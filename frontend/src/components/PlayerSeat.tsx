@@ -1,0 +1,211 @@
+'use client';
+
+import { AnimatePresence, motion } from 'framer-motion';
+import { Card } from './Card';
+import type { Card as CardType } from '@/types/game';
+
+const AVATAR_COLORS = [
+  'bg-blue-500',
+  'bg-purple-500',
+  'bg-pink-500',
+  'bg-orange-500',
+  'bg-teal-500',
+];
+
+interface PlayerSeatProps {
+  nickname: string;
+  role?: 'player' | 'spectator';
+  isLandlord?: boolean;
+  /** The 3 landlord bottom-cards to display next to the landlord avatar */
+  landlordCards?: CardType[];
+  cardCount?: number;
+  isActiveTurn?: boolean;
+  /** Index 0-4 for avatar colour */
+  colorIndex?: number;
+  /** Stacked emoji/text reactions to display (each has its own lifetime) */
+  reactions?: { key: number; text: string }[];
+  /** Compact row layout: avatar left, labels right (for opponent seats) */
+  compact?: boolean;
+}
+
+export function PlayerSeat({
+  nickname,
+  role = 'spectator',
+  isLandlord,
+  landlordCards,
+  cardCount,
+  isActiveTurn = false,
+  colorIndex = 0,
+  reactions = [],
+  compact = false,
+}: PlayerSeatProps) {
+  const initial = nickname.charAt(0).toUpperCase();
+  const avatarColor = AVATAR_COLORS[colorIndex % AVATAR_COLORS.length];
+
+  const avatarEl = (
+    <motion.div
+      animate={
+        isActiveTurn
+          ? {
+              boxShadow: [
+                '0 0 0px 0px rgba(250,204,21,0)',
+                '0 0 12px 6px rgba(250,204,21,0.7)',
+                '0 0 0px 0px rgba(250,204,21,0)',
+              ],
+            }
+          : { boxShadow: '0 0 0px 0px rgba(250,204,21,0)' }
+      }
+      transition={isActiveTurn ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' } : {}}
+      className="rounded-full p-0.5 flex-shrink-0"
+    >
+      <div
+        className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${avatarColor}`}
+      >
+        {initial}
+      </div>
+    </motion.div>
+  );
+
+  if (compact) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.5 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="flex flex-row items-center gap-2 relative"
+      >
+        {avatarEl}
+        {/* Labels: nickname + role + count stacked */}
+        <div className="flex flex-col gap-0.5">
+          <span className="text-white text-xs font-medium max-w-[72px] truncate">{nickname}</span>
+          {role === 'player' && (
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold w-fit ${
+                isLandlord ? 'bg-yellow-400 text-green-900' : 'bg-white/20 text-white'
+              }`}
+            >
+              {isLandlord ? '地主' : '農民'}
+            </span>
+          )}
+          {cardCount !== undefined && role === 'player' && (
+            <span className="bg-black/40 text-white text-[10px] px-1.5 py-0.5 rounded-full w-fit">
+              {cardCount}張
+            </span>
+          )}
+        </div>
+
+        {/* Landlord bottom-cards */}
+        {isLandlord && landlordCards && landlordCards.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex gap-0.5"
+          >
+            {landlordCards.map((card, i) => (
+              <Card key={i} {...card} mini />
+            ))}
+          </motion.div>
+        )}
+
+        {/* Reactions — anchor below the avatar row, fade in from above, exit downward */}
+        <AnimatePresence>
+          {reactions.map((r) => (
+            <motion.div
+              key={r.key}
+              initial={{ opacity: 0, y: -12, scale: 0.85 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 100 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className="absolute top-full left-1/2 -translate-x-1/2 mt-2 whitespace-nowrap bg-black/70 border border-yellow-400/50 text-white text-center text-4xl font-bold px-4 py-2 rounded-xl shadow-lg pointer-events-none"
+              style={{ zIndex: r.key }}
+            >
+              {r.text}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.5 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="flex flex-col items-center gap-1 relative"
+    >
+      {/* Turn glow ring */}
+      <motion.div
+        animate={
+          isActiveTurn
+            ? {
+                boxShadow: [
+                  '0 0 0px 0px rgba(250,204,21,0)',
+                  '0 0 12px 6px rgba(250,204,21,0.7)',
+                  '0 0 0px 0px rgba(250,204,21,0)',
+                ],
+              }
+            : { boxShadow: '0 0 0px 0px rgba(250,204,21,0)' }
+        }
+        transition={isActiveTurn ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' } : {}}
+        className="rounded-full p-0.5"
+      >
+        <div
+          className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${avatarColor}`}
+        >
+          {initial}
+        </div>
+      </motion.div>
+
+      {/* Nickname */}
+      <span className="text-white text-xs font-medium max-w-[60px] truncate">{nickname}</span>
+
+      {/* Role badge */}
+      {role === 'player' && (
+        <span
+          className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+            isLandlord ? 'bg-yellow-400 text-green-900' : 'bg-white/20 text-white'
+          }`}
+        >
+          {isLandlord ? '地主' : '農民'}
+        </span>
+      )}
+
+      {/* Card count badge */}
+      {cardCount !== undefined && role === 'player' && (
+        <span className="bg-black/40 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+          {cardCount}張
+        </span>
+      )}
+
+      {/* Landlord bottom-cards (mini, shown after landlord is decided) */}
+      {isLandlord && landlordCards && landlordCards.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.7 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex gap-0.5 mt-0.5"
+        >
+          {landlordCards.map((card, i) => (
+            <Card key={i} {...card} mini />
+          ))}
+        </motion.div>
+      )}
+
+      {/* Reaction bubbles — absolutely positioned, float above the seat,
+           fade in from below, exit upward 5× the enter distance. */}
+      <AnimatePresence>
+        {reactions.map((r) => (
+          <motion.div
+            key={r.key}
+            initial={{ opacity: 0, y: 12, scale: 0.85 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -100 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap bg-black/70 border border-yellow-400/50 text-white text-center text-4xl font-bold px-4 py-2 rounded-xl shadow-lg pointer-events-none"
+            style={{ zIndex: r.key }}
+          >
+            {r.text}
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </motion.div>
+  );
+}

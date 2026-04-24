@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Card Preview</title>
+    <style>
+      body {
+        background: #2d6a4f;
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+        padding: 60px;
+        font-family: Georgia, serif;
+        align-items: flex-start;
+      }
+
+      /* ─── Base Card ─────────────────────────────────────────── */
+      .card {
+        width: 80px;
+        height: 116px;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 5px 6px;
+        box-sizing: border-box;
+        cursor: pointer;
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease;
+        user-select: none;
+      }
+      .card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+      }
+      .card.selected {
+        transform: translateY(-14px);
+        box-shadow: 0 14px 28px rgba(0, 0, 0, 0.5);
+        outline: 2px solid #f4d03f;
+      }
+
+      /* ─── Colours ────────────────────────────────────────────── */
+      .black {
+        color: #1a1a1a;
+      }
+      .red {
+        color: #c0392b;
+      }
+
+      /* ─── Corner pips ────────────────────────────────────────── */
+      .corner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        line-height: 1;
+      }
+      .corner.bottom-right {
+        align-self: flex-end;
+        transform: rotate(180deg);
+      }
+      .rank {
+        font-size: 15px;
+        font-weight: 700;
+      }
+      .suit-small {
+        font-size: 12px;
+      }
+
+      /* ─── Centre suit ────────────────────────────────────────── */
+      .center-suit {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 38px;
+        line-height: 1;
+      }
+
+      /* ─── Card back ──────────────────────────────────────────── */
+      .card-back {
+        background: linear-gradient(
+          135deg,
+          #1a3a5c 25%,
+          #1e4976 25%,
+          #1e4976 50%,
+          #1a3a5c 50%,
+          #1a3a5c 75%,
+          #1e4976 75%
+        );
+        background-size: 12px 12px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      }
+      .card-back::after {
+        content: "";
+        position: absolute;
+        inset: 5px;
+        border: 2px solid rgba(255, 255, 255, 0.25);
+        border-radius: 4px;
+      }
+
+      /* ─── Jokers ─────────────────────────────────────────────── */
+      .joker-small {
+        background: linear-gradient(135deg, #fff 60%, #e8f5e9 100%);
+      }
+      .joker-big {
+        background: linear-gradient(135deg, #fff 60%, #fff3e0 100%);
+      }
+      .joker-label {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 13px;
+        font-weight: 700;
+        text-align: center;
+        line-height: 1.3;
+        white-space: nowrap;
+      }
+
+      /* ─── Labels ─────────────────────────────────────────────── */
+      h3 {
+        color: #fff;
+        width: 100%;
+        margin: 20px 0 8px;
+        font-size: 14px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+      .row {
+        display: flex;
+        gap: 16px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>黑桃 Spades</h3>
+    <div class="row">
+      <!-- A of Spades -->
+      <div class="card black" onclick="this.classList.toggle('selected')">
+        <div class="corner top-left">
+          <div class="rank">A</div>
+          <div class="suit-small">♠</div>
+        </div>
+        <div class="center-suit">♠</div>
+        <div class="corner bottom-right">
+          <div class="rank">A</div>
+          <div class="suit-small">♠</div>
+        </div>
+      </div>
+
+      <!-- K of Spades -->
+      <div class="card black" onclick="this.classList.toggle('selected')">
+        <div class="corner top-left">
+          <div class="rank">K</div>
+          <div class="suit-small">♠</div>
+        </div>
+        <div class="center-suit">♠</div>
+        <div class="corner bottom-right">
+          <div class="rank">K</div>
+          <div class="suit-small">♠</div>
+        </div>
+      </div>
+
+      <!-- 2 of Spades -->
+      <div class="card black" onclick="this.classList.toggle('selected')">
+        <div class="corner top-left">
+          <div class="rank">2</div>
+          <div class="suit-small">♠</div>
+        </div>
+        <div class="center-suit">♠</div>
+        <div class="corner bottom-right">
+          <div class="rank">2</div>
+          <div class="suit-small">♠</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>紅心 Hearts</h3>
+    <div class="row">
+      <!-- A of Hearts -->
+      <div class="card red" onclick="this.classList.toggle('selected')">
+        <div class="corner top-left">
+          <div class="rank">A</div>
+          <div class="suit-small">♥</div>
+        </div>
+        <div class="center-suit">♥</div>
+        <div class="corner bottom-right">
+          <div class="rank">A</div>
+          <div class="suit-small">♥</div>
+        </div>
+      </div>
+
+      <!-- Q of Hearts -->
+      <div class="card red" onclick="this.classList.toggle('selected')">
+        <div class="corner top-left">
+          <div class="rank">Q</div>
+          <div class="suit-small">♥</div>
+        </div>
+        <div class="center-suit">♥</div>
+        <div class="corner bottom-right">
+          <div class="rank">Q</div>
+          <div class="suit-small">♥</div>
+        </div>
+      </div>
+
+      <!-- 10 of Hearts -->
+      <div class="card red" onclick="this.classList.toggle('selected')">
+        <div class="corner top-left">
+          <div class="rank">10</div>
+          <div class="suit-small">♥</div>
+        </div>
+        <div class="center-suit">♥</div>
+        <div class="corner bottom-right">
+          <div class="rank">10</div>
+          <div class="suit-small">♥</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>方塊 Diamonds &amp; 梅花 Clubs</h3>
+    <div class="row">
+      <!-- J of Diamonds -->
+      <div class="card red" onclick="this.classList.toggle('selected')">
+        <div class="corner top-left">
+          <div class="rank">J</div>
+          <div class="suit-small">♦</div>
+        </div>
+        <div class="center-suit">♦</div>
+        <div class="corner bottom-right">
+          <div class="rank">J</div>
+          <div class="suit-small">♦</div>
+        </div>
+      </div>
+
+      <!-- 3 of Clubs -->
+      <div class="card black" onclick="this.classList.toggle('selected')">
+        <div class="corner top-left">
+          <div class="rank">3</div>
+          <div class="suit-small">♣</div>
+        </div>
+        <div class="center-suit">♣</div>
+        <div class="corner bottom-right">
+          <div class="rank">3</div>
+          <div class="suit-small">♣</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>鬼牌 Jokers</h3>
+    <div class="row">
+      <!-- Small Joker -->
+      <div class="card joker-small" onclick="this.classList.toggle('selected')">
+        <div class="corner top-left">
+          <div class="rank" style="color: #2ecc71">小</div>
+          <div class="suit-small" style="color: #2ecc71">☆</div>
+        </div>
+        <div class="joker-label" style="color: #2ecc71">小<br />鬼</div>
+        <div class="corner bottom-right">
+          <div class="rank" style="color: #2ecc71">小</div>
+          <div class="suit-small" style="color: #2ecc71">☆</div>
+        </div>
+      </div>
+
+      <!-- Big Joker -->
+      <div class="card joker-big" onclick="this.classList.toggle('selected')">
+        <div class="corner top-left">
+          <div class="rank" style="color: #e67e22">大</div>
+          <div class="suit-small" style="color: #e67e22">★</div>
+        </div>
+        <div class="joker-label" style="color: #e67e22">大<br />鬼</div>
+        <div class="corner bottom-right">
+          <div class="rank" style="color: #e67e22">大</div>
+          <div class="suit-small" style="color: #e67e22">★</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>牌背 Card Back</h3>
+    <div class="row">
+      <div class="card card-back"></div>
+      <div class="card card-back"></div>
+      <div class="card card-back"></div>
+    </div>
+
+    <p
+      style="
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 12px;
+        width: 100%;
+        margin-top: 32px;
+      "
+    >
+      點擊任意牌可選取／取消選取（模擬手牌上升效果）
+    </p>
+  </body>
+</html>
