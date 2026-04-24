@@ -58,7 +58,7 @@ export interface Room {
   bidPassCount: number; // total votes cast during landlord bidding
   bidYesVoters: number[]; // player indices who said yes in landlord vote
   firstBidder: number; // player index who starts bidding
-  bidTimer: NodeJS.Timeout | null; // 15s simultaneous bid window
+  bidTimer: NodeJS.Timeout | null; // 8s simultaneous bid window
   bidVotedIndices: number[]; // player indices who have already cast their bid
   idleTimeout: NodeJS.Timeout | null; // 5-min auto-delete timer
   reconnectTimers: Map<string, NodeJS.Timeout>; // socketId → 60s grace timer

@@ -183,7 +183,19 @@ export function GameBoard({
       </div>
 
       {/* ── Bottom: local player hand ──────────────────────── */}
-      <div className="relative pb-4 pt-2 px-2 bg-black/20">
+      <motion.div
+        className="relative pb-4 pt-2 px-2"
+        animate={
+          isMyTurn && phase === 'gameplay'
+            ? { backgroundColor: ['rgba(0,0,0,0.2)', 'rgba(34,197,94,0.35)', 'rgba(0,0,0,0.2)'] }
+            : { backgroundColor: 'rgba(0,0,0,0.2)' }
+        }
+        transition={
+          isMyTurn && phase === 'gameplay'
+            ? { duration: 1.2, repeat: Infinity, ease: 'easeInOut' }
+            : {}
+        }
+      >
 
         {/* Row 1: player seat (left) + emoji selector (right) */}
         <div className="flex items-center justify-between gap-2 mb-1 px-2">
@@ -274,7 +286,7 @@ export function GameBoard({
         ) : (
           <p className="text-white/50 text-center text-sm py-4">觀戰中…</p>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }

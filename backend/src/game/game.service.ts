@@ -723,11 +723,11 @@ export class GameService {
     // Delay the bid_open by 2 seconds so players can see their hand first.
     // All 3 players bid simultaneously; a 15s server-side timer enforces the deadline.
     setTimeout(() => {
-      this.server?.to(room.code).emit('bid_open', { timeoutMs: 15_000 });
+      this.server?.to(room.code).emit('bid_open', { timeoutMs: 8_000 });
       room.bidTimer = setTimeout(() => {
         room.bidTimer = null;
         this.finalizeBidding(room);
-      }, 15_000);
+      }, 8_000);
     }, 2_000);
   }
 

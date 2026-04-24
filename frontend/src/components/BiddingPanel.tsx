@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 
-const BID_SECONDS = 15;
+const BID_SECONDS = 8;
 
 interface BiddingPanelProps {
   hasVoted: boolean;

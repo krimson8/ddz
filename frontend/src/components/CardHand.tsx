@@ -6,7 +6,7 @@ import { Card } from './Card';
 import type { Card as CardType, Play } from '@/types/game';
 import { validatePlay } from '@/lib/cardUtils';
 
-const TURN_SECONDS = 45;
+const TURN_SECONDS = 30;
 
 interface CardHandProps {
   cards: CardType[];

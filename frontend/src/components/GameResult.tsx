@@ -13,6 +13,7 @@ interface GameResultProps {
   confirmedVoters: string[];
   hasVoted: boolean;
   onVote: () => void;
+  onDismiss: () => void;
 }
 
 export function GameResult({
@@ -22,19 +23,20 @@ export function GameResult({
   confirmedVoters,
   hasVoted,
   onVote,
+  onDismiss,
 }: GameResultProps) {
   const isLandlordWin = winner === 'landlord';
   const players = members.filter((m) => m.role === 'player');
 
-  // 5-second auto-vote countdown
-  const [autoSeconds, setAutoSeconds] = useState(5);
-  const autoVotedRef = useRef(false);
+  // 10-second countdown — dismisses overlay when it reaches 0
+  const [autoSeconds, setAutoSeconds] = useState(10);
+  const dismissedRef = useRef(false);
 
   useEffect(() => {
     if (autoSeconds <= 0) {
-      if (!autoVotedRef.current && !hasVoted) {
-        autoVotedRef.current = true;
-        onVote();
+      if (!dismissedRef.current) {
+        dismissedRef.current = true;
+        onDismiss();
       }
       return;
     }
@@ -75,7 +77,7 @@ export function GameResult({
             animate={{ opacity: 1, scale: 1 }}
             className="text-yellow-300 text-sm font-bold mt-1 tabular-nums"
           >
-            {autoSeconds > 0 ? `${autoSeconds} 秒後自動繼續…` : '准備中…'}
+            {autoSeconds > 0 ? `${autoSeconds} 秒後返回大廳…` : '返回大廳…'}
           </motion.p>
         </div>
 
@@ -122,11 +124,11 @@ export function GameResult({
             ))}
           </div>
           <button
-            onClick={onVote}
+            onClick={() => { onVote(); onDismiss(); }}
             disabled={hasVoted}
             className="px-8 py-3 rounded-xl font-bold text-lg bg-yellow-400 hover:bg-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed text-green-900 transition-colors min-h-[44px] w-full"
           >
-            {hasVoted ? '已準備' : `再玩一局${autoSeconds > 0 ? ` (${autoSeconds})` : ''}`}
+            {hasVoted ? '已準備' : '再玩一局'}
           </button>
         </div>
       </motion.div>

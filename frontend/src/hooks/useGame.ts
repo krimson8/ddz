@@ -139,6 +139,8 @@ function reducer(state: GameState, action: Action): GameState {
         phase: "dealing",
         playerOrder: action.playerIds,
         members: updatedMembers,
+        lastPlay: null,
+        lastPlayPlayerIndex: null,
       };
     }
     case "VOTE_RESET":
@@ -158,6 +160,8 @@ function reducer(state: GameState, action: Action): GameState {
         currentTurn: action.firstBidder,
         phase: "dealing",
         playHistory: [],
+        lastPlay: null,
+        lastPlayPlayerIndex: null,
       };
     case "BID_OPEN":
       return { ...state, phase: "bidding", bidVotedCount: 0 };

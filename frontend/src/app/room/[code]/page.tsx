@@ -6,6 +6,7 @@ import { useGame } from '@/hooks/useGame';
 import { useSocket } from '@/hooks/useSocket';
 import { RoomLobby } from '@/components/RoomLobby';
 import { GameBoard } from '@/components/GameBoard';
+import { GameResult } from '@/components/GameResult';
 import type { ClientMember } from '@/types/game';
 
 export default function RoomPage() {
@@ -114,6 +115,17 @@ export default function RoomPage() {
           hasVoted={hasVoted}
           lastGameResult={lastGameResult ?? undefined}
         />
+        {lastGameResult && (
+          <GameResult
+            winner={lastGameResult.winner}
+            members={lastGameResult.members}
+            landlordIndex={lastGameResult.landlordIndex}
+            confirmedVoters={confirmedVoters ?? []}
+            hasVoted={hasVoted}
+            onVote={handleVote}
+            onDismiss={() => setLastGameResult(null)}
+          />
+        )}
       </div>
     );
   }
