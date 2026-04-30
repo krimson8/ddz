@@ -6,8 +6,6 @@ import { useGame } from '@/hooks/useGame';
 import { useSocket } from '@/hooks/useSocket';
 import { RoomLobby } from '@/components/RoomLobby';
 import { GameBoard } from '@/components/GameBoard';
-import { GameResult } from '@/components/GameResult';
-import type { ClientMember } from '@/types/game';
 
 export default function RoomPage() {
   const params = useParams();
@@ -25,28 +23,11 @@ export default function RoomPage() {
     reactEmoji,
   } = useGame();
 
-  const { phase, roomCode, confirmedVoters, members, winner, landlordIndex } = gameState;
+  const { phase, roomCode, confirmedVoters, members, winCounts } = gameState;
 
   const [myNickname, setMyNickname] = useState('');
   const [hasVoted, setHasVoted] = useState(false);
   const hasJoined = useRef(false);
-
-  // Capture the last game result before VOTE_RESET wipes the state
-  const [lastGameResult, setLastGameResult] = useState<{
-    winner: 'landlord' | 'peasants';
-    landlordIndex: number | null;
-    members: ClientMember[];
-  } | null>(null);
-
-  useEffect(() => {
-    if (winner) setLastGameResult({ winner, landlordIndex, members: [...members] });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [winner]);
-
-  // Clear last result when a new game begins
-  useEffect(() => {
-    if (phase === 'dealing' || phase === 'bidding' || phase === 'gameplay') setLastGameResult(null);
-  }, [phase]);
 
   // Reconnect or join on mount
   useEffect(() => {
@@ -101,8 +82,8 @@ export default function RoomPage() {
 
   // ── Render ───────────────────────────────────────────────────────────────
 
-  // Lobby — also shows after game ends (phase briefly becomes 'result' then 'lobby')
-  if (phase === 'lobby' || phase === 'result') {
+  // Lobby
+  if (phase === 'lobby') {
     return (
       <div className="min-h-screen bg-green-900 flex flex-col items-center justify-center gap-6 py-10">
         <h1 className="text-3xl font-black text-white tracking-wide">🀄 鬥地主</h1>
@@ -113,19 +94,8 @@ export default function RoomPage() {
           myNickname={myNickname}
           onVote={handleVote}
           hasVoted={hasVoted}
-          lastGameResult={lastGameResult ?? undefined}
+          winCounts={winCounts}
         />
-        {lastGameResult && (
-          <GameResult
-            winner={lastGameResult.winner}
-            members={lastGameResult.members}
-            landlordIndex={lastGameResult.landlordIndex}
-            confirmedVoters={confirmedVoters ?? []}
-            hasVoted={hasVoted}
-            onVote={handleVote}
-            onDismiss={() => setLastGameResult(null)}
-          />
-        )}
       </div>
     );
   }

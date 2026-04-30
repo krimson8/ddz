@@ -21,7 +21,7 @@ interface SeatReaction {
 
 const REACTION_GROUPS = [
   { label: '表情', items: ['🖕', '🤏', '🤌'] },
-  { label: '語錄', items: ['我操', 'EZ', 'GG', '什麼lin', '你會玩的嗎', '小癟三', '不用看了', '窩妖驗牌', '牌沒有問題', '在我者離', '給我搽皮鞋'] },
+  { label: '語錄', items: ['EZ', 'GG', '什麼lin', '你會玩的嗎', '小癟三', '不用看了', '窩妖驗牌', '牌沒有問題', '在我者離', '給我搽皮鞋'] },
 ];
 
 interface GameBoardProps {
@@ -52,6 +52,7 @@ export function GameBoard({
     phase,
     confirmedVoters,
     playHistory,
+    winner,
   } = gameState;
 
   // Use the server's voteQueue order so indices match currentTurn / landlordIndex.
@@ -61,6 +62,15 @@ export function GameBoard({
   const myPlayerIndex = playerOrder.indexOf(mySocketId);
   const isMyTurn = myPlayerIndex !== -1 && currentTurn === myPlayerIndex;
   const isSpectator = myPlayerIndex === -1;
+
+  const [winCountdown, setWinCountdown] = useState(5);
+
+  useEffect(() => {
+    if (phase !== 'result') return;
+    setWinCountdown(5);
+    const id = setInterval(() => setWinCountdown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(id);
+  }, [phase]);
 
   const lastEmojiTime = useRef(0);
   const [selectedReaction, setSelectedReaction] = useState('🖕');
@@ -287,6 +297,73 @@ export function GameBoard({
           <p className="text-white/50 text-center text-sm py-4">觀戰中…</p>
         )}
       </motion.div>
+
+      {/* ── Win overlay ──────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {phase === 'result' && winner && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/75 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.7, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+              className="bg-green-900/95 rounded-2xl p-8 w-full max-w-sm flex flex-col items-center gap-6 border border-yellow-400/30 shadow-2xl mx-4"
+            >
+              <div className="text-center">
+                <motion.div
+                  initial={{ y: -20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="text-5xl mb-2"
+                >
+                  {winner === 'landlord' ? '🏆' : '🎉'}
+                </motion.div>
+                <h2 className="text-2xl font-black text-white">
+                  {winner === 'landlord' ? '地主獲勝！' : '農民獲勝！'}
+                </h2>
+                <motion.p
+                  key={winCountdown}
+                  initial={{ opacity: 0, scale: 1.3 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="text-yellow-300 text-sm font-bold mt-1 tabular-nums"
+                >
+                  {winCountdown > 0 ? `${winCountdown} 秒後返回大廳…` : '返回大廳…'}
+                </motion.p>
+              </div>
+              <div className="flex gap-4 flex-wrap justify-center">
+                {players.map((member, globalIdx) => {
+                  if (!member) return null;
+                  const isWinner = winner === 'landlord'
+                    ? globalIdx === landlordIndex
+                    : globalIdx !== landlordIndex;
+                  const colors = ['bg-blue-500', 'bg-purple-500', 'bg-pink-500'];
+                  return (
+                    <motion.div
+                      key={member.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 + globalIdx * 0.1 }}
+                      className="flex flex-col items-center gap-1"
+                    >
+                      <div
+                        className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${colors[globalIdx % colors.length]} ${isWinner ? 'ring-2 ring-yellow-400' : 'opacity-60'}`}
+                      >
+                        {member.nickname.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-white text-xs">{member.nickname}</span>
+                      {isWinner && <span className="text-yellow-400 text-xs font-bold">勝利</span>}
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

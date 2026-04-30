@@ -57,6 +57,7 @@ const initialState: GameState = {
   playHistory: [],
   playerCardCounts: [],
   lastPlayPlayerIndex: null,
+  winCounts: {},
 };
 
 // ── Actions ──────────────────────────────────────────────────────────────────
@@ -70,7 +71,7 @@ type Action =
     }
   | { type: "MEMBER_JOINED"; member: ClientMember }
   | { type: "MEMBER_LEFT"; id: string }
-  | { type: "VOTE_OPEN"; members: ClientMember[] }
+  | { type: "VOTE_OPEN"; members: ClientMember[]; winCounts: Record<string, number> }
   | { type: "VOTE_UPDATE"; confirmedVoters: string[] }
   | { type: "VOTE_CLOSED_START"; playerIds: string[] }
   | { type: "VOTE_RESET" }
@@ -95,7 +96,7 @@ type Action =
   | { type: "PLAYER_PASSED"; playerIndex: number; nextTurn: number }
   | { type: "TURN_CHANGED"; nextTurn: number }
   | { type: "NEW_ROUND"; nextTurn: number }
-  | { type: "GAME_OVER"; winner: "landlord" | "peasants" }
+  | { type: "GAME_OVER"; winner: "landlord" | "peasants"; winCounts: Record<string, number> }
   | { type: "ERROR"; message: string };
 
 function reducer(state: GameState, action: Action): GameState {
@@ -122,7 +123,7 @@ function reducer(state: GameState, action: Action): GameState {
         members: state.members.filter((m) => m.id !== action.id),
       };
     case "VOTE_OPEN":
-      return { ...state, members: action.members, phase: "lobby" };
+      return { ...state, members: action.members, phase: "lobby", winCounts: action.winCounts };
     case "VOTE_UPDATE":
       return { ...state, confirmedVoters: action.confirmedVoters };
     case "VOTE_CLOSED_START": {
@@ -230,7 +231,7 @@ function reducer(state: GameState, action: Action): GameState {
         currentTurn: action.nextTurn,
       };
     case "GAME_OVER":
-      return { ...state, phase: "result", winner: action.winner };
+      return { ...state, phase: "result", winner: action.winner, winCounts: action.winCounts };
     default:
       return state;
   }
@@ -285,8 +286,8 @@ export function useGame(): UseGameReturn {
     socket.on("member_left", (data: { id: string }) => {
       dispatch({ type: "MEMBER_LEFT", id: data.id });
     });
-    socket.on("vote_open", (data: { members: ClientMember[] }) => {
-      dispatch({ type: "VOTE_OPEN", members: data.members });
+    socket.on("vote_open", (data: { members: ClientMember[]; winCounts: Record<string, number> }) => {
+      dispatch({ type: "VOTE_OPEN", members: data.members, winCounts: data.winCounts ?? {} });
     });
     socket.on("vote_update", (data: { confirmedVoters: string[] }) => {
       dispatch({ type: "VOTE_UPDATE", confirmedVoters: data.confirmedVoters });
@@ -376,8 +377,8 @@ export function useGame(): UseGameReturn {
         });
       },
     );
-    socket.on("game_over", (data: { winner: "landlord" | "peasants" }) => {
-      dispatch({ type: "GAME_OVER", winner: data.winner });
+    socket.on("game_over", (data: { winner: "landlord" | "peasants"; winCounts: Record<string, number> }) => {
+      dispatch({ type: "GAME_OVER", winner: data.winner, winCounts: data.winCounts ?? {} });
     });
     socket.on("turn_changed", (data: { nextTurn: number }) => {
       dispatch({ type: "TURN_CHANGED", nextTurn: data.nextTurn });

@@ -102,13 +102,12 @@ A web-based multiplayer 鬥地主 (Fight the Landlord) card game for 3 players. 
 
 ### 4.3 Bidding (叫地主)
 
-- A random player is selected to bid first.
-- In turn order, each player can **Want to be Landlord (要做地主)** or **Pass (不做地主)**.
-- Players vote once each; all 3 must vote before a landlord is selected.
-- After all 3 have voted:
-  - **Exactly 1 player** says yes → that player becomes the **Landlord (地主)**.
-  - **2 or 3 players** say yes → the system **randomly picks one** of the yes-voters to be the Landlord.
-  - **Nobody** says yes → the cards are **re-dealt** and voting restarts.
+- Cards are dealt and shown to players; after a **~2-second pause** the bidding UI appears.
+- All 3 players bid **simultaneously** within an **8-second window** (`bid_open` event with `timeoutMs: 8000`).
+- Each player can click **要做地主 (Want to be Landlord)** or **不做 (Pass)**; once voted they cannot change.
+- The round resolves when all 3 have voted **or** the 8-second timer expires:
+  - **1 or more players** say yes → the system **randomly picks one** of the yes-voters to be the Landlord.
+  - **Nobody** says yes → the system **randomly assigns** one of the 3 players as Landlord (no re-deal).
 - The Landlord receives the 3 face-down landlord cards (revealed to all), bringing their hand to **20 cards**.
 
 ### 4.4 Gameplay
@@ -163,7 +162,19 @@ A web-based multiplayer 鬥地主 (Fight the Landlord) card game for 3 players. 
 | Route | Description |
 |-------|-------------|
 | `/` | Landing page — nickname input, create/join room |
-| `/room/[code]` | Game room — lobby, bidding, gameplay, results |
+| `/room/[code]` | Game room — lobby, dealing, bidding, gameplay, results |
+
+### 5.1.1 Client-Side Game Phase
+
+The frontend tracks a `GamePhase` to drive UI transitions:
+
+| Phase | Description |
+|-------|-------------|
+| `lobby` | Waiting room / voting screen |
+| `dealing` | Cards dealt, players see their hand before bidding opens (~2s window) |
+| `bidding` | Simultaneous 8-second bid window open |
+| `gameplay` | Active card play phase |
+| `result` | Game-over overlay shown |
 
 ### 5.2 UI Components
 
@@ -225,9 +236,10 @@ A web-based multiplayer 鬥地主 (Fight the Landlord) card game for 3 players. 
 **HUD**: pass button (不出), play button (出牌), card count badge per opponent.
 
 #### Bidding UI
-- Overlay or inline panel showing bid options: "1 分", "2 分", "3 分", "不叫 (Pass)"
-- Highlight whose turn it is to bid
-- Show previous bids from other players
+- Overlay or inline panel showing bid options: **"要做地主 (Want to be Landlord)"** and **"不做 (Pass)"**
+- All 3 players bid simultaneously; an 8-second countdown is shown
+- Each player can only vote once; the panel disables after submission
+- A live tally shows how many players have already voted (e.g. "1/3 已投票")
 
 #### Game End Overlay
 - Winner announcement with animation.
@@ -263,16 +275,16 @@ A web-based multiplayer 鬥地主 (Fight the Landlord) card game for 3 players. 
 
 ### 5.5 Emoji Reactions
 
-- Three fixed emoji buttons always visible during gameplay (next to HUD).
-- When pressed, an emoji bubble animates out from the sender's avatar: scales up, floats upward, and fades out over ~1.5 seconds.
-- All three players see every reaction in real time (broadcast via WebSocket).
-- Rate-limited: max 1 reaction per player per 3 seconds.
+- A dropdown selector + **送出** button always visible during gameplay (next to the player's hand area).
+- When sent, the reaction text/emoji animates above the sender's avatar: scales up, floats upward, and fades out over ~3 seconds.
+- All players see every reaction in real time (broadcast via WebSocket).
+- Rate-limited: max 1 reaction per player per **500 ms** (silently dropped if too fast).
+- Reactions are grouped in the selector:
 
-| Emoji | Meaning |
-|-------|---------|
-| 🖕 | 中指 (middle finger) |
-| 🤏 | 這麼小 (finger pinch — "so small") |
-| 🤌 | 義大利手勢 (Italian hand / "what do you want?") |
+| Group | Items |
+|-------|-------|
+| 表情 (Emoji) | 🖕, 🤏, 🤌 |
+| 語錄 (Phrases) | 我操, EZ, GG, 什麼lin, 你會玩的嗎, 小癟三, 不用看了, 窩妖驗牌, 牌沒有問題, 在我者離, 給我搽皮鞋 |
 
 ---
 
@@ -306,7 +318,7 @@ interface Room {
   voteTimeout: NodeJS.Timeout | null;
   deck: Card[];
   landlordCards: Card[];       // 3 face-down cards
-  landlordIndex: number;       // index in players (derived from voteQueue[0..2])
+  landlordIndex: number;       // index in players (derived from voteQueue[0..2]); -1 during bidding
   currentTurn: number;         // player index
   currentBid: number;          // unused (kept for compat)
   currentBidder: number;       // who was chosen as landlord
@@ -316,6 +328,10 @@ interface Room {
   bidPassCount: number;        // total votes cast in landlord bidding
   bidYesVoters: number[];      // player indices who said yes in landlord vote
   firstBidder: number;         // who starts bidding
+  bidTimer: NodeJS.Timeout | null;    // 8s simultaneous bid window timer
+  bidVotedIndices: number[];          // player indices who have already cast their bid
+  idleTimeout: NodeJS.Timeout | null; // 5-min auto-delete timer
+  reconnectTimers: Map<string, NodeJS.Timeout>; // socketId → 60s grace timer
 }
 
 interface Member {
@@ -350,11 +366,11 @@ interface Play {
 | Event | Payload | Description |
 |-------|---------|-------------|
 | `create_room` | `{ nickname }` | Create a new room (creator joins as spectator) |
-| `join_room` | `{ roomCode, nickname }` | Join room as spectator |
-| `reconnect` | `{ reconnectToken, roomCode }` | Reconnect to a room after disconnect |
+| `join_room` | `{ code, nickname }` | Join room as spectator (`code` = 6-char room code) |
+| `rejoin` | `{ reconnectToken, code }` | Reconnect to a room after disconnect |
 | `vote_play` | `{}` | Vote to be a player (valid when vote is open and <3 confirmed) |
-| `react_emoji` | `{ emoji: '🖕' \| '🤏' \| '🤌' }` | Send an emoji reaction |
-| `bid` | `{ value: 0 \| 1 }` | Vote for landlord (1 = yes, 0 = no) |
+| `react_emoji` | `{ emoji: string }` | Send an emoji reaction or phrase (see §5.5 for allowed values) |
+| `bid` | `{ value: 0 \| 1 }` | Vote for landlord (1 = yes, 0 = no) during simultaneous bid window |
 | `play_cards` | `{ cards: Card[] }` | Play selected cards |
 | `pass` | `{}` | Pass this turn |
 | `leave_room` | `{}` | Leave the room |
@@ -363,28 +379,29 @@ interface Play {
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `room_created` | `{ roomCode }` | Room successfully created |
-| `room_joined` | `{ members, roomCode }` | Joined successfully (everyone is a spectator initially) |
-| `member_joined` | `{ nickname, memberCount }` | Someone new joined the room |
-| `member_left` | `{ nickname, memberCount }` | Someone left the room |
-| `vote_open` | `{ memberCount }` | ≥3 members present, voting is now open |
-| `vote_update` | `{ confirmedNicknames, confirmedCount }` | Someone voted; broadcast updated tally |
+| `room_created` | `{ roomCode, reconnectToken }` | Room successfully created |
+| `room_joined` | `{ roomCode, members, state, confirmedCount, confirmedNicknames, reconnectToken?, nickname? }` | Joined successfully (everyone is a spectator initially); also sent on reconnect |
+| `member_joined` | `{ id, nickname, role }` | Someone new joined (or reconnected) |
+| `member_left` | `{ id, nickname }` | Someone left the room |
+| `vote_open` | `{ members: [{id, nickname, role}] }` | ≥3 members present, voting is now open |
+| `vote_update` | `{ confirmedVoters: string[], confirmedCount }` | Someone voted; `confirmedVoters` is array of nicknames |
 | `vote_closed_start` | `{ players: [{id,nickname}], spectators: [{id,nickname}] }` | 3 confirmed — roles assigned, game starting |
-| `vote_reset` | `{}` | 60s timeout expired with <3 confirmed; vote resets, back to waiting |
-| `game_start` | `{ hand: Card[], firstBidder }` | Game begins (players get hand; spectators get empty hand) |
-| `bid_turn` | `{ playerIndex, currentBid }` | It’s someone’s turn to bid |
+| `vote_reset` | `{}` | 60s timeout expired with <3 confirmed (or member drop); vote resets, back to waiting |
+| `game_start` | `{ hand: Card[], firstBidder, reconnect? }` | Game begins (players get hand; spectators get empty hand) |
+| `bid_open` | `{ timeoutMs: 8000 }` | Simultaneous bid window is open; all 3 players vote within this window |
+| `bid_turn` | `{ playerIndex, currentBid }` | Only sent to a reconnected player to restore bidding UI state |
 | `bid_made` | `{ playerIndex, value }` | A player placed a bid |
 | `landlord_decided` | `{ playerIndex, landlordCards }` | Landlord is chosen, reveal 3 cards |
 | `your_turn` | `{}` | It’s your turn to play |
-| `cards_played` | `{ playerIndex, cards, handType, remaining }` | Cards were played |
+| `cards_played` | `{ playerIndex, cards, handType, rank, remaining }` | Cards were played |
+| `turn_changed` | `{ nextTurn }` | Current turn index changed (emitted after every play or pass) |
 | `player_passed` | `{ playerIndex }` | A player passed |
-| `new_round` | `{ starterIndex }` | Two passes, new lead round |
-| `game_over` | `{ winner: 'landlord'\|'peasants', landlordIndex }` | Game ended; vote re-opens automatically |
+| `new_round` | `{ nextTurn }` | Two passes, new lead round; `lastPlay` resets to null |
+| `game_over` | `{ winner: ‘landlord’\|’peasants’, landlordIndex }` | Game ended; vote re-opens automatically |
 | `room_disbanded` | `{ reason }` | Room closed (all members left) |
 | `invalid_play` | `{ reason }` | Played cards are invalid |
 | `room_error` | `{ message }` | Room-related error |
-| `rebid` | `{}` | No one bid, re-dealing |
-| `emoji_reaction` | `{ senderNickname, role: 'player'\|'spectator', emoji }` | Broadcast emoji reaction to room |
+| `emoji_reaction` | `{ senderId, senderNickname, role: ‘player’\|’spectator’, emoji }` | Broadcast emoji reaction/phrase to room |
 
 ### 6.4 Game Logic Flow (Server-Side)
 
@@ -411,22 +428,23 @@ state: 'playing'  (encompasses bidding + gameplay sub-states)
   - Sub-state: 'bidding'
       Shuffle & deal 17 cards each (sorted highest→lowest), set aside 3 landlord cards.
       Spectators receive no cards.
-      Random first bidder assigned.
+      Random first bidder index assigned (stored as `firstBidder`).
       Server deals cards to all players (`game_start`), waits ~2 seconds,
-      then emits `bid_turn` to open bidding — giving players time to see
-      their hand before deciding.
-      Players vote in turn: yes (want to be landlord) or no.
-      After all 3 vote:
-        - Nobody voted yes → re-deal, repeat bidding.
-        - 1 voted yes → that player is the Landlord.
-        - 2-3 voted yes → system randomly picks one of the yes-voters.
+      then emits `bid_open { timeoutMs: 8000 }` — all 3 players bid simultaneously.
+      An 8-second server-side timer (`bidTimer`) enforces the deadline.
+      The round resolves when all 3 have voted OR the timer fires:
+        - 1 or more voted yes → system randomly picks one of the yes-voters.
+        - Nobody voted yes → system randomly assigns one of the 3 players.
+      (There is no re-deal; landlord is always determined in one round.)
       Landlord receives the 3 bottom cards (sorted into their hand, 20 total).
       Landlord cards revealed to all players.
   - Sub-state: 'gameplay'
       Landlord plays first.
       Validate each play against hand type rules.
+      After every successful play or pass, server emits `turn_changed { nextTurn }` to
+      all clients and `your_turn {}` to the individual player whose turn it is now.
       Track consecutive passes.
-      Two consecutive passes → new round (last player leads).
+      Two consecutive passes → new round (last player leads), `new_round { nextTurn }` broadcast.
   - When a player’s hand is empty:
       If Landlord → Landlord wins.
       If Peasant → Peasants win.
@@ -645,6 +663,10 @@ Cards will be rendered as styled HTML/CSS components (not images) for simplicity
    - *Resolved*: 5 minutes after all members leave.
 4. **"Next round" mechanic**: Require all players to agree, or first-come-first-served?
    - *Resolved*: First 3 to vote "我要玩" become the next players.
+5. **Bidding mechanic**: Sequential or simultaneous?
+   - *Resolved*: Simultaneous 8-second window. If nobody bids yes, landlord is randomly assigned (no re-deal).
+6. **Emoji rate limit**: 3 seconds or shorter?
+   - *Resolved*: 500 ms (both server and client) for snappier feel.
 
 ---
 

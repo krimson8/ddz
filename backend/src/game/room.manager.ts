@@ -72,6 +72,7 @@ export class RoomManager {
       bidVotedIndices: [],
       idleTimeout: null,
       reconnectTimers: new Map(),
+      winCounts: {},
     };
 
     this.rooms.set(code, room);

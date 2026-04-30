@@ -596,7 +596,7 @@ export class GameService {
 
     this.server
       ?.to(room.code)
-      .emit('vote_open', { members: voteOpenMembers });
+      .emit('vote_open', { members: voteOpenMembers, winCounts: room.winCounts });
   }
 
   /**
@@ -804,9 +804,25 @@ export class GameService {
    * Handle a win condition — emit `game_over` and immediately re-open voting.
    */
   private handleWin(room: Room, winner: 'landlord' | 'peasants'): void {
+    // Update per-room win tally before resetting game state
+    const playerMembers = room.voteQueue
+      .slice(0, 3)
+      .map((id) => room.members.find((m) => m.id === id))
+      .filter(Boolean) as import('./types').Member[];
+
+    for (let i = 0; i < playerMembers.length; i++) {
+      const isWinner =
+        winner === 'landlord' ? i === room.landlordIndex : i !== room.landlordIndex;
+      if (isWinner) {
+        const nick = playerMembers[i].nickname;
+        room.winCounts[nick] = (room.winCounts[nick] ?? 0) + 1;
+      }
+    }
+
     this.server?.to(room.code).emit('game_over', {
       winner,
       landlordIndex: room.landlordIndex,
+      winCounts: room.winCounts,
     });
 
     // Tear down game state in preparation for the next round
@@ -830,9 +846,9 @@ export class GameService {
     room.reconnectTimers.forEach((t) => clearTimeout(t));
     room.reconnectTimers.clear();
 
-    // Re-open voting immediately (game_over → voting per spec §6.4)
+    // Delay re-opening voting so clients can show the win screen for 5 seconds
     room.state = 'waiting'; // openVoting requires 'waiting' as pre-condition
-    this.openVoting(room);
+    setTimeout(() => this.openVoting(room), 5_000);
   }
 
   /**

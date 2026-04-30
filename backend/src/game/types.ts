@@ -62,4 +62,5 @@ export interface Room {
   bidVotedIndices: number[]; // player indices who have already cast their bid
   idleTimeout: NodeJS.Timeout | null; // 5-min auto-delete timer
   reconnectTimers: Map<string, NodeJS.Timeout>; // socketId → 60s grace timer
+  winCounts: Record<string, number>; // nickname → total wins in this room
 }

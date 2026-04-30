@@ -24,6 +24,7 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, playerInde
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onPassRef = useRef(onPass);
   onPassRef.current = onPass;
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Notify parent of selection changes
   useEffect(() => {
@@ -104,7 +105,15 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, playerInde
   return (
     <div className="flex flex-col items-center gap-3 w-full">
       {/* Card strip */}
-      <div className="flex flex-row items-end overflow-x-auto pb-2 px-2 gap-1 max-w-full">
+      <div
+        ref={scrollRef}
+        className="flex flex-row items-end overflow-x-auto pb-2 px-2 gap-1 max-w-full"
+        onWheel={(e) => {
+          if (e.deltaY === 0 || !scrollRef.current) return;
+          e.preventDefault();
+          scrollRef.current.scrollLeft += e.deltaY;
+        }}
+      >
         <AnimatePresence initial={false}>
           {cards.map((card, idx) => (
             <motion.div

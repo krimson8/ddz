@@ -67,4 +67,6 @@ export interface GameState {
   playHistory: HistoryEntry[];
   /** Card counts per player index (0-2) during gameplay */
   playerCardCounts: number[];
+  /** Per-room win tally: nickname → total wins */
+  winCounts: Record<string, number>;
 }
