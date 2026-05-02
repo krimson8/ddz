@@ -33,6 +33,7 @@ export interface ClientMember {
   nickname: string;
   role: "spectator" | "player";
   wantToPlay: boolean;
+  cardCount?: number;
 }
 
 export type RoomState = "waiting" | "playing";
@@ -53,23 +54,33 @@ export interface GameState {
   myHand: Card[];
   landlordCards: Card[] | null;
   landlordIndex: number | null;
-  /** Player index (0-2) whose turn it is */
-  currentTurn: number | null;
+  /** Socket ID of the player whose turn it currently is (server-authoritative) */
+  currentPlayer: string | null;
+  /** Epoch ms when the current player's turn timer expires (server-authoritative) */
+  currentPlayerEndTime: number | null;
   /** Unused in yes/no bidding system (kept for compat) */
   currentBid: number;
-  /** How many players have cast their landlord bid this round */
+  /** How many players have cast their landlord bid this round (server-authoritative) */
   bidVotedCount: number;
   /** Whether the local player has already submitted their landlord bid */
   bidSubmitted: boolean;
+  /** Milliseconds for the current bid window (from server bid_open) */
+  bidTimeoutMs: number;
   lastPlay: Play | null;
-  /** Global player index (0-2) who made the last play */
-  lastPlayPlayerIndex: number | null;
+  /** Socket ID of the player who made the last play */
+  lastPlayedBy: string | null;
   winner: "landlord" | "peasants" | null;
+  /** Socket IDs of winning players (server-authoritative, set on game_over) */
+  winnerIds: string[];
   playHistory: HistoryEntry[];
   /** Card counts per player index (0-2) during gameplay */
   playerCardCounts: number[];
   /** Per-room win tally: nickname → total wins */
   winCounts: Record<string, number>;
+  /** How many members have wantToPlay=true (server-authoritative) */
+  readyCount: number;
+  /** Whether voting is currently allowed (server-authoritative, >=3 members in waiting state) */
+  canVote: boolean;
   /** Set when a player disconnects mid-game; cleared on reconnect or abort */
   disconnectedPlayer: { nickname: string; timeoutMs: number } | null;
 }

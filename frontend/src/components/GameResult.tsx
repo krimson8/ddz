@@ -7,23 +7,24 @@ const AVATAR_COLORS = ['bg-blue-500', 'bg-purple-500', 'bg-pink-500', 'bg-orange
 
 interface GameResultProps {
   winner: 'landlord' | 'peasants';
+  /** Socket IDs of winning players (server-authoritative) */
+  winnerIds: string[];
   members: ClientMember[];
-  landlordIndex: number | null;
+  readyCount: number;
   hasVoted: boolean;
   onVote: () => void;
 }
 
 export function GameResult({
   winner,
+  winnerIds,
   members,
-  landlordIndex,
+  readyCount,
   hasVoted,
   onVote,
 }: GameResultProps) {
-  const readyCount = members.filter((m) => m.wantToPlay).length;
   const isLandlordWin = winner === 'landlord';
   const players = members.filter((m) => m.role === 'player');
-
 
   return (
     <motion.div
@@ -56,7 +57,7 @@ export function GameResult({
         {/* Confetti strip */}
         <div className="flex gap-3 flex-wrap justify-center">
           {players.map((member, i) => {
-            const isWinner = isLandlordWin ? i === landlordIndex : i !== landlordIndex;
+            const isWinner = winnerIds.includes(member.id);
             return (
               <motion.div
                 key={member.id}

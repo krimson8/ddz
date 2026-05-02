@@ -5,6 +5,8 @@ import { createDeck, shuffle, sortHand, validatePlay } from './card.utils';
 import { RoomManager } from './room.manager';
 import { Card, Member, Room } from './types';
 
+const TURN_TIMEOUT_MS = 30_000;
+
 // ── Nickname sanitisation ────────────────────────────────────────────────────
 
 /** Strip HTML tags and control characters; enforce 2–10 character length. */
@@ -62,6 +64,44 @@ export class GameService {
     this.server?.to(room.code).emit(event, { ...payload, seq: room.eventSeq });
   }
 
+  /**
+   * Broadcast the canonical gameplay state to the whole room, then unicast
+   * the current player's hand to them privately.
+   *
+   * Called after every state-changing gameplay action: card play, pass,
+   * new round, landlord decided, and turn timer expiry.
+   */
+  private buildGameStatePayload(room: Room): object {
+    return {
+      currentPlayer: room.playerIds[room.currentTurn] ?? null,
+      currentPlayerEndTime: room.turnEndTime,
+      onTable: room.lastPlay,
+      history: room.playHistory,
+      playerCardCounts: room.playerIds.map((id) => {
+        const m = room.members.find((mem) => mem.id === id);
+        return m ? m.hand.length : 0;
+      }),
+      landlordIndex: room.landlordIndex,
+      landlordCards: room.landlordCards,
+      phase: 'gameplay',
+    };
+  }
+
+  /** Unicast a game_state snapshot to a single socket (reconnect / spectator join). */
+  private emitGameStateToSocket(room: Room, socketId: string): void {
+    this.server?.to(socketId).emit('game_state', this.buildGameStatePayload(room));
+  }
+
+  /** Broadcast game_state to the room, then unicast each player's hand. */
+  private emitGameState(room: Room): void {
+    this.emitToRoom(room, 'game_state', this.buildGameStatePayload(room));
+    for (let i = 0; i < 3; i++) {
+      const pid = room.playerIds[i];
+      const m = room.members.find((mem) => mem.id === pid);
+      if (m) this.emitToSocket(pid, 'hand_updated', { hand: m.hand });
+    }
+  }
+
   /** Broadcast the full connected member list to the room. */
   private emitMembersUpdate(room: Room): void {
     const members = room.members
@@ -73,7 +113,9 @@ export class GameService {
         cardCount: m.hand.length,
         wantToPlay: m.wantToPlay,
       }));
-    this.emitToRoom(room, 'members_update', { members });
+    const readyCount = members.filter((m) => m.wantToPlay).length;
+    const canVote = room.state === 'waiting' && members.length >= 3;
+    this.emitToRoom(room, 'members_update', { members, readyCount, canVote });
   }
 
   /** Unicast to a single socket — no seq (point-to-point, not room-level). */
@@ -264,16 +306,9 @@ export class GameService {
         wantToPlay: m.wantToPlay,
       }));
 
-    const gameSnapshot = room.state === 'playing' ? {
-      currentTurn: room.currentTurn,
-      landlordIndex: room.landlordIndex,
-      landlordCards: room.landlordCards,
-      lastPlay: room.lastPlay,
-      playerCardCounts: room.playerIds.map((id) => {
-        const m = room.members.find((mem) => mem.id === id);
-        return m ? m.hand.length : 0;
-      }),
-    } : {};
+    const reconnectPhase = room.state === 'playing'
+      ? (room.landlordIndex >= 0 ? 'gameplay' : 'bidding')
+      : 'lobby';
 
     this.server?.to(socketId).emit('room_joined', {
       roomCode,
@@ -283,35 +318,35 @@ export class GameService {
       seq: room.eventSeq,
       reconnect: true,
       winCounts: room.winCounts,
-      ...gameSnapshot,
+      phase: reconnectPhase,
       ...(newReconnectToken ? { reconnectToken: newReconnectToken } : {}),
     });
 
-    // Re-send hand if in playing state
-    if (room.state === 'playing' && member.role === 'player') {
-      this.server
-        ?.to(socketId)
-        .emit('game_start', {
+    // Re-send game state if room is in playing state
+    if (room.state === 'playing') {
+      if (member.role === 'player') {
+        this.server?.to(socketId).emit('game_start', {
           hand: member.hand,
           firstBidder: room.firstBidder,
           reconnect: true,
         });
 
-      // If it's their turn, notify
-      const playerIndex = room.playerIds.indexOf(socketId);
-      if (playerIndex !== -1) {
-        // During bidding: always re-send bid_turn so the player sees the panel.
-        if (room.landlordIndex === -1) {
-          this.server?.to(socketId).emit('bid_turn', {
-            playerIndex: room.currentTurn,
-            currentBid: room.currentBid,
-            submitted: room.bidVotedIndices.includes(playerIndex),
-          });
+        const playerIndex = room.playerIds.indexOf(socketId);
+        if (playerIndex !== -1) {
+          if (room.landlordIndex === -1) {
+            // During bidding: re-send bid panel state
+            this.server?.to(socketId).emit('bid_turn', {
+              playerIndex: room.currentTurn,
+              currentBid: room.currentBid,
+              submitted: room.bidVotedIndices.includes(playerIndex),
+            });
+          } else {
+            this.emitGameStateToSocket(room, socketId);
+          }
         }
-        // During gameplay: emit your_turn if it is their turn.
-        if (room.landlordIndex !== -1 && room.currentTurn === playerIndex) {
-          this.server?.to(socketId).emit('your_turn', {});
-        }
+      } else if (room.landlordIndex >= 0) {
+        // Spectator joining mid-gameplay: send full board snapshot
+        this.emitGameStateToSocket(room, socketId);
       }
     }
 
@@ -388,7 +423,7 @@ export class GameService {
     }
     room.bidPassCount++;
 
-    this.emitToRoom(room, 'bid_made', { playerIndex, value });
+    this.emitToRoom(room, 'bid_made', { playerIndex, value, votedCount: room.bidPassCount });
 
     // If all 3 have voted early, finalize now
     if (room.bidPassCount >= 3) {
@@ -449,16 +484,9 @@ export class GameService {
     room.lastPlay = result;
     room.lastPlayedBy = playerIndex;
     room.passCount = 0;
+    room.playHistory.push({ playerIndex, play: result });
 
-    this.emitToRoom(room, 'cards_played', {
-      playerIndex,
-      cards: result.cards,
-      handType: result.type,
-      rank: result.rank,
-      remaining: member.hand.length,
-    });
-
-    // Win check
+    // Win check before advancing turn
     if (member.hand.length === 0) {
       const winner =
         playerIndex === room.landlordIndex ? 'landlord' : 'peasants';
@@ -466,11 +494,10 @@ export class GameService {
       return;
     }
 
-    // Advance turn and broadcast nextTurn so all clients can track whose turn it is.
     const nextTurn = (room.currentTurn + 1) % 3;
     room.currentTurn = nextTurn;
-    this.emitToRoom(room, 'turn_changed', { nextTurn });
-    this.emitToSocket(room.playerIds[nextTurn], 'your_turn', {});
+    this.startTurnTimer(room, nextTurn);
+    this.emitGameState(room);
   }
 
   /**
@@ -487,23 +514,17 @@ export class GameService {
     if (playerIndex === -1 || playerIndex !== room.currentTurn) return;
 
     room.passCount++;
-    this.emitToRoom(room, 'player_passed', { playerIndex });
 
     if (room.passCount >= 2) {
       // Two consecutive passes → the player who last played leads a new round
-      const nextTurn = room.lastPlayedBy;
       room.passCount = 0;
       room.lastPlay = null;
-      room.currentTurn = nextTurn;
-      this.emitToRoom(room, 'new_round', { nextTurn });
-      this.emitToRoom(room, 'turn_changed', { nextTurn });
-      this.emitToSocket(room.playerIds[nextTurn], 'your_turn', {});
+      room.currentTurn = room.lastPlayedBy;
     } else {
-      const nextTurn = (room.currentTurn + 1) % 3;
-      room.currentTurn = nextTurn;
-      this.emitToRoom(room, 'turn_changed', { nextTurn });
-      this.emitToSocket(room.playerIds[nextTurn], 'your_turn', {});
+      room.currentTurn = (room.currentTurn + 1) % 3;
     }
+    this.startTurnTimer(room, room.currentTurn);
+    this.emitGameState(room);
   }
 
   // ── Disconnect / leave ──────────────────────────────────────────────────────
@@ -602,7 +623,7 @@ export class GameService {
       .filter((m) => m.role === 'spectator')
       .map((m) => ({ id: m.id, nickname: m.nickname }));
 
-    this.emitToRoom(room, 'vote_closed_start', { players, spectators });
+    this.emitToRoom(room, 'vote_closed_start', { players, spectators, phase: 'dealing' });
 
     // Broadcast updated roles so all clients see the locked-in player list
     // without having to derive roles from vote_closed_start on the frontend.
@@ -661,21 +682,21 @@ export class GameService {
     for (let i = 0; i < 3; i++) {
       const m = room.members.find((mem) => mem.id === room.playerIds[i]);
       if (m) {
-        this.emitToSocket(m.id, 'game_start', { hand: m.hand, firstBidder: room.firstBidder });
+        this.emitToSocket(m.id, 'game_start', { hand: m.hand, firstBidder: room.firstBidder, phase: 'dealing' });
       }
     }
 
     // Spectators get an empty hand (for consistent client-side state)
     for (const m of room.members) {
       if (m.role === 'spectator') {
-        this.emitToSocket(m.id, 'game_start', { hand: [], firstBidder: room.firstBidder });
+        this.emitToSocket(m.id, 'game_start', { hand: [], firstBidder: room.firstBidder, phase: 'dealing' });
       }
     }
 
     // Delay the bid_open by 2 seconds so players can see their hand first.
     // All 3 players bid simultaneously; a 15s server-side timer enforces the deadline.
     setTimeout(() => {
-      this.emitToRoom(room, 'bid_open', { timeoutMs: 8_000 });
+      this.emitToRoom(room, 'bid_open', { timeoutMs: 8_000, phase: 'bidding' });
       // Unicast each player's individual submission status so the client knows
       // whether to show the bid panel as already submitted (e.g. after reconnect).
       for (let i = 0; i < 3; i++) {
@@ -707,30 +728,28 @@ export class GameService {
       landlordMember.hand = sortHand(landlordMember.hand);
     }
 
-    const playerCardCounts = room.playerIds.map((id) => {
-      const m = room.members.find((mem) => mem.id === id);
-      return m ? m.hand.length : 0;
-    });
-
-    this.emitToRoom(room, 'landlord_decided', {
-      playerIndex: landlordIndex,
-      landlordCards: room.landlordCards,
-      playerCardCounts,
-    });
-
-    // Unicast the landlord's updated hand (17 + 3 = 20 cards) so the client
-    // never has to merge cards locally.
-    if (landlordMember) {
-      this.emitToSocket(landlordMember.id, 'hand_updated', { hand: landlordMember.hand });
-    }
-
     // Landlord leads first
     room.currentTurn = landlordIndex;
     room.passCount = 0;
     room.lastPlay = null;
     room.lastPlayedBy = landlordIndex;
+    room.playHistory = [];
 
-    this.emitToSocket(room.playerIds[landlordIndex], 'your_turn', {});
+    // Emit landlord_decided so clients know who the landlord is and transition phase,
+    // then immediately follow with a game_state for the first turn.
+    const playerCardCounts = room.playerIds.map((id) => {
+      const m = room.members.find((mem) => mem.id === id);
+      return m ? m.hand.length : 0;
+    });
+    this.emitToRoom(room, 'landlord_decided', {
+      playerIndex: landlordIndex,
+      landlordCards: room.landlordCards,
+      playerCardCounts,
+      phase: 'gameplay',
+    });
+
+    this.startTurnTimer(room, landlordIndex);
+    this.emitGameState(room);
   }
 
   /**
@@ -762,13 +781,22 @@ export class GameService {
   }
 
   /**
-   * Advance to the next player's gameplay turn.
-   * Called after a successful card play.
+   * Start a 30-second server-side timer for the given player's turn.
+   * When it fires, auto-pass on their behalf exactly as if they called handlePass.
    */
-  private advanceGameTurn(room: Room): void {
-    const nextTurn = (room.currentTurn + 1) % 3;
-    room.currentTurn = nextTurn;
-    this.server?.to(room.playerIds[nextTurn]).emit('your_turn', {});
+  private startTurnTimer(room: Room, playerIndex: number): void {
+    if (room.turnTimer) clearTimeout(room.turnTimer);
+    room.turnEndTime = Date.now() + TURN_TIMEOUT_MS;
+    room.turnTimer = setTimeout(() => {
+      room.turnTimer = null;
+      const socketId = room.playerIds[playerIndex];
+      if (socketId) this.handlePass(socketId);
+    }, TURN_TIMEOUT_MS);
+  }
+
+  /** Cancel the current turn timer without triggering a pass. */
+  private clearTurnTimer(room: Room): void {
+    if (room.turnTimer) { clearTimeout(room.turnTimer); room.turnTimer = null; }
   }
 
   /**
@@ -789,10 +817,16 @@ export class GameService {
       }
     }
 
+    // Build the authoritative winners list (socket IDs) so frontend never derives it
+    const winnerIds = room.playerIds.filter((_, i) =>
+      winner === 'landlord' ? i === room.landlordIndex : i !== room.landlordIndex,
+    );
     this.emitToRoom(room, 'game_over', {
       winner,
       landlordIndex: room.landlordIndex,
       winCounts: room.winCounts,
+      winnerIds,
+      phase: 'result',
     });
 
     // Tear down game state in preparation for the next round
@@ -808,9 +842,12 @@ export class GameService {
     room.passCount = 0;
     room.lastPlay = null;
     room.lastPlayedBy = -1;
+    room.playHistory = [];
+    room.turnEndTime = 0;
     room.bidPassCount = 0;
     room.bidVotedIndices = [];
     if (room.bidTimer) { clearTimeout(room.bidTimer); room.bidTimer = null; }
+    this.clearTurnTimer(room);
     room.playerIds = [];
 
     // Cancel any pending reconnect timers
@@ -820,7 +857,7 @@ export class GameService {
     room.state = 'waiting';
     // After win screen delay, tell all clients to return to lobby then sync member list
     setTimeout(() => {
-      this.emitToRoom(room, 'return_to_lobby', {});
+      this.emitToRoom(room, 'return_to_lobby', { phase: 'lobby' });
       this.emitMembersUpdate(room);
     }, 5_000);
   }
@@ -833,6 +870,7 @@ export class GameService {
   private resetToWaiting(room: Room): void {
     // Clear timers
     if (room.bidTimer) { clearTimeout(room.bidTimer); room.bidTimer = null; }
+    this.clearTurnTimer(room);
     room.reconnectTimers.forEach((t) => clearTimeout(t));
     room.reconnectTimers.clear();
 
@@ -859,11 +897,13 @@ export class GameService {
     room.passCount = 0;
     room.lastPlay = null;
     room.lastPlayedBy = -1;
+    room.playHistory = [];
+    room.turnEndTime = 0;
     room.bidPassCount = 0;
     room.bidYesVoters = [];
     room.bidVotedIndices = [];
 
-    this.emitToRoom(room, 'game_aborted', {});
+    this.emitToRoom(room, 'game_aborted', { phase: 'lobby' });
     this.emitMembersUpdate(room);
   }
 

@@ -17,7 +17,7 @@ function clearRoomStorage(roomCode: string) {
 export default function Home() {
   const socket = useSocket();
   const { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, playCards, pass, reactEmoji } = useGame();
-  const { phase, roomCode, members, winCounts } = gameState;
+  const { phase, roomCode, members, winCounts, readyCount, canVote } = gameState;
 
   const [nickname, setNickname] = useState('');
   const [joinCode, setJoinCode] = useState('');
@@ -35,7 +35,6 @@ export default function Home() {
     if (hasAttemptedReconnect.current) return;
     hasAttemptedReconnect.current = true;
 
-    // Find any saved reconnect token across all rooms
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key?.startsWith('ddz_reconnectToken_')) {
@@ -55,9 +54,7 @@ export default function Home() {
     function handleConnect() {
       if (!roomCode) return;
       const token = localStorage.getItem(`ddz_reconnectToken_${roomCode}`);
-      if (token) {
-        socket.emit('rejoin', { code: roomCode, reconnectToken: token });
-      }
+      if (token) socket.emit('rejoin', { code: roomCode, reconnectToken: token });
     }
     socket.on('connect', handleConnect);
     return () => { socket.off('connect', handleConnect); };
@@ -78,12 +75,19 @@ export default function Home() {
     };
   }, [socket]);
 
+  // room_disbanded: server confirms the room is gone — clear token (state reset already handled by useGame via game_aborted)
+  useEffect(() => {
+    const handleDisbanded = () => {
+      if (roomCode) clearRoomStorage(roomCode);
+    };
+    socket.on('room_disbanded', handleDisbanded);
+    return () => { socket.off('room_disbanded', handleDisbanded); };
+  }, [socket, roomCode]);
+
   // Listen for server errors
   useEffect(() => {
     const handleError = (data: { message: string }) => {
-      // Reconnect failed — clear the stale token and stay on home screen
       if (roomCode) clearRoomStorage(roomCode);
-      // Also scan for any stale token that caused the error
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key?.startsWith('ddz_reconnectToken_')) {
@@ -115,6 +119,8 @@ export default function Home() {
   }
 
   function handleLeaveRoom() {
+    // Clear the token immediately so a page refresh after leaving returns to home.
+    // State reset waits for server confirmation (members_update / game_aborted).
     if (roomCode) clearRoomStorage(roomCode);
     leaveRoom();
   }
@@ -195,6 +201,8 @@ export default function Home() {
           onVote={votePlay}
           hasVoted={hasVoted}
           winCounts={winCounts}
+          readyCount={readyCount}
+          canVote={canVote}
         />
       </div>
     );

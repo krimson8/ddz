@@ -6,8 +6,6 @@ import { Card } from './Card';
 import type { Card as CardType, Play } from '@/types/game';
 import { validatePlay } from '@/lib/cardUtils';
 
-const TURN_SECONDS = 30;
-
 interface CardHandProps {
   cards: CardType[];
   onPlay: (cards: CardType[]) => void;
@@ -16,14 +14,14 @@ interface CardHandProps {
   playerIndex?: number;
   lastPlay?: Play | null;
   onSelectionChange?: (cards: CardType[]) => void;
+  /** Epoch ms when the current turn expires (from server). Only relevant when interactive. */
+  turnEndTime?: number | null;
 }
 
-export function CardHand({ cards, onPlay, onPass, interactive = true, playerIndex = 0, lastPlay, onSelectionChange }: CardHandProps) {
+export function CardHand({ cards, onPlay, onPass, interactive = true, playerIndex = 0, lastPlay, onSelectionChange, turnEndTime }: CardHandProps) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const onPassRef = useRef(onPass);
-  onPassRef.current = onPass;
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Notify parent of selection changes
@@ -37,33 +35,24 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, playerInde
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, cards]);
 
-  // 20s countdown when it's my turn
+  // Countdown derived from server-sent turnEndTime — no local auto-pass logic
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
-    if (!interactive) {
+    if (!interactive || !turnEndTime) {
       setTimeLeft(null);
       return;
     }
-    setTimeLeft(TURN_SECONDS);
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev === null || prev <= 1) return 0;
-        return prev - 1;
-      });
-    }, 1000);
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((turnEndTime - Date.now()) / 1000));
+      setTimeLeft(remaining);
+      if (remaining <= 0 && timerRef.current) clearInterval(timerRef.current);
+    };
+    tick();
+    timerRef.current = setInterval(tick, 1000);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [interactive]);
-
-  // Auto-pass when timer expires
-  useEffect(() => {
-    if (timeLeft !== 0 || !interactive) return;
-    if (timerRef.current) clearInterval(timerRef.current);
-    setSelected(new Set());
-    setTimeLeft(null);
-    onPassRef.current();
-  }, [timeLeft, interactive]);
+  }, [interactive, turnEndTime]);
 
   // Clear selection when interactive starts (new turn)
   useEffect(() => {

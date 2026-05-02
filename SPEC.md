@@ -168,15 +168,17 @@ There is no `/room/[code]` route. The room code is not in the URL; identity is e
 
 ### 5.1.1 Client-Side Game Phase
 
-The frontend tracks a `GamePhase` to drive UI transitions:
+The frontend tracks a `GamePhase` to drive UI transitions. **All phase transitions are driven exclusively by server events** — the client never derives or self-advances the phase.
 
-| Phase | Description |
-|-------|-------------|
-| `lobby` | Waiting room / voting screen |
-| `dealing` | Cards dealt, players see their hand before bidding opens (~2s window) |
-| `bidding` | Simultaneous 8-second bid window open |
-| `gameplay` | Active card play phase |
-| `result` | Game-over overlay shown |
+| Phase | Description | Triggered by |
+|-------|-------------|--------------|
+| `lobby` | Waiting room / voting screen | Initial state; `game_aborted`, `return_to_lobby` |
+| `dealing` | Cards dealt, players see their hand before bidding opens (~2s window) | `vote_closed_start`, `game_start` |
+| `bidding` | Simultaneous 8-second bid window open | `bid_open` |
+| `gameplay` | Active card play phase | `landlord_decided` |
+| `result` | Game-over overlay shown | `game_over` |
+
+On reconnect, the server includes a `phase` field in `room_joined` so the client restores the correct phase directly.
 
 ### 5.2 UI Components
 
@@ -388,24 +390,26 @@ interface Play {
 | Event | Payload | Description |
 |-------|---------|-------------|
 | `room_created` | `{ roomCode, reconnectToken }` | Room successfully created |
-| `room_joined` | `{ roomCode, members, state, playerIds, seq, reconnectToken?, reconnect?, currentTurn?, landlordIndex?, landlordCards?, lastPlay?, playerCardCounts? }` | Full state snapshot — sent on join, rejoin, and sync. Gameplay fields only present when reconnecting mid-game. |
-| `members_update` | `{ members: [{id, nickname, role, cardCount, wantToPlay}], seq }` | Full member list broadcast whenever membership or `wantToPlay` changes |
-| `vote_closed_start` | `{ players: [{id,nickname}], spectators: [{id,nickname}], seq }` | 3 members ready — roles locked, game starting in 3s |
-| `game_start` | `{ hand: Card[], firstBidder, reconnect? }` | Unicast — game begins; players get hand, spectators get empty hand. On reconnect, only restores hand (phase already set by `room_joined`). |
-| `bid_open` | `{ timeoutMs: 8000, seq }` | Simultaneous bid window is open |
-| `bid_turn` | `{ playerIndex, currentBid }` | Unicast to reconnected player only — restores bidding UI state |
-| `bid_made` | `{ playerIndex, value, seq }` | A player placed a bid |
-| `landlord_decided` | `{ playerIndex, landlordCards, seq }` | Landlord chosen; 3 face-down cards revealed to all |
+| `room_joined` | `{ roomCode, members, state, playerIds, seq, winCounts, phase, reconnectToken?, reconnect?, currentTurn?, landlordIndex?, landlordCards?, lastPlay?, playerCardCounts? }` | Full state snapshot — sent on join, rejoin, and sync. `winCounts` and `phase` always present. Gameplay fields only present when reconnecting mid-game. |
+| `members_update` | `{ members: [{id, nickname, role, cardCount, wantToPlay}], readyCount, canVote, seq }` | Full member list broadcast whenever membership, role, or `wantToPlay` changes. `readyCount` is the authoritative count of members with `wantToPlay=true`. `canVote` is `true` when the room is in `waiting` state with ≥3 members. Also emitted immediately after `vote_closed_start` to push updated roles. |
+| `vote_closed_start` | `{ players: [{id,nickname}], spectators: [{id,nickname}], phase: ‘dealing’, seq }` | 3 members ready — roles locked, game starting in 3s. Followed immediately by `members_update` with authoritative roles. |
+| `game_start` | `{ hand: Card[], firstBidder, phase: ‘dealing’, reconnect? }` | Unicast — game begins; players get hand, spectators get empty hand. On reconnect, only restores hand (phase already set by `room_joined`). |
+| `bid_open` | `{ timeoutMs: 8000, phase: ‘bidding’, seq }` | Simultaneous bid window is open. Each player also receives a unicast `bid_status` immediately after. |
+| `bid_status` | `{ submitted: boolean }` | Unicast — tells the receiving player whether they have already cast their landlord bid. Sent after `bid_open` and on reconnect via `bid_turn`. |
+| `bid_turn` | `{ playerIndex, currentBid, submitted }` | Unicast to reconnected player only — restores bidding UI state including whether the player already voted. |
+| `bid_made` | `{ playerIndex, value, votedCount, seq }` | A player placed a bid. `votedCount` is the authoritative total number of players who have voted so far. |
+| `landlord_decided` | `{ playerIndex, landlordCards, playerCardCounts, phase: ‘gameplay’, seq }` | Landlord chosen; 3 face-down cards revealed to all; authoritative card counts for all 3 players included. Followed by a unicast `hand_updated` to the landlord. |
+| `hand_updated` | `{ hand: Card[] }` | Unicast — full sorted hand. Sent to the landlord after receiving the 3 bottom cards, and to any player after every successful `play_cards`. Clients must not modify their hand locally. |
 | `your_turn` | `{}` | Unicast — it’s your turn to play |
 | `cards_played` | `{ playerIndex, cards, handType, rank, remaining, seq }` | Cards were played |
 | `turn_changed` | `{ nextTurn, seq }` | Current turn index changed (emitted after every play or pass) |
 | `player_passed` | `{ playerIndex, seq }` | A player passed |
 | `new_round` | `{ nextTurn, seq }` | Two passes — new lead round; `lastPlay` resets to null |
-| `game_over` | `{ winner: ‘landlord’\|’peasants’, landlordIndex, winCounts, seq }` | Game ended; win overlay shown. `return_to_lobby` follows after 5s. |
-| `return_to_lobby` | `{ seq }` | Emitted 5s after `game_over` — all clients reset to lobby screen; `members_update` follows immediately |
+| `game_over` | `{ winner: ‘landlord’\|’peasants’, landlordIndex, winnerIds: string[], winCounts, phase: ‘result’, seq }` | Game ended; win overlay shown. `winnerIds` is the authoritative list of winning socket IDs. `return_to_lobby` follows after 5s. |
+| `return_to_lobby` | `{ phase: ‘lobby’, seq }` | Emitted 5s after `game_over` — all clients reset to lobby screen; `members_update` follows immediately |
 | `player_disconnected` | `{ nickname, timeoutMs: 15000, seq }` | A player dropped mid-game; reconnect window started. Other players see a waiting overlay. |
-| `player_reconnected` | `{ nickname, seq }` | Disconnected player successfully rejoined; overlay dismissed, game continues |
-| `game_aborted` | `{ seq }` | Game aborted (reconnect window expired); all flags cleared, back to waiting |
+| `player_reconnected` | `{ nickname, playerIds, seq }` | Disconnected player successfully rejoined; `playerIds` carries the updated slot assignments (new socket ID) so all clients can re-render that player’s seat. Overlay dismissed, game continues. |
+| `game_aborted` | `{ phase: ‘lobby’, seq }` | Game aborted (reconnect window expired); all flags cleared, back to waiting |
 | `room_disbanded` | `{ reason }` | Room closed (all members left, 5-min idle timeout) |
 | `invalid_play` | `{ reason }` | Played cards are invalid |
 | `room_error` | `{ message }` | Room-related error (e.g. join failed, rate limit, reconnect failed) |
@@ -416,13 +420,29 @@ interface Play {
 ```
 ── UNIFIED ROOM STATE MACHINE ──────────────────────────────
 
+── SERVER AUTHORITY PRINCIPLE ───────────────────────────────
+
+  The backend is the sole source of truth for all game state and phase transitions.
+  Clients never derive phase, compute card counts, or mutate their hand locally.
+  Specifically:
+    - Every phase transition is delivered as an explicit `phase` field in a server event.
+    - `members_update` carries `readyCount` and `canVote` so the UI never computes them.
+    - `bid_made` carries `votedCount` so the UI never self-increments a local counter.
+    - `game_over` carries `winnerIds` (socket IDs) so the UI never derives winners from landlordIndex.
+    - `hand_updated` is sent after every successful play so clients never remove cards locally.
+    - A 30-second server-side `turnTimer` auto-passes for idle players; the client
+      countdown is display-only and has no game-state side effects.
+
 state: ‘waiting’
   - Everyone in the room is a spectator; all wantToPlay flags are false.
   - New members can join at any time.
   - Any member can toggle wantToPlay via vote_play at any time.
-  - On every toggle, members_update is broadcast with the full member list.
+  - On every toggle, members_update is broadcast with the full member list
+    (includes readyCount and canVote).
   - Transition → ‘playing’ the instant exactly 3 members have wantToPlay = true.
   - No timeout, no separate ‘voting’ state.
+  - On transition: vote_closed_start { phase: ‘dealing’ } broadcast, then members_update
+    broadcast with authoritative roles (players vs spectators).
 
 state: ‘playing’  (encompasses bidding + gameplay sub-states)
   - The 3 players are locked in playerIds[]; wantToPlay flags are no longer relevant.
@@ -430,30 +450,34 @@ state: ‘playing’  (encompasses bidding + gameplay sub-states)
       Shuffle & deal 17 cards each (sorted highest→lowest), set aside 3 landlord cards.
       Spectators receive no cards.
       Random first bidder index assigned (stored as `firstBidder`).
-      Server deals cards to all players (`game_start`), waits ~2 seconds,
-      then emits `bid_open { timeoutMs: 8000 }` — all 3 players bid simultaneously.
+      Server deals cards to all players via unicast `game_start { phase: ‘dealing’ }`,
+      waits ~2 seconds, then emits `bid_open { timeoutMs: 8000, phase: ‘bidding’ }`.
+      Each player also receives a unicast `bid_status { submitted }` right after bid_open.
       An 8-second server-side timer (`bidTimer`) enforces the deadline.
       The round resolves when all 3 have voted OR the timer fires:
         - 1 or more voted yes → system randomly picks one of the yes-voters.
         - Nobody voted yes → system randomly assigns one of the 3 players.
       (There is no re-deal; landlord is always determined in one round.)
       Landlord receives the 3 bottom cards (sorted into their hand, 20 total).
-      Landlord cards revealed to all players.
+      landlord_decided { phase: ‘gameplay’ } broadcast includes playerCardCounts.
+      Unicast hand_updated sent to landlord with their full 20-card hand.
   - Sub-state: ‘gameplay’
       Landlord plays first.
+      A 30-second server-side turn timer (`turnTimer`) starts when each turn begins.
+      If the timer fires, the server calls handlePass on behalf of the idle player.
       Validate each play against hand type rules.
-      After every successful play or pass, server emits `turn_changed { nextTurn }` to
-      all clients and `your_turn {}` to the individual player whose turn it is now.
+      After every successful play: unicast hand_updated to the player who played,
+      then emit turn_changed { nextTurn } to all clients and your_turn {} to the next player.
       Track consecutive passes.
       Two consecutive passes → new round (last player leads), `new_round { nextTurn }` broadcast.
   - When a player’s hand is empty:
       If Landlord → Landlord wins.
       If Peasant → Peasants win.
   - On game end:
-      game_over broadcast → win overlay shown on all clients.
+      game_over { phase: ‘result’, winnerIds, winCounts } broadcast → win overlay shown.
       All wantToPlay flags cleared; all members reverted to spectator.
       After 5-second delay:
-        return_to_lobby broadcast → all clients reset to lobby screen.
+        return_to_lobby { phase: ‘lobby’ } broadcast → all clients reset to lobby screen.
         members_update broadcast (updated member list with cleared flags).
       Room returns to ‘waiting’ — members may immediately start voting again.
 
@@ -466,8 +490,10 @@ state: ‘playing’  (encompasses bidding + gameplay sub-states)
     - If reconnected within 15s:
         playerIds updated to new socket ID.
         Full game state (hand, currentTurn, landlordIndex, landlordCards, lastPlay,
-        playerCardCounts) unicast via room_joined + game_start.
-        player_reconnected broadcast → overlay dismissed, game continues.
+        playerCardCounts, winCounts) unicast via room_joined + game_start.
+        player_reconnected { nickname, playerIds } broadcast → other clients update
+        their playerOrder to the new socket ID so the seat re-renders correctly.
+        Overlay dismissed, game continues.
         members_update broadcast.
     - If not reconnected → room resets to ‘waiting’:
         All remaining members become spectators, wantToPlay flags cleared.
@@ -506,7 +532,7 @@ identifyHandType(cards: Card[]): { type: HandType, rank: number } | null
 | Scenario | Behaviour |
 |----------|-----------|
 | Member disconnects during 'waiting' | Removed immediately from member list. `members_update` broadcast. Their `wantToPlay` flag is gone with them — vote count drops naturally. |
-| Player disconnects during 'playing' | 15-second grace period — `player_disconnected` broadcast; member stays in room with `disconnectedAt` set, filtered from `members_update`. If reconnected → full state unicast (`room_joined` + `game_start`), `player_reconnected` + `members_update` broadcast. If timer expires → `game_aborted`, all flags cleared, room back to 'waiting'. |
+| Player disconnects during 'playing' | 15-second grace period — `player_disconnected` broadcast; member stays in room with `disconnectedAt` set, filtered from `members_update`. If reconnected → full state unicast (`room_joined` with `winCounts` + `game_start`), `player_reconnected { nickname, playerIds }` broadcast (so other clients update their seat mapping to the new socket ID) + `members_update`. If timer expires → `game_aborted`, all flags cleared, room back to 'waiting'. |
 | All members leave | Room deleted after 5-minute idle timeout. `room_disbanded` broadcast. |
 
 ### 6.7 Health & Monitoring
@@ -534,7 +560,7 @@ All communication is via **WebSocket (Socket.IO)**. No REST endpoints except `/h
 - Client stores it in `localStorage` under key `ddz_reconnectToken_<ROOMCODE>`.
 - On page load, client scans `localStorage` for any saved token and auto-emits `rejoin { code, reconnectToken }`.
 - On socket transport reconnect (network blip), client re-emits `rejoin` on the `connect` event if a token exists for the current room.
-- Server matches token → updates socket ID → restores full game state via `room_joined` + `game_start` unicast.
+- Server matches token → updates socket ID → restores full game state via `room_joined` (includes `winCounts` always) + `game_start` unicast.
 - Token is rotated on every successful reconnect to prevent replay attacks.
 - If `rejoin` fails (room gone, token expired) → server emits `room_error` → client clears the stale token and shows the home screen.
 - "← 離開房間" button clears the token explicitly so a page refresh after leaving returns to the home screen.

@@ -1,23 +1,27 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-
-const BID_SECONDS = 8;
 
 interface BiddingPanelProps {
   hasVoted: boolean;
   onVoteYes: () => void;
   votedCount?: number;
+  timeoutMs?: number;
 }
 
-export function BiddingPanel({ hasVoted, onVoteYes, votedCount = 0 }: BiddingPanelProps) {
-  const [timeLeft, setTimeLeft] = useState(BID_SECONDS);
+export function BiddingPanel({ hasVoted, onVoteYes, votedCount = 0, timeoutMs = 8000 }: BiddingPanelProps) {
+  const totalSeconds = Math.round(timeoutMs / 1000);
+  const [timeLeft, setTimeLeft] = useState(totalSeconds);
+  // Reset when a new bid window opens (timeoutMs changes)
+  const prevTimeoutMs = useRef(timeoutMs);
 
-  // Self-contained countdown; resets on each mount (i.e. each new bid_open)
   useEffect(() => {
-    setTimeLeft(BID_SECONDS);
-  }, []);
+    if (prevTimeoutMs.current !== timeoutMs) {
+      prevTimeoutMs.current = timeoutMs;
+      setTimeLeft(totalSeconds);
+    }
+  }, [timeoutMs, totalSeconds]);
 
   useEffect(() => {
     if (timeLeft <= 0) return;

@@ -12,6 +12,8 @@ interface RoomLobbyProps {
   onVote: () => void;
   hasVoted: boolean;
   winCounts: Record<string, number>;
+  readyCount: number;
+  canVote: boolean;
 }
 
 export function RoomLobby({
@@ -21,11 +23,11 @@ export function RoomLobby({
   onVote,
   hasVoted,
   winCounts,
+  readyCount,
+  canVote,
 }: RoomLobbyProps) {
   const [copied, setCopied] = useState(false);
   const playerCount = members.filter((m) => m.role === 'player').length;
-  const readyCount = members.filter((m) => m.wantToPlay).length;
-  const canVote = members.length >= 3;
 
   function copyCode() {
     navigator.clipboard.writeText(roomCode).then(() => {

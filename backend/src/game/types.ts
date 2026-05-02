@@ -40,6 +40,11 @@ export interface Member {
 
 export type RoomState = 'waiting' | 'playing';
 
+export interface HistoryEntry {
+  playerIndex: number;
+  play: Play;
+}
+
 export interface Room {
   code: string;
   members: Member[];
@@ -56,11 +61,14 @@ export interface Room {
   passCount: number; // consecutive passes during gameplay
   lastPlay: Play | null;
   lastPlayedBy: number; // player index
+  playHistory: HistoryEntry[]; // full play history for current round
+  turnEndTime: number; // epoch ms when the current turn's 30s timer expires
   bidPassCount: number; // total votes cast during landlord bidding
   bidYesVoters: number[]; // player indices who said yes in landlord vote
   firstBidder: number; // player index who starts bidding
   bidTimer: NodeJS.Timeout | null; // 8s simultaneous bid window
   bidVotedIndices: number[]; // player indices who have already cast their bid
+  turnTimer: NodeJS.Timeout | null; // per-turn 30s auto-pass timer
   idleTimeout: NodeJS.Timeout | null; // 5-min auto-delete timer
   reconnectTimers: Map<string, NodeJS.Timeout>; // socketId → 60s grace timer
   winCounts: Record<string, number>; // nickname → total wins in this room
