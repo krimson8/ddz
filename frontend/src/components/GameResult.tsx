@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import type { ClientMember } from '@/types/game';
 
 const AVATAR_COLORS = ['bg-blue-500', 'bg-purple-500', 'bg-pink-500', 'bg-orange-500', 'bg-teal-500'];
@@ -10,40 +9,21 @@ interface GameResultProps {
   winner: 'landlord' | 'peasants';
   members: ClientMember[];
   landlordIndex: number | null;
-  confirmedVoters: string[];
   hasVoted: boolean;
   onVote: () => void;
-  onDismiss: () => void;
 }
 
 export function GameResult({
   winner,
   members,
   landlordIndex,
-  confirmedVoters,
   hasVoted,
   onVote,
-  onDismiss,
 }: GameResultProps) {
+  const readyCount = members.filter((m) => m.wantToPlay).length;
   const isLandlordWin = winner === 'landlord';
   const players = members.filter((m) => m.role === 'player');
 
-  // 10-second countdown — dismisses overlay when it reaches 0
-  const [autoSeconds, setAutoSeconds] = useState(10);
-  const dismissedRef = useRef(false);
-
-  useEffect(() => {
-    if (autoSeconds <= 0) {
-      if (!dismissedRef.current) {
-        dismissedRef.current = true;
-        onDismiss();
-      }
-      return;
-    }
-    const id = setTimeout(() => setAutoSeconds((s) => s - 1), 1000);
-    return () => clearTimeout(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSeconds]);
 
   return (
     <motion.div
@@ -70,15 +50,7 @@ export function GameResult({
           <h2 className="text-2xl font-black text-white">
             {isLandlordWin ? '地主獲勝！' : '農民獲勝！'}
           </h2>
-          {/* Auto-countdown */}
-          <motion.p
-            key={autoSeconds}
-            initial={{ opacity: 0, scale: 1.3 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-yellow-300 text-sm font-bold mt-1 tabular-nums"
-          >
-            {autoSeconds > 0 ? `${autoSeconds} 秒後返回大廳…` : '返回大廳…'}
-          </motion.p>
+          <p className="text-yellow-300 text-sm font-bold mt-1">返回大廳中…</p>
         </div>
 
         {/* Confetti strip */}
@@ -107,28 +79,32 @@ export function GameResult({
 
         {/* Re-vote section */}
         <div className="flex flex-col items-center gap-3 w-full">
-          <p className="text-white font-bold">再玩一局？({confirmedVoters.length}/3)</p>
+          <p className="text-white font-bold">再玩一局？({readyCount}/3)</p>
           <div className="flex gap-2 flex-wrap justify-center">
             {members.map((m) => (
               <span
                 key={m.id}
                 className={[
                   'text-xs px-2 py-1 rounded-full',
-                  confirmedVoters.includes(m.nickname)
+                  m.wantToPlay
                     ? 'bg-yellow-400 text-green-900 font-bold'
                     : 'bg-white/20 text-white',
                 ].join(' ')}
               >
-                {confirmedVoters.includes(m.nickname) ? '✓ ' : ''}{m.nickname}
+                {m.wantToPlay ? '✓ ' : ''}{m.nickname}
               </span>
             ))}
           </div>
           <button
-            onClick={() => { onVote(); onDismiss(); }}
-            disabled={hasVoted}
-            className="px-8 py-3 rounded-xl font-bold text-lg bg-yellow-400 hover:bg-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed text-green-900 transition-colors min-h-[44px] w-full"
+            onClick={onVote}
+            className={[
+              'px-8 py-3 rounded-xl font-bold text-lg transition-colors min-h-[44px] w-full',
+              hasVoted
+                ? 'bg-red-500 hover:bg-red-400 text-white'
+                : 'bg-yellow-400 hover:bg-yellow-300 text-green-900',
+            ].join(' ')}
           >
-            {hasVoted ? '已準備' : '再玩一局'}
+            {hasVoted ? '取消準備' : '再玩一局'}
           </button>
         </div>
       </motion.div>

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Server } from 'socket.io';
 import { createDeck, shuffle, sortHand, validatePlay } from './card.utils';
 import { RoomManager } from './room.manager';
@@ -28,6 +29,7 @@ export interface JoinResult {
 export interface ReconnectResult {
   roomCode: string;
   wasDisconnected: boolean;
+  newReconnectToken: string;
 }
 
 // ── GameService ──────────────────────────────────────────────────────────────
@@ -52,15 +54,39 @@ export class GameService {
     this.server = server;
   }
 
+  // ── Broadcast helpers ───────────────────────────────────────────────────────
+
+  /** Broadcast to every socket in the room, appending the room's seq number. */
+  private emitToRoom(room: Room, event: string, payload: object): void {
+    room.eventSeq += 1;
+    this.server?.to(room.code).emit(event, { ...payload, seq: room.eventSeq });
+  }
+
+  /** Broadcast the full connected member list to the room. */
+  private emitMembersUpdate(room: Room): void {
+    const members = room.members
+      .filter((m) => !m.disconnectedAt)
+      .map((m) => ({
+        id: m.id,
+        nickname: m.nickname,
+        role: m.role,
+        cardCount: m.hand.length,
+        wantToPlay: m.wantToPlay,
+      }));
+    this.emitToRoom(room, 'members_update', { members });
+  }
+
+  /** Unicast to a single socket — no seq (point-to-point, not room-level). */
+  private emitToSocket(socketId: string, event: string, payload: object): void {
+    this.server?.to(socketId).emit(event, payload);
+  }
+
   // ── Room creation / joining ─────────────────────────────────────────────────
 
   /**
    * Create a new room. Returns info for the gateway to complete the flow:
    *   1. socket.join(roomCode)
    *   2. socket.emit('room_created', { roomCode, reconnectToken })
-   *
-   * Transitions waiting → voting if this somehow starts with ≥3 members
-   * (edge case guard, normally only 1 member on create).
    */
   handleCreateRoom(
     socketId: string,
@@ -71,21 +97,23 @@ export class GameService {
       return { error: '暱稱必須為 2–10 個字元' };
     }
 
+    if (this.roomManager.roomCount >= 500) {
+      return { error: '伺服器已達到最大房間數，請稍後再試' };
+    }
+
     const { room, reconnectToken } = this.roomManager.createRoom(
       nickname,
       socketId,
     );
 
-    this.checkVoteTransition(room);
     return { roomCode: room.code, reconnectToken, nickname };
   }
 
   /**
    * Join an existing room. Returns info for the gateway to complete the flow:
    *   1. socket.join(roomCode)
-   *   2. socket.emit('room_joined', { roomCode, reconnectToken, members, state, confirmedCount })
-   *   3. (already emitted by this method) room broadcast: member_joined
-   *      and possibly vote_open (if transition triggers after join)
+   *   2. socket.emit('room_joined', { roomCode, reconnectToken, members, state })
+   *   3. (already emitted by this method) room broadcast: members_update
    *
    * Safe to call in any RoomState — new members always join as spectators.
    */
@@ -115,6 +143,10 @@ export class GameService {
       room.idleTimeout = null;
     }
 
+    if (room.members.length >= 10) {
+      return { error: '房間人數已滿（最多 10 人）' };
+    }
+
     const result = this.roomManager.joinRoom(upperCode, nickname, socketId);
     if (!result) {
       return { error: '加入房間失敗' };
@@ -122,18 +154,9 @@ export class GameService {
 
     const { member, reconnectToken } = result;
 
-    // Broadcast to existing room members (new member hasn't socket.join'd yet,
-    // so they won't receive this — correct behaviour)
-    this.server
-      ?.to(upperCode)
-      .emit('member_joined', {
-        id: member.id,
-        nickname: member.nickname,
-        role: member.role,
-      });
-
-    // Only check vote transition from 'waiting' state
-    this.checkVoteTransition(room);
+    // Broadcast full member list to existing room members (new member hasn't
+    // socket.join'd yet, so they won't receive this — correct behaviour)
+    this.emitMembersUpdate(room);
 
     return { roomCode: upperCode, reconnectToken, nickname: member.nickname };
   }
@@ -153,19 +176,15 @@ export class GameService {
         nickname: m.nickname,
         role: m.role,
         cardCount: m.hand.length,
+        wantToPlay: m.wantToPlay,
       }));
 
     return {
       roomCode,
       members,
       state: room.state,
-      confirmedCount: room.voteQueue.length,
-      confirmedNicknames: room.voteQueue
-        .slice(0, 3)
-        .map(
-          (id) =>
-            room.members.find((m) => m.id === id)?.nickname ?? '(已離線)',
-        ),
+      playerIds: room.playerIds,
+      seq: room.eventSeq,
     };
   }
 
@@ -194,10 +213,14 @@ export class GameService {
 
     const { room, member } = found;
 
+    // Rotate the token on every successful reconnect to prevent replay attacks
+    const newReconnectToken = randomUUID();
+    member.reconnectToken = newReconnectToken;
+
     // Still connected (e.g. SPA navigation) — update socket id and return
     if (!member.disconnectedAt) {
       member.id = newSocketId;
-      return { roomCode: upperCode, wasDisconnected: false };
+      return { roomCode: upperCode, wasDisconnected: false, newReconnectToken };
     }
 
     // Cancel the pending 60 s reset timer for this player
@@ -208,18 +231,21 @@ export class GameService {
       room.reconnectTimers.delete(oldSocketId);
     }
 
-    // Restore socket identity
+    // Restore socket identity and keep playerIds in sync
     member.id = newSocketId;
     member.disconnectedAt = undefined;
 
-    return { roomCode: upperCode, wasDisconnected: true };
+    const pidIdx = room.playerIds.indexOf(oldSocketId);
+    if (pidIdx !== -1) room.playerIds[pidIdx] = newSocketId;
+
+    return { roomCode: upperCode, wasDisconnected: true, newReconnectToken };
   }
 
   /**
    * Emit the current game state back to a reconnected player.
    * Must be called AFTER the gateway has done socket.join(roomCode).
    */
-  emitReconnectState(socketId: string, roomCode: string, wasDisconnected = true): void {
+  emitReconnectState(socketId: string, roomCode: string, wasDisconnected = true, newReconnectToken?: string): void {
     const room = this.roomManager.getRoom(roomCode);
     if (!room) return;
 
@@ -234,14 +260,29 @@ export class GameService {
         nickname: m.nickname,
         role: m.role,
         cardCount: m.hand.length,
+        wantToPlay: m.wantToPlay,
       }));
+
+    const gameSnapshot = room.state === 'playing' ? {
+      currentTurn: room.currentTurn,
+      landlordIndex: room.landlordIndex,
+      landlordCards: room.landlordCards,
+      lastPlay: room.lastPlay,
+      playerCardCounts: room.playerIds.map((id) => {
+        const m = room.members.find((mem) => mem.id === id);
+        return m ? m.hand.length : 0;
+      }),
+    } : {};
 
     this.server?.to(socketId).emit('room_joined', {
       roomCode,
       members,
       state: room.state,
-      confirmedCount: room.voteQueue.length,
+      playerIds: room.playerIds,
+      seq: room.eventSeq,
       reconnect: true,
+      ...gameSnapshot,
+      ...(newReconnectToken ? { reconnectToken: newReconnectToken } : {}),
     });
 
     // Re-send hand if in playing state
@@ -255,13 +296,14 @@ export class GameService {
         });
 
       // If it's their turn, notify
-      const playerIndex = room.voteQueue.slice(0, 3).indexOf(socketId);
+      const playerIndex = room.playerIds.indexOf(socketId);
       if (playerIndex !== -1) {
         // During bidding: always re-send bid_turn so the player sees the panel.
         if (room.landlordIndex === -1) {
           this.server?.to(socketId).emit('bid_turn', {
             playerIndex: room.currentTurn,
             currentBid: room.currentBid,
+            submitted: room.bidVotedIndices.includes(playerIndex),
           });
         }
         // During gameplay: emit your_turn if it is their turn.
@@ -271,60 +313,46 @@ export class GameService {
       }
     }
 
-    // Let room know the player is back (skip for soft reconnects like SPA nav)
+    // Let room know the member list has changed (skip for soft reconnects like SPA nav)
     if (wasDisconnected) {
-      this.server
-        ?.to(roomCode)
-        .emit('member_joined', {
-          id: member.id,
-          nickname: member.nickname,
-          role: member.role,
-        });
+      // Include playerIds so other clients can update their playerOrder with the
+      // reconnected player's new socket ID.
+      this.emitToRoom(room, 'player_reconnected', {
+        nickname: member.nickname,
+        playerIds: room.playerIds,
+      });
+      this.emitMembersUpdate(room);
     }
   }
 
   // ── Voting ──────────────────────────────────────────────────────────────────
 
   /**
-   * A member claims a player slot for the upcoming game.
-   * Valid only when room.state === 'voting' and the member hasn't voted yet.
+   * Toggle a member's intent to play. When exactly 3 members have flagged
+   * wantToPlay, the game starts immediately and the flags are locked.
+   * Available in any state except 'playing'.
    */
   handleVotePlay(socketId: string): void {
     const room = this.roomManager.getRoomBySocketId(socketId);
     if (!room) return;
 
-    if (room.state !== 'voting') {
-      this.server?.to(socketId).emit('room_error', { message: '目前無法投票' });
+    if (room.state === 'playing') {
+      this.server?.to(socketId).emit('room_error', { message: '遊戲進行中，無法投票' });
       return;
     }
 
-    if (room.voteQueue.length >= 3) {
-      this.server
-        ?.to(socketId)
-        .emit('room_error', { message: '已有 3 位玩家確認，無法再加入' });
-      return;
-    }
+    const member = room.members.find((m) => m.id === socketId);
+    if (!member) return;
 
-    if (room.voteQueue.includes(socketId)) {
-      this.server?.to(socketId).emit('room_error', { message: '你已投票' });
-      return;
-    }
+    // Toggle
+    member.wantToPlay = !member.wantToPlay;
 
-    room.voteQueue.push(socketId);
+    // Broadcast updated list so all clients re-render
+    this.emitMembersUpdate(room);
 
-    const confirmedVoters = room.voteQueue
-      .slice(0, 3)
-      .map(
-        (id) =>
-          room.members.find((m) => m.id === id)?.nickname ?? '(已離線)',
-      );
-
-    this.server?.to(room.code).emit('vote_update', {
-      confirmedVoters,
-      confirmedCount: room.voteQueue.length,
-    });
-
-    if (room.voteQueue.length >= 3) {
+    // Count how many want to play
+    const voters = room.members.filter((m) => m.wantToPlay && !m.disconnectedAt);
+    if (voters.length >= 3) {
       this.startGame(room);
     }
   }
@@ -346,7 +374,7 @@ export class GameService {
       return;
     }
 
-    const playerIndex = room.voteQueue.slice(0, 3).indexOf(socketId);
+    const playerIndex = room.playerIds.indexOf(socketId);
     if (playerIndex === -1) return; // spectator
 
     // Prevent duplicate votes
@@ -358,9 +386,7 @@ export class GameService {
     }
     room.bidPassCount++;
 
-    this.server
-      ?.to(room.code)
-      .emit('bid_made', { playerIndex, value });
+    this.emitToRoom(room, 'bid_made', { playerIndex, value });
 
     // If all 3 have voted early, finalize now
     if (room.bidPassCount >= 3) {
@@ -383,7 +409,7 @@ export class GameService {
       return;
     }
 
-    const playerIndex = room.voteQueue.slice(0, 3).indexOf(socketId);
+    const playerIndex = room.playerIds.indexOf(socketId);
     if (playerIndex === -1) return; // spectator
 
     if (playerIndex !== room.currentTurn) {
@@ -422,7 +448,7 @@ export class GameService {
     room.lastPlayedBy = playerIndex;
     room.passCount = 0;
 
-    this.server?.to(room.code).emit('cards_played', {
+    this.emitToRoom(room, 'cards_played', {
       playerIndex,
       cards: result.cards,
       handType: result.type,
@@ -441,8 +467,8 @@ export class GameService {
     // Advance turn and broadcast nextTurn so all clients can track whose turn it is.
     const nextTurn = (room.currentTurn + 1) % 3;
     room.currentTurn = nextTurn;
-    this.server?.to(room.code).emit('turn_changed', { nextTurn });
-    this.server?.to(room.voteQueue[nextTurn]).emit('your_turn', {});
+    this.emitToRoom(room, 'turn_changed', { nextTurn });
+    this.emitToSocket(room.playerIds[nextTurn], 'your_turn', {});
   }
 
   /**
@@ -455,11 +481,11 @@ export class GameService {
       return;
     }
 
-    const playerIndex = room.voteQueue.slice(0, 3).indexOf(socketId);
+    const playerIndex = room.playerIds.indexOf(socketId);
     if (playerIndex === -1 || playerIndex !== room.currentTurn) return;
 
     room.passCount++;
-    this.server?.to(room.code).emit('player_passed', { playerIndex });
+    this.emitToRoom(room, 'player_passed', { playerIndex });
 
     if (room.passCount >= 2) {
       // Two consecutive passes → the player who last played leads a new round
@@ -467,14 +493,14 @@ export class GameService {
       room.passCount = 0;
       room.lastPlay = null;
       room.currentTurn = nextTurn;
-      this.server?.to(room.code).emit('new_round', { nextTurn });
-      this.server?.to(room.code).emit('turn_changed', { nextTurn });
-      this.server?.to(room.voteQueue[nextTurn]).emit('your_turn', {});
+      this.emitToRoom(room, 'new_round', { nextTurn });
+      this.emitToRoom(room, 'turn_changed', { nextTurn });
+      this.emitToSocket(room.playerIds[nextTurn], 'your_turn', {});
     } else {
       const nextTurn = (room.currentTurn + 1) % 3;
       room.currentTurn = nextTurn;
-      this.server?.to(room.code).emit('turn_changed', { nextTurn });
-      this.server?.to(room.voteQueue[nextTurn]).emit('your_turn', {});
+      this.emitToRoom(room, 'turn_changed', { nextTurn });
+      this.emitToSocket(room.playerIds[nextTurn], 'your_turn', {});
     }
   }
 
@@ -521,34 +547,25 @@ export class GameService {
       // Keep the member in the room but mark them as disconnected.
       member.disconnectedAt = Date.now();
 
-      // Broadcast so other players know
-      this.server?.to(room.code).emit('member_left', {
-        id: socketId,
+      // Broadcast updated member list (disconnected member filtered out)
+      this.emitMembersUpdate(room);
+
+      this.emitToRoom(room, 'player_disconnected', {
         nickname: member.nickname,
+        timeoutMs: 15_000,
       });
 
       // Schedule automatic room reset if player doesn't reconnect in time
       const timer = setTimeout(() => {
         room.reconnectTimers.delete(socketId);
         this.resetToWaiting(room);
-      }, 60_000);
+      }, 15_000);
       room.reconnectTimers.set(socketId, timer);
     } else {
       // --- Immediate remove path ---
       this.roomManager.removeSocket(socketId);
 
-      this.server?.to(room.code).emit('member_left', {
-        id: socketId,
-        nickname: member.nickname,
-      });
-
-      // Remove from voteQueue (relevant during 'voting' state)
-      if (room.state === 'voting') {
-        room.voteQueue = room.voteQueue.filter((id) => id !== socketId);
-        if (room.members.length < 3) {
-          this.resetVote(room);
-        }
-      }
+      this.emitMembersUpdate(room);
 
       // If this was the last member, start the idle-cleanup timer
       if (room.members.length === 0) {
@@ -563,93 +580,31 @@ export class GameService {
     }
   }
 
-  /** Transition waiting → voting if ≥3 members are present. */
-  private checkVoteTransition(room: Room): void {
-    if (room.state === 'waiting' && room.members.length >= 3) {
-      this.openVoting(room);
-    }
-  }
-
   /**
-   * Open the voting phase. Emits `vote_open` and starts the 60-second timeout.
-   * Assumes the room is in 'waiting' state or otherwise ready for a new vote.
-   */
-  private openVoting(room: Room): void {
-    // Clear any stale vote timeout
-    if (room.voteTimeout) {
-      clearTimeout(room.voteTimeout);
-      room.voteTimeout = null;
-    }
-
-    room.state = 'voting';
-    room.voteQueue = [];
-
-    room.voteTimeout = setTimeout(() => {
-      if (room.state === 'voting' && room.voteQueue.length < 3) {
-        this.resetVote(room);
-      }
-    }, 60_000);
-
-    const voteOpenMembers = room.members
-      .filter((m) => !m.disconnectedAt)
-      .map((m) => ({ id: m.id, nickname: m.nickname, role: m.role }));
-
-    this.server
-      ?.to(room.code)
-      .emit('vote_open', { members: voteOpenMembers, winCounts: room.winCounts });
-  }
-
-  /**
-   * Cancel an in-progress vote and fall back to 'waiting'.
-   * Re-opens a new vote immediately if ≥3 members are still present.
-   * Emits `vote_reset`.
-   */
-  private resetVote(room: Room): void {
-    if (room.voteTimeout) {
-      clearTimeout(room.voteTimeout);
-      room.voteTimeout = null;
-    }
-
-    room.state = 'waiting';
-    room.voteQueue = [];
-
-    this.server?.to(room.code).emit('vote_reset', {});
-
-    if (room.members.length >= 3) {
-      this.openVoting(room);
-    }
-  }
-
-  /**
-   * Assign roles, emit `vote_closed_start`, then start a 3-second countdown
-   * before kicking off the first bidding round.
+   * Lock in the 3 voters, assign roles, emit `vote_closed_start`, then start
+   * a 3-second countdown before kicking off the first bidding round.
    */
   private startGame(room: Room): void {
-    // Freeze vote timeout
-    if (room.voteTimeout) {
-      clearTimeout(room.voteTimeout);
-      room.voteTimeout = null;
-    }
+    // Pick exactly the first 3 members who want to play (connected only)
+    const voters = room.members.filter((m) => m.wantToPlay && !m.disconnectedAt).slice(0, 3);
+    room.playerIds = voters.map((m) => m.id);
 
-    // Assign player / spectator roles
-    const playerIdSet = new Set(room.voteQueue.slice(0, 3));
+    // Assign roles
+    const playerIdSet = new Set(room.playerIds);
     for (const m of room.members) {
       m.role = playerIdSet.has(m.id) ? 'player' : 'spectator';
     }
 
-    const players = room.voteQueue
-      .slice(0, 3)
-      .map((id) => room.members.find((m) => m.id === id))
-      .filter((m): m is Member => !!m)
-      .map((m) => ({ id: m.id, nickname: m.nickname }));
-
+    const players = voters.map((m) => ({ id: m.id, nickname: m.nickname }));
     const spectators = room.members
       .filter((m) => m.role === 'spectator')
       .map((m) => ({ id: m.id, nickname: m.nickname }));
 
-    this.server
-      ?.to(room.code)
-      .emit('vote_closed_start', { players, spectators });
+    this.emitToRoom(room, 'vote_closed_start', { players, spectators });
+
+    // Broadcast updated roles so all clients see the locked-in player list
+    // without having to derive roles from vote_closed_start on the frontend.
+    this.emitMembersUpdate(room);
 
     // 3-second countdown, then deal
     setTimeout(() => this.startBiddingRound(room), 3_000);
@@ -680,9 +635,8 @@ export class GameService {
     room.deck = deck;
     room.landlordCards = deck.slice(51, 54); // last 3 cards
 
-    const playerIds = room.voteQueue.slice(0, 3);
     for (let i = 0; i < 3; i++) {
-      const m = room.members.find((mem) => mem.id === playerIds[i]);
+      const m = room.members.find((mem) => mem.id === room.playerIds[i]);
       if (m) m.hand = deck.slice(i * 17, i * 17 + 17);
     }
 
@@ -697,33 +651,37 @@ export class GameService {
 
     // Sort each player's hand before sending
     for (let i = 0; i < 3; i++) {
-      const m = room.members.find((mem) => mem.id === playerIds[i]);
+      const m = room.members.find((mem) => mem.id === room.playerIds[i]);
       if (m) m.hand = sortHand(m.hand);
     }
 
     // Unicast each player's hand
     for (let i = 0; i < 3; i++) {
-      const m = room.members.find((mem) => mem.id === playerIds[i]);
+      const m = room.members.find((mem) => mem.id === room.playerIds[i]);
       if (m) {
-        this.server
-          ?.to(m.id)
-          .emit('game_start', { hand: m.hand, firstBidder: room.firstBidder });
+        this.emitToSocket(m.id, 'game_start', { hand: m.hand, firstBidder: room.firstBidder });
       }
     }
 
     // Spectators get an empty hand (for consistent client-side state)
     for (const m of room.members) {
       if (m.role === 'spectator') {
-        this.server
-          ?.to(m.id)
-          .emit('game_start', { hand: [], firstBidder: room.firstBidder });
+        this.emitToSocket(m.id, 'game_start', { hand: [], firstBidder: room.firstBidder });
       }
     }
 
     // Delay the bid_open by 2 seconds so players can see their hand first.
     // All 3 players bid simultaneously; a 15s server-side timer enforces the deadline.
     setTimeout(() => {
-      this.server?.to(room.code).emit('bid_open', { timeoutMs: 8_000 });
+      this.emitToRoom(room, 'bid_open', { timeoutMs: 8_000 });
+      // Unicast each player's individual submission status so the client knows
+      // whether to show the bid panel as already submitted (e.g. after reconnect).
+      for (let i = 0; i < 3; i++) {
+        const pid = room.playerIds[i];
+        if (pid) {
+          this.emitToSocket(pid, 'bid_status', { submitted: room.bidVotedIndices.includes(i) });
+        }
+      }
       room.bidTimer = setTimeout(() => {
         room.bidTimer = null;
         this.finalizeBidding(room);
@@ -739,19 +697,30 @@ export class GameService {
     const landlordIndex = room.currentBidder;
     room.landlordIndex = landlordIndex;
 
-    const playerIds = room.voteQueue.slice(0, 3);
     const landlordMember = room.members.find(
-      (m) => m.id === playerIds[landlordIndex],
+      (m) => m.id === room.playerIds[landlordIndex],
     );
     if (landlordMember) {
       landlordMember.hand.push(...room.landlordCards);
       landlordMember.hand = sortHand(landlordMember.hand);
     }
 
-    this.server?.to(room.code).emit('landlord_decided', {
+    const playerCardCounts = room.playerIds.map((id) => {
+      const m = room.members.find((mem) => mem.id === id);
+      return m ? m.hand.length : 0;
+    });
+
+    this.emitToRoom(room, 'landlord_decided', {
       playerIndex: landlordIndex,
       landlordCards: room.landlordCards,
+      playerCardCounts,
     });
+
+    // Unicast the landlord's updated hand (17 + 3 = 20 cards) so the client
+    // never has to merge cards locally.
+    if (landlordMember) {
+      this.emitToSocket(landlordMember.id, 'hand_updated', { hand: landlordMember.hand });
+    }
 
     // Landlord leads first
     room.currentTurn = landlordIndex;
@@ -759,7 +728,7 @@ export class GameService {
     room.lastPlay = null;
     room.lastPlayedBy = landlordIndex;
 
-    this.server?.to(playerIds[landlordIndex]).emit('your_turn', {});
+    this.emitToSocket(room.playerIds[landlordIndex], 'your_turn', {});
   }
 
   /**
@@ -786,7 +755,7 @@ export class GameService {
    * Emits `rebid` then starts a new bidding round.
    */
   private reDeal(room: Room): void {
-    this.server?.to(room.code).emit('rebid', {});
+    this.emitToRoom(room, 'rebid', {});
     setTimeout(() => this.startBiddingRound(room), 1_500);
   }
 
@@ -797,7 +766,7 @@ export class GameService {
   private advanceGameTurn(room: Room): void {
     const nextTurn = (room.currentTurn + 1) % 3;
     room.currentTurn = nextTurn;
-    this.server?.to(room.voteQueue[nextTurn]).emit('your_turn', {});
+    this.server?.to(room.playerIds[nextTurn]).emit('your_turn', {});
   }
 
   /**
@@ -805,8 +774,7 @@ export class GameService {
    */
   private handleWin(room: Room, winner: 'landlord' | 'peasants'): void {
     // Update per-room win tally before resetting game state
-    const playerMembers = room.voteQueue
-      .slice(0, 3)
+    const playerMembers = room.playerIds
       .map((id) => room.members.find((m) => m.id === id))
       .filter(Boolean) as import('./types').Member[];
 
@@ -819,7 +787,7 @@ export class GameService {
       }
     }
 
-    this.server?.to(room.code).emit('game_over', {
+    this.emitToRoom(room, 'game_over', {
       winner,
       landlordIndex: room.landlordIndex,
       winCounts: room.winCounts,
@@ -829,6 +797,7 @@ export class GameService {
     for (const m of room.members) {
       m.role = 'spectator';
       m.hand = [];
+      m.wantToPlay = false;
     }
 
     room.deck = [];
@@ -840,28 +809,27 @@ export class GameService {
     room.bidPassCount = 0;
     room.bidVotedIndices = [];
     if (room.bidTimer) { clearTimeout(room.bidTimer); room.bidTimer = null; }
-    room.voteQueue = [];
+    room.playerIds = [];
 
     // Cancel any pending reconnect timers
     room.reconnectTimers.forEach((t) => clearTimeout(t));
     room.reconnectTimers.clear();
 
-    // Delay re-opening voting so clients can show the win screen for 5 seconds
-    room.state = 'waiting'; // openVoting requires 'waiting' as pre-condition
-    setTimeout(() => this.openVoting(room), 5_000);
+    room.state = 'waiting';
+    // After win screen delay, tell all clients to return to lobby then sync member list
+    setTimeout(() => {
+      this.emitToRoom(room, 'return_to_lobby', {});
+      this.emitMembersUpdate(room);
+    }, 5_000);
   }
 
   /**
    * Emergency reset: abort a live game due to a player disconnect/timeout.
-   * All members revert to spectator, game fields are cleared, `vote_reset`
-   * is broadcast, and a new vote opens if ≥3 members remain.
+   * All members revert to spectator with cleared flags, game fields are
+   * cleared, and `game_aborted` is broadcast.
    */
   private resetToWaiting(room: Room): void {
     // Clear timers
-    if (room.voteTimeout) {
-      clearTimeout(room.voteTimeout);
-      room.voteTimeout = null;
-    }
     if (room.bidTimer) { clearTimeout(room.bidTimer); room.bidTimer = null; }
     room.reconnectTimers.forEach((t) => clearTimeout(t));
     room.reconnectTimers.clear();
@@ -869,16 +837,17 @@ export class GameService {
     // Drop disconnected members from the list
     room.members = room.members.filter((m) => !m.disconnectedAt);
 
-    // Reset all remaining members to spectator with empty hands
+    // Reset all remaining members to spectator with cleared flags
     for (const m of room.members) {
       m.role = 'spectator';
       m.hand = [];
+      m.wantToPlay = false;
       m.disconnectedAt = undefined;
     }
 
     // Clear game fields
     room.state = 'waiting';
-    room.voteQueue = [];
+    room.playerIds = [];
     room.deck = [];
     room.landlordCards = [];
     room.landlordIndex = -1;
@@ -892,11 +861,8 @@ export class GameService {
     room.bidYesVoters = [];
     room.bidVotedIndices = [];
 
-    this.server?.to(room.code).emit('vote_reset', {});
-
-    if (room.members.length >= 3) {
-      this.openVoting(room);
-    }
+    this.emitToRoom(room, 'game_aborted', {});
+    this.emitMembersUpdate(room);
   }
 
   /**
@@ -908,9 +874,7 @@ export class GameService {
     room.idleTimeout = setTimeout(() => {
       const current = this.roomManager.getRoom(room.code);
       if (current && current.members.length === 0) {
-        this.server
-          ?.to(current.code)
-          .emit('room_disbanded', { reason: '房間已關閉（閒置逾時）' });
+        this.emitToRoom(current, 'room_disbanded', { reason: '房間已關閉（閒置逾時）' });
         this.roomManager.deleteRoom(current.code);
       }
     }, 5 * 60 * 1_000);
@@ -928,7 +892,7 @@ export class GameService {
     const member = room.members.find((m) => m.id === socketId);
     if (!member) return;
 
-    this.server?.to(room.code).emit('emoji_reaction', {
+    this.emitToRoom(room, 'emoji_reaction', {
       senderId: socketId,
       senderNickname: member.nickname,
       role: member.role,

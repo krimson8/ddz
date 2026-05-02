@@ -50,12 +50,12 @@ export function GameBoard({
     landlordCards,
     landlordIndex,
     phase,
-    confirmedVoters,
     playHistory,
     winner,
+    disconnectedPlayer,
   } = gameState;
 
-  // Use the server's voteQueue order so indices match currentTurn / landlordIndex.
+  // Use the server's playerIds order so indices match currentTurn / landlordIndex.
   const players = playerOrder
     .map((id) => members.find((m) => m.id === id))
     .filter((m): m is typeof members[0] => Boolean(m));
@@ -63,14 +63,6 @@ export function GameBoard({
   const isMyTurn = myPlayerIndex !== -1 && currentTurn === myPlayerIndex;
   const isSpectator = myPlayerIndex === -1;
 
-  const [winCountdown, setWinCountdown] = useState(5);
-
-  useEffect(() => {
-    if (phase !== 'result') return;
-    setWinCountdown(5);
-    const id = setInterval(() => setWinCountdown((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(id);
-  }, [phase]);
 
   const lastEmojiTime = useRef(0);
   const [selectedReaction, setSelectedReaction] = useState('🖕');
@@ -78,12 +70,6 @@ export function GameBoard({
   const reactionTimers = useRef<Record<number, ReturnType<typeof setTimeout>[]>>({});
   const reactionKeyRef = useRef(0);
   const [selectedCards, setSelectedCards] = useState<Card[]>([]);
-  const [hasVotedLandlord, setHasVotedLandlord] = useState(false);
-
-  // Reset landlord vote flag whenever a new bidding round starts
-  useEffect(() => {
-    if (phase === 'bidding') setHasVotedLandlord(false);
-  }, [phase]);
 
   // Keep latest values accessible inside the socket effect without re-subscribing
   const latestPlayerOrder = useRef(playerOrder);
@@ -175,8 +161,8 @@ export function GameBoard({
         <div className="flex-[3] flex items-center justify-center px-4 min-h-0">
           {phase === 'bidding' && !isSpectator ? (
             <BiddingPanel
-              hasVoted={hasVotedLandlord}
-              onVoteYes={() => { setHasVotedLandlord(true); onBid(1); }}
+              hasVoted={gameState.bidSubmitted}
+              onVoteYes={() => onBid(1)}
               votedCount={gameState.bidVotedCount}
             />
           ) : (
@@ -298,6 +284,29 @@ export function GameBoard({
         )}
       </motion.div>
 
+      {/* ── Disconnect overlay ───────────────────────────────────────────── */}
+      <AnimatePresence>
+        {disconnectedPlayer && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/70 flex items-center justify-center z-40"
+          >
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+              className="bg-green-900/95 rounded-2xl p-8 w-full max-w-xs flex flex-col items-center gap-4 border border-yellow-400/30 shadow-2xl mx-4 text-center"
+            >
+              <div className="text-4xl">⏳</div>
+              <h2 className="text-xl font-black text-white">{disconnectedPlayer.nickname} 斷線了</h2>
+              <p className="text-white/70 text-sm">等待重連中，若逾時遊戲將中止</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── Win overlay ──────────────────────────────────────────────────── */}
       <AnimatePresence>
         {phase === 'result' && winner && (
@@ -325,14 +334,7 @@ export function GameBoard({
                 <h2 className="text-2xl font-black text-white">
                   {winner === 'landlord' ? '地主獲勝！' : '農民獲勝！'}
                 </h2>
-                <motion.p
-                  key={winCountdown}
-                  initial={{ opacity: 0, scale: 1.3 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="text-yellow-300 text-sm font-bold mt-1 tabular-nums"
-                >
-                  {winCountdown > 0 ? `${winCountdown} 秒後返回大廳…` : '返回大廳…'}
-                </motion.p>
+                <p className="text-yellow-300 text-sm font-bold mt-1">返回大廳中…</p>
               </div>
               <div className="flex gap-4 flex-wrap justify-center">
                 {players.map((member, globalIdx) => {

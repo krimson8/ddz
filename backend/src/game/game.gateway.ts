@@ -186,7 +186,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayDisconnect {
     }
 
     void socket.join(result.roomCode);
-    this.gameService.emitReconnectState(socket.id, result.roomCode, result.wasDisconnected);
+    this.gameService.emitReconnectState(socket.id, result.roomCode, result.wasDisconnected, result.newReconnectToken);
   }
 
   // ── vote_play ────────────────────────────────────────────────────────────────
@@ -309,6 +309,19 @@ export class GameGateway implements OnGatewayInit, OnGatewayDisconnect {
     this.emojiTimestamps.set(socket.id, now);
 
     this.gameService.handleReactEmoji(socket.id, emoji);
+  }
+
+  // ── sync_request ─────────────────────────────────────────────────────────────
+
+  @SubscribeMessage('sync_request')
+  handleSyncRequest(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() payload: unknown,
+  ): void {
+    const roomCode = extractString(payload, 'roomCode');
+    if (!roomCode) return;
+    // Reuse the existing full-state snapshot path — safe and already tested.
+    this.gameService.emitReconnectState(socket.id, roomCode.toUpperCase(), false);
   }
 
   // ── leave_room ────────────────────────────────────────────────────────────────

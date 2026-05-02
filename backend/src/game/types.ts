@@ -31,24 +31,25 @@ export interface Play {
 export interface Member {
   id: string; // socket.id
   nickname: string;
-  reconnectToken: string; // UUID stored in client sessionStorage
+  reconnectToken: string; // UUID stored in client localStorage (per room key)
   role: 'spectator' | 'player';
   hand: Card[];
+  wantToPlay: boolean; // toggled by vote_play; locked once game starts
   disconnectedAt?: number; // timestamp (ms) for reconnect-window tracking
 }
 
-export type RoomState = 'waiting' | 'voting' | 'playing';
+export type RoomState = 'waiting' | 'playing';
 
 export interface Room {
   code: string;
   members: Member[];
   state: RoomState;
-  /** socket IDs in vote_play order; first 3 become players */
-  voteQueue: string[];
-  voteTimeout: NodeJS.Timeout | null;
+  eventSeq: number; // monotonically increasing counter; included in every room broadcast
+  /** socket IDs of the 3 players, set when game starts */
+  playerIds: string[];
   deck: Card[];
   landlordCards: Card[]; // 3 face-down cards
-  landlordIndex: number; // player index (0-2) within voteQueue[0..2]
+  landlordIndex: number; // player index (0-2) within playerIds[0..2]
   currentTurn: number; // player index 0-2
   currentBid: number; // unused in yes/no bidding (kept for compat)
   currentBidder: number; // player index chosen as landlord

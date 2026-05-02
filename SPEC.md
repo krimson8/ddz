@@ -62,11 +62,12 @@ A web-based multiplayer 鬥地主 (Fight the Landlord) card game for 3 players. 
 - **Everyone who joins a room (including the creator) starts as a spectator.**
 - The room has no dedicated "player" seats until a vote has concluded.
 - Displays the room code prominently (copyable) — share to invite more people.
-- Shows the spectator list (all current members).
-- Once **≥3 people** are in the room, a **"準備開始" (Ready to Start)** voting prompt appears for everyone.
-  - Any member can click "我要玩 (I’m In)"; the first 3 to do so become the players for the upcoming game.
-  - New arrivals can still vote **as long as fewer than 3 have confirmed**.
-- Once 3 players are confirmed, the game starts after a 3-second countdown.
+- Shows the member list (all current members), with each member’s ready status visible.
+- Once **≥3 people** are in the room, a **"準備出戰"** voting prompt appears for everyone.
+  - Any member can click **"我要玩！"** to toggle their `wantToPlay` flag on; clicking again (**"取消準備"**) toggles it off.
+  - The ready count (N/3) updates live for all members via `members_update`.
+  - The instant exactly 3 members have `wantToPlay = true`, the game locks in immediately (no timeout needed).
+- Once 3 players are locked in, the game starts after a 3-second countdown.
 
 ### 3.3 Game Screen
 
@@ -78,11 +79,11 @@ A web-based multiplayer 鬥地主 (Fight the Landlord) card game for 3 players. 
 ### 3.4 Game End
 
 - Shows winner announcement (地主勝 / 農民勝).
-- **All** people in the room (3 players + all spectators) are shown the same prompt: **"我要玩 (I’m In)"** / **"離開 (Leave)"**.
-- The **first 3** to click "我要玩" become the next game’s players; everyone else who confirms becomes a spectator.
-- New members who join **while the vote is still open** (i.e., fewer than 3 have confirmed) can also click "我要玩" and claim a player slot.
-- Once 3 players are confirmed, the next game starts after a 3-second countdown.
-- If fewer than 3 confirm within 60 seconds, the room resets to **waiting** state (everyone is a spectator again, re-waiting for the vote to fill).
+- All `wantToPlay` flags are cleared for everyone; all members revert to spectator role.
+- **All** people in the room (3 players + all spectators) are shown the same prompt: **"再玩一局"** / **"取消準備"**.
+- Members toggle their intent with the same mechanism as the lobby — **"再玩一局"** sets `wantToPlay = true`, clicking again cancels.
+- The instant exactly 3 members have `wantToPlay = true`, the next game locks in and starts after a 3-second countdown.
+- There is no timeout — members can take as long as they want; the vote never auto-resets.
 
 ---
 
@@ -161,8 +162,9 @@ A web-based multiplayer 鬥地主 (Fight the Landlord) card game for 3 players. 
 
 | Route | Description |
 |-------|-------------|
-| `/` | Landing page — nickname input, create/join room |
-| `/room/[code]` | Game room — lobby, dealing, bidding, gameplay, results |
+| `/` | Single page — all views (home screen, lobby, game board) rendered here based on `GamePhase` |
+
+There is no `/room/[code]` route. The room code is not in the URL; identity is entirely token-based (see §7.2).
 
 ### 5.1.1 Client-Side Game Phase
 
@@ -186,15 +188,17 @@ The frontend tracks a `GamePhase` to drive UI transitions:
 - Nickname is sanitised against XSS on both client and server before use.
 - **Duplicate nicknames**: If a nickname already exists in the room, the server appends a numeric suffix (e.g., "小明" → "小明2") to ensure uniqueness within the room.
 
-#### Lobby (within `/room/[code]`)
+#### Lobby
+- **"← 離開房間"** button at top-left — emits `leave_room`, clears the reconnect token from `localStorage`, and resets state to the home screen.
 - Room code display (large, copyable)
 - **Member list**: all members shown as avatar circles in a scrollable strip
   - Each avatar shows the **coloured initial** of the nickname + label below
   - New members appear with a fade-in + scale animation
-- When **≥3 members** are present, the **"準備開始" voting prompt** appears:
-  - Each member sees a "我要玩" button; avatars who have voted get a green tick
-  - A live counter "N/3 已確認" is shown
-  - When 3 have voted, a 3-second countdown starts
+  - Members with `wantToPlay = true` are highlighted in yellow
+- When **≥3 members** are present, the **"準備出戰"** voting prompt appears:
+  - Button shows **"我要玩！"** when not ready, **"取消準備"** (red) when ready — toggleable at any time
+  - A live counter "準備出戰 (N/3)" updates via `members_update` for all clients
+  - When 3 members are ready, a 3-second countdown starts automatically
 - On small screens (<400px), the member strip collapses behind a "房間成員 (N)" chip
 
 #### Game Board
@@ -242,11 +246,13 @@ The frontend tracks a `GamePhase` to drive UI transitions:
 - A live tally shows how many players have already voted (e.g. "1/3 已投票")
 
 #### Game End Overlay
-- Winner announcement with animation.
-- **All room members** see a "我要玩 (I’m In)" / "離開 (Leave)" prompt.
-- A live roster shows who has voted, with avatars ticking green as they confirm.
-- First 3 to confirm get "玩家" badge; the rest who confirm get "觀眾" badge.
-- 60-second countdown; if fewer than 3 confirm, room resets to **waiting** (all members become spectators, vote re-opens when ≥3 present).
+- Winner announcement shown immediately when `game_over` event is received. No client-side countdown.
+- Displays a static "返回大廳中…" message while the backend 5-second delay runs.
+- After 5 seconds the server emits `return_to_lobby` → all clients reset to the lobby screen.
+- All `wantToPlay` flags are cleared server-side; `members_update` follows `return_to_lobby`.
+- **All room members** see a **"再玩一局"** / **"取消準備"** toggle button — same mechanics as the lobby.
+- A live roster shows who is ready, highlighted in yellow as they toggle on.
+- No timeout — vote stays open until 3 are ready.
 
 ### 5.3 Animations (Framer Motion)
 
@@ -313,12 +319,11 @@ src/
 interface Room {
   code: string;               // 6-char room code
   members: Member[];           // all people in the room
-  state: 'waiting' | 'voting' | 'playing';
-  voteQueue: string[];         // socket IDs in vote_play order; first 3 = players
-  voteTimeout: NodeJS.Timeout | null;
+  state: 'waiting' | 'playing';
+  playerIds: string[];         // socket IDs of the 3 locked-in players (set when game starts)
   deck: Card[];
   landlordCards: Card[];       // 3 face-down cards
-  landlordIndex: number;       // index in players (derived from voteQueue[0..2]); -1 during bidding
+  landlordIndex: number;       // index in playerIds[0..2]; -1 during bidding
   currentTurn: number;         // player index
   currentBid: number;          // unused (kept for compat)
   currentBidder: number;       // who was chosen as landlord
@@ -331,15 +336,18 @@ interface Room {
   bidTimer: NodeJS.Timeout | null;    // 8s simultaneous bid window timer
   bidVotedIndices: number[];          // player indices who have already cast their bid
   idleTimeout: NodeJS.Timeout | null; // 5-min auto-delete timer
-  reconnectTimers: Map<string, NodeJS.Timeout>; // socketId → 60s grace timer
+  reconnectTimers: Map<string, NodeJS.Timeout>; // socketId → 15s grace timer
+  winCounts: Record<string, number>;  // nickname → total wins in this room session
 }
 
 interface Member {
   id: string;                  // socket.id
   nickname: string;
-  reconnectToken: string;      // UUID stored in client sessionStorage
+  reconnectToken: string;      // UUID stored in client localStorage (per room key)
   role: 'spectator' | 'player'; // 'player' only during 'playing' state
   hand: Card[];                // empty for spectators
+  wantToPlay: boolean;         // toggled by vote_play; cleared on game start/end
+  disconnectedAt?: number;     // timestamp (ms) set on disconnect; cleared on reconnect
 }
 ```
 
@@ -368,7 +376,7 @@ interface Play {
 | `create_room` | `{ nickname }` | Create a new room (creator joins as spectator) |
 | `join_room` | `{ code, nickname }` | Join room as spectator (`code` = 6-char room code) |
 | `rejoin` | `{ reconnectToken, code }` | Reconnect to a room after disconnect |
-| `vote_play` | `{}` | Vote to be a player (valid when vote is open and <3 confirmed) |
+| `vote_play` | `{}` | Toggle `wantToPlay` flag — valid any time game is not running; triggers game start if 3 members are now ready |
 | `react_emoji` | `{ emoji: string }` | Send an emoji reaction or phrase (see §5.5 for allowed values) |
 | `bid` | `{ value: 0 \| 1 }` | Vote for landlord (1 = yes, 0 = no) during simultaneous bid window |
 | `play_cards` | `{ cards: Card[] }` | Play selected cards |
@@ -380,27 +388,27 @@ interface Play {
 | Event | Payload | Description |
 |-------|---------|-------------|
 | `room_created` | `{ roomCode, reconnectToken }` | Room successfully created |
-| `room_joined` | `{ roomCode, members, state, confirmedCount, confirmedNicknames, reconnectToken?, nickname? }` | Joined successfully (everyone is a spectator initially); also sent on reconnect |
-| `member_joined` | `{ id, nickname, role }` | Someone new joined (or reconnected) |
-| `member_left` | `{ id, nickname }` | Someone left the room |
-| `vote_open` | `{ members: [{id, nickname, role}] }` | ≥3 members present, voting is now open |
-| `vote_update` | `{ confirmedVoters: string[], confirmedCount }` | Someone voted; `confirmedVoters` is array of nicknames |
-| `vote_closed_start` | `{ players: [{id,nickname}], spectators: [{id,nickname}] }` | 3 confirmed — roles assigned, game starting |
-| `vote_reset` | `{}` | 60s timeout expired with <3 confirmed (or member drop); vote resets, back to waiting |
-| `game_start` | `{ hand: Card[], firstBidder, reconnect? }` | Game begins (players get hand; spectators get empty hand) |
-| `bid_open` | `{ timeoutMs: 8000 }` | Simultaneous bid window is open; all 3 players vote within this window |
-| `bid_turn` | `{ playerIndex, currentBid }` | Only sent to a reconnected player to restore bidding UI state |
-| `bid_made` | `{ playerIndex, value }` | A player placed a bid |
-| `landlord_decided` | `{ playerIndex, landlordCards }` | Landlord is chosen, reveal 3 cards |
-| `your_turn` | `{}` | It’s your turn to play |
-| `cards_played` | `{ playerIndex, cards, handType, rank, remaining }` | Cards were played |
-| `turn_changed` | `{ nextTurn }` | Current turn index changed (emitted after every play or pass) |
-| `player_passed` | `{ playerIndex }` | A player passed |
-| `new_round` | `{ nextTurn }` | Two passes, new lead round; `lastPlay` resets to null |
-| `game_over` | `{ winner: ‘landlord’\|’peasants’, landlordIndex }` | Game ended; vote re-opens automatically |
-| `room_disbanded` | `{ reason }` | Room closed (all members left) |
+| `room_joined` | `{ roomCode, members, state, playerIds, seq, reconnectToken?, reconnect?, currentTurn?, landlordIndex?, landlordCards?, lastPlay?, playerCardCounts? }` | Full state snapshot — sent on join, rejoin, and sync. Gameplay fields only present when reconnecting mid-game. |
+| `members_update` | `{ members: [{id, nickname, role, cardCount, wantToPlay}], seq }` | Full member list broadcast whenever membership or `wantToPlay` changes |
+| `vote_closed_start` | `{ players: [{id,nickname}], spectators: [{id,nickname}], seq }` | 3 members ready — roles locked, game starting in 3s |
+| `game_start` | `{ hand: Card[], firstBidder, reconnect? }` | Unicast — game begins; players get hand, spectators get empty hand. On reconnect, only restores hand (phase already set by `room_joined`). |
+| `bid_open` | `{ timeoutMs: 8000, seq }` | Simultaneous bid window is open |
+| `bid_turn` | `{ playerIndex, currentBid }` | Unicast to reconnected player only — restores bidding UI state |
+| `bid_made` | `{ playerIndex, value, seq }` | A player placed a bid |
+| `landlord_decided` | `{ playerIndex, landlordCards, seq }` | Landlord chosen; 3 face-down cards revealed to all |
+| `your_turn` | `{}` | Unicast — it’s your turn to play |
+| `cards_played` | `{ playerIndex, cards, handType, rank, remaining, seq }` | Cards were played |
+| `turn_changed` | `{ nextTurn, seq }` | Current turn index changed (emitted after every play or pass) |
+| `player_passed` | `{ playerIndex, seq }` | A player passed |
+| `new_round` | `{ nextTurn, seq }` | Two passes — new lead round; `lastPlay` resets to null |
+| `game_over` | `{ winner: ‘landlord’\|’peasants’, landlordIndex, winCounts, seq }` | Game ended; win overlay shown. `return_to_lobby` follows after 5s. |
+| `return_to_lobby` | `{ seq }` | Emitted 5s after `game_over` — all clients reset to lobby screen; `members_update` follows immediately |
+| `player_disconnected` | `{ nickname, timeoutMs: 15000, seq }` | A player dropped mid-game; reconnect window started. Other players see a waiting overlay. |
+| `player_reconnected` | `{ nickname, seq }` | Disconnected player successfully rejoined; overlay dismissed, game continues |
+| `game_aborted` | `{ seq }` | Game aborted (reconnect window expired); all flags cleared, back to waiting |
+| `room_disbanded` | `{ reason }` | Room closed (all members left, 5-min idle timeout) |
 | `invalid_play` | `{ reason }` | Played cards are invalid |
-| `room_error` | `{ message }` | Room-related error |
+| `room_error` | `{ message }` | Room-related error (e.g. join failed, rate limit, reconnect failed) |
 | `emoji_reaction` | `{ senderId, senderNickname, role: ‘player’\|’spectator’, emoji }` | Broadcast emoji reaction/phrase to room |
 
 ### 6.4 Game Logic Flow (Server-Side)
@@ -408,24 +416,17 @@ interface Play {
 ```
 ── UNIFIED ROOM STATE MACHINE ──────────────────────────────
 
-state: 'waiting'
-  - Everyone in the room is a spectator (including creator).
+state: ‘waiting’
+  - Everyone in the room is a spectator; all wantToPlay flags are false.
   - New members can join at any time.
-  - Transition → 'voting' when memberCount ≥ 3.
+  - Any member can toggle wantToPlay via vote_play at any time.
+  - On every toggle, members_update is broadcast with the full member list.
+  - Transition → ‘playing’ the instant exactly 3 members have wantToPlay = true.
+  - No timeout, no separate ‘voting’ state.
 
-state: 'voting'
-  - vote_open broadcast to all members.
-  - Any member can emit vote_play to claim a player slot.
-  - New arrivals while <3 confirmed may also vote.
-  - Server tracks voteQueue: string[] (socket IDs, in order of receipt).
-  - Transition → 'playing' when voteQueue.length ≥ 3
-      → first 3 become players, rest remain spectators.
-  - If memberCount drops below 3 while voting → back to 'waiting',
-    vote resets, vote_reset broadcast.
-  - 60-second timeout with <3 confirmed → vote resets, back to 'waiting'.
-
-state: 'playing'  (encompasses bidding + gameplay sub-states)
-  - Sub-state: 'bidding'
+state: ‘playing’  (encompasses bidding + gameplay sub-states)
+  - The 3 players are locked in playerIds[]; wantToPlay flags are no longer relevant.
+  - Sub-state: ‘bidding’
       Shuffle & deal 17 cards each (sorted highest→lowest), set aside 3 landlord cards.
       Spectators receive no cards.
       Random first bidder index assigned (stored as `firstBidder`).
@@ -438,7 +439,7 @@ state: 'playing'  (encompasses bidding + gameplay sub-states)
       (There is no re-deal; landlord is always determined in one round.)
       Landlord receives the 3 bottom cards (sorted into their hand, 20 total).
       Landlord cards revealed to all players.
-  - Sub-state: 'gameplay'
+  - Sub-state: ‘gameplay’
       Landlord plays first.
       Validate each play against hand type rules.
       After every successful play or pass, server emits `turn_changed { nextTurn }` to
@@ -448,21 +449,38 @@ state: 'playing'  (encompasses bidding + gameplay sub-states)
   - When a player’s hand is empty:
       If Landlord → Landlord wins.
       If Peasant → Peasants win.
-  - Transition → 'voting' on game end
-      (game_over broadcast, vote immediately re-opens for all members).
+  - On game end:
+      game_over broadcast → win overlay shown on all clients.
+      All wantToPlay flags cleared; all members reverted to spectator.
+      After 5-second delay:
+        return_to_lobby broadcast → all clients reset to lobby screen.
+        members_update broadcast (updated member list with cleared flags).
+      Room returns to ‘waiting’ — members may immediately start voting again.
 
 ── DISCONNECTION ────────────────────────────────────────────
 
-  Player disconnects during 'playing':
-    - Grant 60-second reconnect window.
-    - If reconnected within 60s → restore hand & state, continue.
-    - If not reconnected → room resets to 'waiting' state:
-        All remaining members become spectators.
-        Players’ hands are discarded.
-        vote_reset broadcast; memberCount checked → if ≥3, vote_open fires again.
+  Player disconnects during ‘playing’:
+    - Grant 15-second reconnect window (member marked disconnectedAt, filtered from members_update).
+    - player_disconnected { nickname, timeoutMs: 15000 } broadcast to remaining players.
+    - Remaining players see a waiting overlay until resolved.
+    - If reconnected within 15s:
+        playerIds updated to new socket ID.
+        Full game state (hand, currentTurn, landlordIndex, landlordCards, lastPlay,
+        playerCardCounts) unicast via room_joined + game_start.
+        player_reconnected broadcast → overlay dismissed, game continues.
+        members_update broadcast.
+    - If not reconnected → room resets to ‘waiting’:
+        All remaining members become spectators, wantToPlay flags cleared.
+        game_aborted broadcast + members_update.
 
-  Spectator disconnects (any state):
-    - Silently removed; no impact on game or voting.
+  Socket transport reconnect (network blip, same page):
+    - Socket.IO fires a new ‘connect’ event on the client.
+    - Client re-emits rejoin with the saved reconnect token automatically.
+    - Server processes it as a normal reconnect (token lookup, state restore).
+
+  Member disconnects during ‘waiting’:
+    - Removed immediately from member list.
+    - members_update broadcast. No impact on vote (their flag is gone with them).
 
   All members leave:
     - Room auto-deleted after 5-minute idle timeout.
@@ -487,10 +505,9 @@ identifyHandType(cards: Card[]): { type: HandType, rank: number } | null
 
 | Scenario | Behaviour |
 |----------|-----------|
-| Spectator disconnects (any state) | Silently removed from member list. No effect on game. |
-| Player disconnects during 'playing' | 60-second grace period. If reconnected → restore state. If not → reset room to 'waiting': all remaining members become spectators, hands discarded, `vote_reset` broadcast. If ≥3 members remain, `vote_open` fires immediately. |
-| Member disconnects during 'voting' | Removed from member list and voteQueue (if present). If memberCount drops below 3 → `vote_reset`, back to 'waiting'. |
-| All members leave | Room deleted after 5-minute idle timeout. |
+| Member disconnects during 'waiting' | Removed immediately from member list. `members_update` broadcast. Their `wantToPlay` flag is gone with them — vote count drops naturally. |
+| Player disconnects during 'playing' | 15-second grace period — `player_disconnected` broadcast; member stays in room with `disconnectedAt` set, filtered from `members_update`. If reconnected → full state unicast (`room_joined` + `game_start`), `player_reconnected` + `members_update` broadcast. If timer expires → `game_aborted`, all flags cleared, room back to 'waiting'. |
+| All members leave | Room deleted after 5-minute idle timeout. `room_disbanded` broadcast. |
 
 ### 6.7 Health & Monitoring
 
@@ -513,9 +530,14 @@ All communication is via **WebSocket (Socket.IO)**. No REST endpoints except `/h
 
 ### 7.2 Reconnection
 
-- Client stores a `reconnectToken` (UUID) in `sessionStorage`.
-- On reconnect, client sends `{ reconnectToken, roomCode }`.
-- Server matches token to player and restores their state.
+- On join/create, server assigns a `reconnectToken` (UUID) and sends it in `room_created` / `room_joined`.
+- Client stores it in `localStorage` under key `ddz_reconnectToken_<ROOMCODE>`.
+- On page load, client scans `localStorage` for any saved token and auto-emits `rejoin { code, reconnectToken }`.
+- On socket transport reconnect (network blip), client re-emits `rejoin` on the `connect` event if a token exists for the current room.
+- Server matches token → updates socket ID → restores full game state via `room_joined` + `game_start` unicast.
+- Token is rotated on every successful reconnect to prevent replay attacks.
+- If `rejoin` fails (room gone, token expired) → server emits `room_error` → client clears the stale token and shows the home screen.
+- "← 離開房間" button clears the token explicitly so a page refresh after leaving returns to the home screen.
 
 ---
 
@@ -563,10 +585,7 @@ ddz/
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── layout.tsx
-│   │   │   ├── page.tsx        # Landing page
-│   │   │   └── room/
-│   │   │       └── [code]/
-│   │   │           └── page.tsx # Game room
+│   │   │   └── page.tsx        # Single page — home / lobby / game board
 │   │   ├── components/
 │   │   │   ├── Card.tsx
 │   │   │   ├── CardHand.tsx
@@ -632,7 +651,7 @@ Cards will be rendered as styled HTML/CSS components (not images) for simplicity
 - [x] Basic card animations
 - [x] Win/loss detection
 - [x] Play again in same room
-- [x] Reconnection support (60s grace)
+- [x] Reconnection support (15s grace, token-based, auto-rejoin on transport reconnect)
 
 ### In Scope (MVP) — additions
 - [x] Nickname input with `localStorage` prefill
@@ -658,11 +677,11 @@ Cards will be rendered as styled HTML/CSS components (not images) for simplicity
 1. **Card assets**: Use CSS-rendered cards or import an SVG card set?
    - *Resolved*: CSS-rendered for zero external dependencies.
 2. **Reconnection**: Is 60 seconds sufficient?
-   - *Resolved*: Yes, keep it simple.
+   - *Resolved*: Reduced to 15 seconds. Token-based, auto-rejoin on transport reconnect and page load.
 3. **Room expiry**: How long should an idle room persist?
    - *Resolved*: 5 minutes after all members leave.
 4. **"Next round" mechanic**: Require all players to agree, or first-come-first-served?
-   - *Resolved*: First 3 to vote "我要玩" become the next players.
+   - *Resolved*: Toggle-based — any member can set/unset `wantToPlay`; game locks the instant 3 are ready. No timeout.
 5. **Bidding mechanic**: Sequential or simultaneous?
    - *Resolved*: Simultaneous 8-second window. If nobody bids yes, landlord is randomly assigned (no re-deal).
 6. **Emoji rate limit**: 3 seconds or shorter?

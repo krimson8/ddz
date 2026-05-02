@@ -32,9 +32,10 @@ export interface ClientMember {
   id: string;
   nickname: string;
   role: "spectator" | "player";
+  wantToPlay: boolean;
 }
 
-export type RoomState = "waiting" | "voting" | "playing";
+export type RoomState = "waiting" | "playing";
 
 export type GamePhase = "lobby" | "dealing" | "bidding" | "gameplay" | "result";
 
@@ -47,7 +48,7 @@ export interface GameState {
   phase: GamePhase;
   roomCode: string | null;
   members: ClientMember[];
-  /** Socket IDs of the 3 players in voteQueue (turn) order */
+  /** Socket IDs of the 3 players in turn order */
   playerOrder: string[];
   myHand: Card[];
   landlordCards: Card[] | null;
@@ -58,15 +59,17 @@ export interface GameState {
   currentBid: number;
   /** How many players have cast their landlord bid this round */
   bidVotedCount: number;
+  /** Whether the local player has already submitted their landlord bid */
+  bidSubmitted: boolean;
   lastPlay: Play | null;
   /** Global player index (0-2) who made the last play */
   lastPlayPlayerIndex: number | null;
-  /** Nicknames of members who have voted "我要玩" */
-  confirmedVoters: string[];
   winner: "landlord" | "peasants" | null;
   playHistory: HistoryEntry[];
   /** Card counts per player index (0-2) during gameplay */
   playerCardCounts: number[];
   /** Per-room win tally: nickname → total wins */
   winCounts: Record<string, number>;
+  /** Set when a player disconnects mid-game; cleared on reconnect or abort */
+  disconnectedPlayer: { nickname: string; timeoutMs: number } | null;
 }

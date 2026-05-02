@@ -8,7 +8,6 @@ import type { ClientMember } from '@/types/game';
 interface RoomLobbyProps {
   roomCode: string;
   members: ClientMember[];
-  confirmedVoters: string[];
   myNickname?: string;
   onVote: () => void;
   hasVoted: boolean;
@@ -18,7 +17,6 @@ interface RoomLobbyProps {
 export function RoomLobby({
   roomCode,
   members,
-  confirmedVoters,
   myNickname,
   onVote,
   hasVoted,
@@ -26,6 +24,7 @@ export function RoomLobby({
 }: RoomLobbyProps) {
   const [copied, setCopied] = useState(false);
   const playerCount = members.filter((m) => m.role === 'player').length;
+  const readyCount = members.filter((m) => m.wantToPlay).length;
   const canVote = members.length >= 3;
 
   function copyCode() {
@@ -101,7 +100,7 @@ export function RoomLobby({
       {canVote && (
         <div className="flex flex-col items-center gap-3">
           <p className="text-white text-base font-bold">
-            我要玩！({confirmedVoters.length}/3)
+            準備出戰 ({readyCount}/3)
           </p>
           <div className="flex gap-2 flex-wrap justify-center">
             {members.slice(0, 5).map((m) => (
@@ -109,7 +108,7 @@ export function RoomLobby({
                 key={m.id}
                 className={[
                   'text-xs px-2 py-1 rounded-full',
-                  confirmedVoters.includes(m.nickname)
+                  m.wantToPlay
                     ? 'bg-yellow-400 text-green-900 font-bold'
                     : 'bg-white/20 text-white',
                 ].join(' ')}
@@ -120,10 +119,14 @@ export function RoomLobby({
           </div>
           <button
             onClick={onVote}
-            disabled={hasVoted}
-            className="px-8 py-3 rounded-xl font-bold text-lg bg-yellow-400 hover:bg-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed text-green-900 transition-colors min-h-[44px]"
+            className={[
+              'px-8 py-3 rounded-xl font-bold text-lg transition-colors min-h-[44px]',
+              hasVoted
+                ? 'bg-red-500 hover:bg-red-400 text-white'
+                : 'bg-yellow-400 hover:bg-yellow-300 text-green-900',
+            ].join(' ')}
           >
-            {hasVoted ? '已準備' : '我要玩'}
+            {hasVoted ? '取消準備' : '我要玩！'}
           </button>
         </div>
       )}

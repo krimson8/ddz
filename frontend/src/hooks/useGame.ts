@@ -51,13 +51,14 @@ const initialState: GameState = {
   currentTurn: null,
   currentBid: 0,
   bidVotedCount: 0,
+  bidSubmitted: false,
   lastPlay: null,
-  confirmedVoters: [],
   winner: null,
   playHistory: [],
   playerCardCounts: [],
   lastPlayPlayerIndex: null,
   winCounts: {},
+  disconnectedPlayer: null,
 };
 
 // ── Actions ──────────────────────────────────────────────────────────────────
@@ -67,24 +68,29 @@ type Action =
       type: "ROOM_JOINED";
       roomCode: string;
       members: ClientMember[];
-      confirmedCount: number;
+      playerIds: string[];
+      // Present only on mid-game reconnect
+      currentTurn?: number;
+      landlordIndex?: number;
+      landlordCards?: Card[];
+      lastPlay?: Play | null;
+      playerCardCounts?: number[];
     }
-  | { type: "MEMBER_JOINED"; member: ClientMember }
-  | { type: "MEMBER_LEFT"; id: string }
-  | { type: "VOTE_OPEN"; members: ClientMember[]; winCounts: Record<string, number> }
-  | { type: "VOTE_UPDATE"; confirmedVoters: string[] }
+  | { type: "MEMBERS_UPDATE"; members: ClientMember[] }
   | { type: "VOTE_CLOSED_START"; playerIds: string[] }
-  | { type: "VOTE_RESET" }
-  | { type: "GAME_START"; hand: Card[]; firstBidder: number }
+  | { type: "GAME_ABORTED" }
+  | { type: "GAME_START"; hand: Card[]; firstBidder: number; reconnect?: boolean }
   | { type: "BID_OPEN" }
-  | { type: "BID_TURN"; playerIndex: number; currentBid: number }
-  | { type: "BID_MADE"; value: number }
+  | { type: "BID_STATUS"; submitted: boolean }
+  | { type: "BID_TURN"; playerIndex: number; currentBid: number; submitted?: boolean }
+  | { type: "BID_MADE"; value: number; isMyBid: boolean }
   | {
       type: "LANDLORD_DECIDED";
       landlordIndex: number;
       landlordCards: Card[];
-      isLandlord: boolean;
+      playerCardCounts: number[];
     }
+  | { type: "HAND_UPDATED"; hand: Card[] }
   | {
       type: "CARDS_PLAYED";
       play: Play;
@@ -97,64 +103,54 @@ type Action =
   | { type: "TURN_CHANGED"; nextTurn: number }
   | { type: "NEW_ROUND"; nextTurn: number }
   | { type: "GAME_OVER"; winner: "landlord" | "peasants"; winCounts: Record<string, number> }
+  | { type: "PLAYER_DISCONNECTED"; nickname: string; timeoutMs: number }
+  | { type: "PLAYER_RECONNECTED"; playerIds: string[] }
   | { type: "ERROR"; message: string };
 
 function reducer(state: GameState, action: Action): GameState {
   switch (action.type) {
-    case "ROOM_JOINED":
+    case "ROOM_JOINED": {
+      const isReconnect = action.playerIds.length > 0 && action.currentTurn !== undefined;
       return {
         ...state,
         roomCode: action.roomCode,
         members: action.members,
-        phase: "lobby",
-        confirmedVoters: [],
+        playerOrder: action.playerIds,
+        phase: action.playerIds.length > 0 ? state.phase : "lobby",
+        ...(isReconnect ? {
+          currentTurn: action.currentTurn!,
+          landlordIndex: action.landlordIndex ?? null,
+          landlordCards: action.landlordCards ?? null,
+          lastPlay: action.lastPlay ?? null,
+          playerCardCounts: action.playerCardCounts ?? state.playerCardCounts,
+          phase: action.landlordIndex !== undefined && action.landlordIndex >= 0 ? "gameplay" : "bidding",
+        } : {}),
       };
-    case "MEMBER_JOINED":
-      return {
-        ...state,
-        members: [
-          ...state.members.filter((m) => m.id !== action.member.id),
-          action.member,
-        ],
-      };
-    case "MEMBER_LEFT":
-      return {
-        ...state,
-        members: state.members.filter((m) => m.id !== action.id),
-      };
-    case "VOTE_OPEN":
-      return { ...state, members: action.members, phase: "lobby", winCounts: action.winCounts };
-    case "VOTE_UPDATE":
-      return { ...state, confirmedVoters: action.confirmedVoters };
-    case "VOTE_CLOSED_START": {
-      // Update member roles using the authoritative player order from the server.
-      const playerSet = new Set(action.playerIds);
-      const updatedMembers = state.members.map((m) => ({
-        ...m,
-        role: (playerSet.has(m.id)
-          ? "player"
-          : "spectator") as ClientMember["role"],
-      }));
+    }
+    case "MEMBERS_UPDATE":
+      return { ...state, members: action.members };
+    case "VOTE_CLOSED_START":
+      // Roles are broadcast via the members_update that follows this event.
       return {
         ...state,
         phase: "dealing",
         playerOrder: action.playerIds,
-        members: updatedMembers,
         lastPlay: null,
         lastPlayPlayerIndex: null,
       };
-    }
-    case "VOTE_RESET":
+    case "GAME_ABORTED":
       return {
         ...initialState,
         roomCode: state.roomCode,
-        members: state.members.map((m) => ({
-          ...m,
-          role: "spectator" as const,
-        })),
+        members: state.members,
+        winCounts: state.winCounts,
       };
     case "GAME_START":
-      // Cards dealt — show hand in 'dealing' phase; bidding panel not yet shown.
+      if (action.reconnect) {
+        // Mid-game reconnect: only restore the hand, phase/turn already set by ROOM_JOINED
+        return { ...state, myHand: sortHand(action.hand) };
+      }
+      // Fresh deal — show hand in 'dealing' phase; bidding panel not yet shown.
       return {
         ...state,
         myHand: sortHand(action.hand),
@@ -165,38 +161,35 @@ function reducer(state: GameState, action: Action): GameState {
         lastPlayPlayerIndex: null,
       };
     case "BID_OPEN":
-      return { ...state, phase: "bidding", bidVotedCount: 0 };
+      return { ...state, phase: "bidding", bidVotedCount: 0, bidSubmitted: false };
+    case "BID_STATUS":
+      return { ...state, bidSubmitted: action.submitted };
     case "BID_TURN":
       return {
         ...state,
         currentTurn: action.playerIndex,
         currentBid: action.currentBid,
         phase: "bidding",
+        ...(action.submitted !== undefined ? { bidSubmitted: action.submitted } : {}),
       };
     case "BID_MADE":
       return {
         ...state,
         currentBid: action.value > 0 ? action.value : state.currentBid,
         bidVotedCount: state.bidVotedCount + 1,
+        ...(action.isMyBid ? { bidSubmitted: true } : {}),
       };
-    case "LANDLORD_DECIDED": {
-      const newHand = action.isLandlord
-        ? sortHand([...state.myHand, ...action.landlordCards])
-        : state.myHand;
-      // Landlord gets 20 cards (17 + 3 bottom), others keep 17
-      const countsAfterLandlord = [17, 17, 17];
-      countsAfterLandlord[action.landlordIndex] = 20;
+    case "LANDLORD_DECIDED":
       return {
         ...state,
         landlordIndex: action.landlordIndex,
         landlordCards: action.landlordCards,
-        // Landlord adds the 3 face-down cards to their hand (sorted).
-        myHand: newHand,
         phase: "gameplay",
         currentTurn: action.landlordIndex,
-        playerCardCounts: countsAfterLandlord,
+        playerCardCounts: action.playerCardCounts,
       };
-    }
+    case "HAND_UPDATED":
+      return { ...state, myHand: sortHand(action.hand) };
     case "CARDS_PLAYED": {
       // Update card count for the player who just played
       const newCounts = [...state.playerCardCounts];
@@ -230,8 +223,16 @@ function reducer(state: GameState, action: Action): GameState {
         lastPlayPlayerIndex: null,
         currentTurn: action.nextTurn,
       };
+    case "PLAYER_DISCONNECTED":
+      return { ...state, disconnectedPlayer: { nickname: action.nickname, timeoutMs: action.timeoutMs } };
+    case "PLAYER_RECONNECTED":
+      return {
+        ...state,
+        disconnectedPlayer: null,
+        playerOrder: action.playerIds.length > 0 ? action.playerIds : state.playerOrder,
+      };
     case "GAME_OVER":
-      return { ...state, phase: "result", winner: action.winner, winCounts: action.winCounts };
+      return { ...state, phase: "result", winner: action.winner, winCounts: action.winCounts, disconnectedPlayer: null };
     default:
       return state;
   }
@@ -243,6 +244,7 @@ export interface UseGameReturn {
   gameState: GameState;
   createRoom: (nickname: string) => void;
   joinRoom: (code: string, nickname: string) => void;
+  leaveRoom: () => void;
   votePlay: () => void;
   bid: (amount: 0 | 1) => void;
   playCards: (cards: Card[]) => void;
@@ -258,88 +260,133 @@ export function useGame(): UseGameReturn {
   const gameStateRef = useRef(initialState);
   gameStateRef.current = gameState;
 
+  // Sequence number tracking for divergence detection.
+  const seqRef = useRef(0);
+  const roomCodeRef = useRef<string | null>(null);
+
   // Subscribe to all server→client events
   useEffect(() => {
+    // Returns true if the event is in-order; requests a resync and returns false if not.
+    // Only room-broadcast events carry `seq`; unicasts (game_start, your_turn) pass seq=undefined.
+    function checkSeq(seq: number | undefined): boolean {
+      if (seq === undefined) return true; // unicast — no seq tracking
+      if (seq === seqRef.current + 1) {
+        seqRef.current = seq;
+        return true;
+      }
+      // Gap detected — request a full state snapshot from the server
+      const roomCode = roomCodeRef.current;
+      if (roomCode) socket.emit("sync_request", { roomCode });
+      return false;
+    }
+
     socket.on(
       "room_joined",
       (data: {
         roomCode: string;
         members: ClientMember[];
-        confirmedCount: number;
+        playerIds?: string[];
+        currentTurn?: number;
+        landlordIndex?: number;
+        landlordCards?: Card[];
+        lastPlay?: Play | null;
+        playerCardCounts?: number[];
+        seq?: number;
       }) => {
         console.log("[useGame] room_joined received:", data);
-        dispatch({ type: "ROOM_JOINED", ...data });
+        if (typeof data.seq === "number") {
+          seqRef.current = data.seq;
+        }
+        roomCodeRef.current = data.roomCode;
+        dispatch({
+          type: "ROOM_JOINED",
+          roomCode: data.roomCode,
+          members: data.members,
+          playerIds: data.playerIds ?? [],
+          currentTurn: data.currentTurn,
+          landlordIndex: data.landlordIndex,
+          landlordCards: data.landlordCards,
+          lastPlay: data.lastPlay,
+          playerCardCounts: data.playerCardCounts,
+        });
       },
     );
     socket.on("room_created", (data: { roomCode: string }) => {
       console.log("[useGame] room_created received:", data);
-      dispatch({
-        type: "ROOM_JOINED",
-        roomCode: data.roomCode,
-        members: [],
-        confirmedCount: 0,
-      });
+      roomCodeRef.current = data.roomCode;
+      seqRef.current = 0;
+      dispatch({ type: "ROOM_JOINED", roomCode: data.roomCode, members: [], playerIds: [] });
     });
-    socket.on("member_joined", (member: ClientMember) => {
-      dispatch({ type: "MEMBER_JOINED", member });
+    socket.on("members_update", (data: { members: ClientMember[]; seq?: number }) => {
+      if (!checkSeq(data.seq)) return;
+      dispatch({ type: "MEMBERS_UPDATE", members: data.members });
     });
-    socket.on("member_left", (data: { id: string }) => {
-      dispatch({ type: "MEMBER_LEFT", id: data.id });
-    });
-    socket.on("vote_open", (data: { members: ClientMember[]; winCounts: Record<string, number> }) => {
-      dispatch({ type: "VOTE_OPEN", members: data.members, winCounts: data.winCounts ?? {} });
-    });
-    socket.on("vote_update", (data: { confirmedVoters: string[] }) => {
-      dispatch({ type: "VOTE_UPDATE", confirmedVoters: data.confirmedVoters });
+    socket.on("game_aborted", (data: { seq?: number } = {}) => {
+      if (!checkSeq(data.seq)) return;
+      dispatch({ type: "GAME_ABORTED" });
     });
     socket.on(
       "vote_closed_start",
-      (data: { players: { id: string; nickname: string }[] }) => {
+      (data: { players: { id: string; nickname: string }[]; seq?: number }) => {
+        if (!checkSeq(data.seq)) return;
         dispatch({
           type: "VOTE_CLOSED_START",
           playerIds: (data?.players ?? []).map((p) => p.id),
         });
       },
     );
-    socket.on("vote_reset", () => {
-      dispatch({ type: "VOTE_RESET" });
-    });
-    socket.on("game_start", (data: { hand: Card[]; firstBidder: number }) => {
+    // game_start is a unicast — no seq
+    socket.on("game_start", (data: { hand: Card[]; firstBidder: number; reconnect?: boolean }) => {
       dispatch({
         type: "GAME_START",
         hand: data.hand,
         firstBidder: data.firstBidder,
+        reconnect: data.reconnect,
       });
     });
-    socket.on("bid_open", () => {
+    socket.on("bid_open", (data: { seq?: number } = {}) => {
+      if (!checkSeq(data.seq)) return;
       dispatch({ type: "BID_OPEN" });
     });
     socket.on(
+      "bid_status",
+      (data: { submitted: boolean }) => {
+        dispatch({ type: "BID_STATUS", submitted: data.submitted });
+      },
+    );
+    socket.on(
       "bid_turn",
-      (data: { playerIndex: number; currentBid: number }) => {
+      (data: { playerIndex: number; currentBid: number; submitted?: boolean }) => {
         dispatch({
           type: "BID_TURN",
           playerIndex: data.playerIndex,
           currentBid: data.currentBid,
+          submitted: data.submitted,
         });
       },
     );
-    socket.on("bid_made", (data: { playerIndex: number; value: number }) => {
-      dispatch({ type: "BID_MADE", value: data.value });
+    socket.on("bid_made", (data: { playerIndex: number; value: number; seq?: number }) => {
+      if (!checkSeq(data.seq)) return;
+      const { playerOrder } = gameStateRef.current;
+      const isMyBid = playerOrder[data.playerIndex] === socket.id;
+      dispatch({ type: "BID_MADE", value: data.value, isMyBid });
     });
     socket.on(
       "landlord_decided",
-      (data: { playerIndex: number; landlordCards: Card[] }) => {
-        const { playerOrder } = gameStateRef.current;
-        const isLandlord = playerOrder[data.playerIndex] === socket.id;
+      (data: { playerIndex: number; landlordCards: Card[]; playerCardCounts: number[]; seq?: number }) => {
+        if (!checkSeq(data.seq)) return;
         dispatch({
           type: "LANDLORD_DECIDED",
           landlordIndex: data.playerIndex,
           landlordCards: data.landlordCards,
-          isLandlord,
+          playerCardCounts: data.playerCardCounts,
         });
       },
     );
+    // Unicast — no seq. Replaces myHand with the server-authoritative version.
+    socket.on("hand_updated", (data: { hand: Card[] }) => {
+      dispatch({ type: "HAND_UPDATED", hand: data.hand });
+    });
     socket.on(
       "cards_played",
       (data: {
@@ -349,7 +396,9 @@ export function useGame(): UseGameReturn {
         rank: number;
         remaining: number;
         nextTurn?: number;
+        seq?: number;
       }) => {
+        if (!checkSeq(data.seq)) return;
         const { playerOrder } = gameStateRef.current;
         const mySocketIndex = playerOrder.indexOf(socket.id ?? "");
         dispatch({
@@ -364,45 +413,63 @@ export function useGame(): UseGameReturn {
     );
     socket.on(
       "player_passed",
-      (data: { playerIndex: number; nextTurn: number }) => {
+      (data: { playerIndex: number; nextTurn: number; seq?: number }) => {
+        if (!checkSeq(data.seq)) return;
         dispatch({ type: "PLAYER_PASSED", ...data });
       },
     );
     socket.on(
       "new_round",
-      (data: { nextTurn?: number; starterIndex?: number }) => {
+      (data: { nextTurn?: number; starterIndex?: number; seq?: number }) => {
+        if (!checkSeq(data.seq)) return;
         dispatch({
           type: "NEW_ROUND",
           nextTurn: data.nextTurn ?? data.starterIndex ?? 0,
         });
       },
     );
-    socket.on("game_over", (data: { winner: "landlord" | "peasants"; winCounts: Record<string, number> }) => {
+    socket.on("game_over", (data: { winner: "landlord" | "peasants"; winCounts: Record<string, number>; seq?: number }) => {
+      if (!checkSeq(data.seq)) return;
       dispatch({ type: "GAME_OVER", winner: data.winner, winCounts: data.winCounts ?? {} });
     });
-    socket.on("turn_changed", (data: { nextTurn: number }) => {
+    socket.on("turn_changed", (data: { nextTurn: number; seq?: number }) => {
+      if (!checkSeq(data.seq)) return;
       dispatch({ type: "TURN_CHANGED", nextTurn: data.nextTurn });
+    });
+    socket.on("return_to_lobby", (data: { seq?: number } = {}) => {
+      if (!checkSeq(data.seq)) return;
+      dispatch({ type: "GAME_ABORTED" });
+    });
+    socket.on("player_disconnected", (data: { nickname: string; timeoutMs: number; seq?: number }) => {
+      if (!checkSeq(data.seq)) return;
+      dispatch({ type: "PLAYER_DISCONNECTED", nickname: data.nickname, timeoutMs: data.timeoutMs });
+    });
+    socket.on("player_reconnected", (data: { nickname: string; playerIds?: string[]; seq?: number }) => {
+      if (!checkSeq(data.seq)) return;
+      dispatch({ type: "PLAYER_RECONNECTED", playerIds: data.playerIds ?? [] });
     });
 
     return () => {
       socket.off("room_joined");
       socket.off("room_created");
-      socket.off("member_joined");
-      socket.off("member_left");
-      socket.off("vote_open");
-      socket.off("vote_update");
+      socket.off("members_update");
+      socket.off("game_aborted");
       socket.off("vote_closed_start");
-      socket.off("vote_reset");
       socket.off("game_start");
       socket.off("bid_open");
+      socket.off("bid_status");
       socket.off("bid_turn");
       socket.off("bid_made");
       socket.off("landlord_decided");
+      socket.off("hand_updated");
       socket.off("cards_played");
       socket.off("player_passed");
       socket.off("new_round");
       socket.off("game_over");
       socket.off("turn_changed");
+      socket.off("return_to_lobby");
+      socket.off("player_disconnected");
+      socket.off("player_reconnected");
     };
   }, [socket]);
 
@@ -429,6 +496,11 @@ export function useGame(): UseGameReturn {
     },
     [socket],
   );
+
+  const leaveRoom = useCallback(() => {
+    socket.emit("leave_room");
+    dispatch({ type: "GAME_ABORTED" });
+  }, [socket]);
 
   const votePlay = useCallback(() => {
     socket.emit("vote_play");
@@ -463,6 +535,7 @@ export function useGame(): UseGameReturn {
     gameState,
     createRoom,
     joinRoom,
+    leaveRoom,
     votePlay,
     bid,
     playCards,

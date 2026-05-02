@@ -48,14 +48,15 @@ export class RoomManager {
       reconnectToken,
       role: 'spectator',
       hand: [],
+      wantToPlay: false,
     };
 
     const room: Room = {
       code,
       members: [member],
       state: 'waiting',
-      voteQueue: [],
-      voteTimeout: null,
+      eventSeq: 0,
+      playerIds: [],
       deck: [],
       landlordCards: [],
       landlordIndex: -1,
@@ -111,6 +112,7 @@ export class RoomManager {
       reconnectToken,
       role: 'spectator',
       hand: [],
+      wantToPlay: false,
     };
 
     room.members.push(member);
@@ -182,7 +184,6 @@ export class RoomManager {
     const room = this.rooms.get(code);
     if (!room) return;
     if (room.idleTimeout) clearTimeout(room.idleTimeout);
-    if (room.voteTimeout) clearTimeout(room.voteTimeout);
     room.reconnectTimers.forEach((t) => clearTimeout(t));
     this.rooms.delete(code);
   }
