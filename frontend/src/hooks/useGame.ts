@@ -69,6 +69,7 @@ type Action =
       roomCode: string;
       members: ClientMember[];
       playerIds: string[];
+      winCounts: Record<string, number>;
       // Present only on mid-game reconnect
       currentTurn?: number;
       landlordIndex?: number;
@@ -116,6 +117,7 @@ function reducer(state: GameState, action: Action): GameState {
         roomCode: action.roomCode,
         members: action.members,
         playerOrder: action.playerIds,
+        winCounts: action.winCounts,
         phase: action.playerIds.length > 0 ? state.phase : "lobby",
         ...(isReconnect ? {
           currentTurn: action.currentTurn!,
@@ -286,6 +288,7 @@ export function useGame(): UseGameReturn {
         roomCode: string;
         members: ClientMember[];
         playerIds?: string[];
+        winCounts?: Record<string, number>;
         currentTurn?: number;
         landlordIndex?: number;
         landlordCards?: Card[];
@@ -303,6 +306,7 @@ export function useGame(): UseGameReturn {
           roomCode: data.roomCode,
           members: data.members,
           playerIds: data.playerIds ?? [],
+          winCounts: data.winCounts ?? {},
           currentTurn: data.currentTurn,
           landlordIndex: data.landlordIndex,
           landlordCards: data.landlordCards,
@@ -315,7 +319,7 @@ export function useGame(): UseGameReturn {
       console.log("[useGame] room_created received:", data);
       roomCodeRef.current = data.roomCode;
       seqRef.current = 0;
-      dispatch({ type: "ROOM_JOINED", roomCode: data.roomCode, members: [], playerIds: [] });
+      dispatch({ type: "ROOM_JOINED", roomCode: data.roomCode, members: [], playerIds: [], winCounts: {} });
     });
     socket.on("members_update", (data: { members: ClientMember[]; seq?: number }) => {
       if (!checkSeq(data.seq)) return;

@@ -185,6 +185,7 @@ export class GameService {
       state: room.state,
       playerIds: room.playerIds,
       seq: room.eventSeq,
+      winCounts: room.winCounts,
     };
   }
 
@@ -281,6 +282,7 @@ export class GameService {
       playerIds: room.playerIds,
       seq: room.eventSeq,
       reconnect: true,
+      winCounts: room.winCounts,
       ...gameSnapshot,
       ...(newReconnectToken ? { reconnectToken: newReconnectToken } : {}),
     });
