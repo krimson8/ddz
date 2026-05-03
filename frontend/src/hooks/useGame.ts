@@ -79,6 +79,7 @@ type Action =
       phase: GamePhase;
     }
   | { type: "GAME_OVER"; winner: "landlord" | "peasants"; winCounts: Record<string, number>; winnerIds: string[]; phase: GamePhase }
+  | { type: "TURN_CHANGED"; nextTurn: number }
   | { type: "PLAYER_DISCONNECTED"; nickname: string; timeoutMs: number }
   | { type: "PLAYER_RECONNECTED"; playerIds: string[] }
   | { type: "ERROR"; message: string };
@@ -199,6 +200,8 @@ function reducer(state: GameState, action: Action): GameState {
         winCounts: action.winCounts,
         disconnectedPlayer: null,
       };
+    case "TURN_CHANGED":
+      return { ...state, currentPlayer: state.playerOrder[action.nextTurn] ?? null };
     default:
       return state;
   }
