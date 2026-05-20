@@ -63,8 +63,8 @@ A web-based multiplayer 鬥地主 (Fight the Landlord) card game for 3 players. 
 - The room has no dedicated "player" seats until a vote has concluded.
 - Displays the room code prominently (copyable) — share to invite more people.
 - Shows the member list (all current members), with each member’s ready status visible.
-- Once **≥3 people** are in the room, a **"準備出戰"** voting prompt appears for everyone.
-  - Any member can click **"我要玩！"** to toggle their `wantToPlay` flag on; clicking again (**"取消準備"**) toggles it off.
+- **Any member can toggle ready at any time** — no minimum player count required before voting.
+  - Button shows **"我要玩！"** when not ready, **"取消準備"** (red) when ready — toggleable at any time.
   - The ready count (N/3) updates live for all members via `members_update`.
   - The instant exactly 3 members have `wantToPlay = true`, the game locks in immediately (no timeout needed).
 - Once 3 players are locked in, the game starts after a 3-second countdown.
@@ -197,7 +197,7 @@ On reconnect, the server includes a `phase` field in `room_joined` so the client
   - Each avatar shows the **coloured initial** of the nickname + label below
   - New members appear with a fade-in + scale animation
   - Members with `wantToPlay = true` are highlighted in yellow
-- When **≥3 members** are present, the **"準備出戰"** voting prompt appears:
+- The **"準備出戰"** voting prompt is always visible — no minimum player count required:
   - Button shows **"我要玩！"** when not ready, **"取消準備"** (red) when ready — toggleable at any time
   - A live counter "準備出戰 (N/3)" updates via `members_update` for all clients
   - When 3 members are ready, a 3-second countdown starts automatically
@@ -391,7 +391,7 @@ interface Play {
 |-------|---------|-------------|
 | `room_created` | `{ roomCode, reconnectToken }` | Room successfully created |
 | `room_joined` | `{ roomCode, members, state, playerIds, seq, winCounts, phase, reconnectToken?, reconnect?, currentTurn?, landlordIndex?, landlordCards?, lastPlay?, playerCardCounts? }` | Full state snapshot — sent on join, rejoin, and sync. `winCounts` and `phase` always present. Gameplay fields only present when reconnecting mid-game. |
-| `members_update` | `{ members: [{id, nickname, role, cardCount, wantToPlay}], readyCount, canVote, seq }` | Full member list broadcast whenever membership, role, or `wantToPlay` changes. `readyCount` is the authoritative count of members with `wantToPlay=true`. `canVote` is `true` when the room is in `waiting` state with ≥3 members. Also emitted immediately after `vote_closed_start` to push updated roles. |
+| `members_update` | `{ members: [{id, nickname, role, cardCount, wantToPlay}], readyCount, canVote, seq }` | Full member list broadcast whenever membership, role, or `wantToPlay` changes. `readyCount` is the authoritative count of members with `wantToPlay=true`. `canVote` is `true` when the room is in `waiting` state (voting is always available regardless of member count). Also emitted immediately after `vote_closed_start` to push updated roles. |
 | `vote_closed_start` | `{ players: [{id,nickname}], spectators: [{id,nickname}], phase: ‘dealing’, seq }` | 3 members ready — roles locked, game starting in 3s. Followed immediately by `members_update` with authoritative roles. |
 | `game_start` | `{ hand: Card[], firstBidder, phase: ‘dealing’, reconnect? }` | Unicast — game begins; players get hand, spectators get empty hand. On reconnect, only restores hand (phase already set by `room_joined`). |
 | `bid_open` | `{ timeoutMs: 8000, phase: ‘bidding’, seq }` | Simultaneous bid window is open. Each player also receives a unicast `bid_status` immediately after. |
@@ -436,7 +436,7 @@ interface Play {
 state: ‘waiting’
   - Everyone in the room is a spectator; all wantToPlay flags are false.
   - New members can join at any time.
-  - Any member can toggle wantToPlay via vote_play at any time.
+  - Any member can toggle wantToPlay via vote_play at any time (no minimum member count required).
   - On every toggle, members_update is broadcast with the full member list
     (includes readyCount and canVote).
   - Transition → ‘playing’ the instant exactly 3 members have wantToPlay = true.

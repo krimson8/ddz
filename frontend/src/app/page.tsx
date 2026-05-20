@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGame } from '@/hooks/useGame';
 import { useSocket } from '@/hooks/useSocket';
+import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { RoomLobby } from '@/components/RoomLobby';
 import { GameBoard } from '@/components/GameBoard';
+import { VolumeControl } from '@/components/VolumeControl';
 
 function sanitizeNickname(raw: string): string {
   return raw.replace(/<[^>]*>/g, '').trim().slice(0, 10);
@@ -17,6 +19,7 @@ function clearRoomStorage(roomCode: string) {
 export default function Home() {
   const socket = useSocket();
   const { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, playCards, pass, reactEmoji } = useGame();
+  const { setVolume, playEmoji } = useSoundEffects(gameState, socket.id ?? '');
   const { phase, roomCode, members, winCounts, readyCount, canVote } = gameState;
 
   const [nickname, setNickname] = useState('');
@@ -127,96 +130,98 @@ export default function Home() {
 
   const hasVoted = members.some((m) => m.id === socket.id && m.wantToPlay);
 
-  // ── Home screen ───────────────────────────────────────────────────────────
-  if (phase === 'lobby' && !roomCode) {
-    return (
-      <div className="min-h-screen bg-green-900 flex items-center justify-center p-4">
-        <div className="bg-white/10 backdrop-blur rounded-2xl p-8 w-full max-w-sm flex flex-col gap-6">
-          <h1 className="text-4xl font-bold text-white text-center tracking-wide">🀄 鬥地主</h1>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-white/80 text-sm">暱稱</label>
-            <input
-              className="rounded-lg px-4 py-3 text-lg bg-white/20 text-white placeholder-white/40 outline-none focus:ring-2 focus:ring-yellow-400"
-              placeholder="你的暱稱（2–10字）"
-              maxLength={10}
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            />
-          </div>
-
-          <button
-            onClick={handleCreate}
-            className="rounded-xl py-3 text-lg font-bold bg-yellow-400 hover:bg-yellow-300 active:bg-yellow-500 text-green-900 transition-colors"
-          >
-            建立房間
-          </button>
-
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-white/20" />
-            <span className="text-white/50 text-sm">或</span>
-            <div className="flex-1 h-px bg-white/20" />
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <label className="text-white/80 text-sm">加入房間</label>
-            <input
-              className="rounded-lg px-4 py-3 text-lg bg-white/20 text-white placeholder-white/40 outline-none focus:ring-2 focus:ring-yellow-400 uppercase tracking-widest"
-              placeholder="房間代碼"
-              maxLength={6}
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
-            />
-            <button
-              onClick={handleJoin}
-              className="rounded-xl py-3 text-lg font-bold bg-white/20 hover:bg-white/30 active:bg-white/10 text-white transition-colors"
-            >
-              加入
-            </button>
-          </div>
-
-          {error && <p className="text-red-300 text-sm text-center">{error}</p>}
-        </div>
-      </div>
-    );
-  }
-
-  // ── Lobby ─────────────────────────────────────────────────────────────────
-  if (phase === 'lobby' && roomCode) {
-    return (
-      <div className="min-h-screen bg-green-900 flex flex-col items-center justify-center gap-6 py-10">
-        <button
-          onClick={handleLeaveRoom}
-          className="self-start ml-4 text-white/60 hover:text-white text-sm flex items-center gap-1 transition-colors"
-        >
-          ← 離開房間
-        </button>
-        <h1 className="text-3xl font-black text-white tracking-wide">🀄 鬥地主</h1>
-        <RoomLobby
-          roomCode={roomCode}
-          members={members}
-          myNickname={nickname || (localStorage.getItem('ddz_nickname') ?? '')}
-          onVote={votePlay}
-          hasVoted={hasVoted}
-          winCounts={winCounts}
-          readyCount={readyCount}
-          canVote={canVote}
-        />
-      </div>
-    );
-  }
-
-  // ── Game board (dealing / bidding / gameplay / result) ────────────────────
   return (
-    <GameBoard
-      gameState={gameState}
-      mySocketId={socket.id ?? ''}
-      onPlayCards={playCards}
-      onPass={pass}
-      onBid={bid}
-      onEmojiReact={reactEmoji}
-    />
+    <>
+      <VolumeControl onVolumeChange={setVolume} />
+
+      {/* ── Home screen ─────────────────────────────────────────────────── */}
+      {phase === 'lobby' && !roomCode && (
+        <div className="min-h-screen bg-green-900 flex items-center justify-center p-4">
+          <div className="bg-white/10 backdrop-blur rounded-2xl p-8 w-full max-w-sm flex flex-col gap-6">
+            <h1 className="text-4xl font-bold text-white text-center tracking-wide">🀄 鬥地主</h1>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-white/80 text-sm">暱稱</label>
+              <input
+                className="rounded-lg px-4 py-3 text-lg bg-white/20 text-white placeholder-white/40 outline-none focus:ring-2 focus:ring-yellow-400"
+                placeholder="你的暱稱（2–10字）"
+                maxLength={10}
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              />
+            </div>
+
+            <button
+              onClick={handleCreate}
+              className="rounded-xl py-3 text-lg font-bold bg-yellow-400 hover:bg-yellow-300 active:bg-yellow-500 text-green-900 transition-colors"
+            >
+              建立房間
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-white/20" />
+              <span className="text-white/50 text-sm">或</span>
+              <div className="flex-1 h-px bg-white/20" />
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <label className="text-white/80 text-sm">加入房間</label>
+              <input
+                className="rounded-lg px-4 py-3 text-lg bg-white/20 text-white placeholder-white/40 outline-none focus:ring-2 focus:ring-yellow-400 uppercase tracking-widest"
+                placeholder="房間代碼"
+                maxLength={6}
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+              />
+              <button
+                onClick={handleJoin}
+                className="rounded-xl py-3 text-lg font-bold bg-white/20 hover:bg-white/30 active:bg-white/10 text-white transition-colors"
+              >
+                加入
+              </button>
+            </div>
+
+            {error && <p className="text-red-300 text-sm text-center">{error}</p>}
+          </div>
+        </div>
+      )}
+
+      {/* ── Lobby ───────────────────────────────────────────────────────── */}
+      {phase === 'lobby' && roomCode && (
+        <div className="min-h-screen bg-green-900 flex flex-col items-center justify-center gap-6 py-10">
+          <button
+            onClick={handleLeaveRoom}
+            className="self-start ml-4 text-white/60 hover:text-white text-sm flex items-center gap-1 transition-colors"
+          >
+            ← 離開房間
+          </button>
+          <h1 className="text-3xl font-black text-white tracking-wide">🀄 鬥地主</h1>
+          <RoomLobby
+            roomCode={roomCode}
+            members={members}
+            myNickname={nickname || (localStorage.getItem('ddz_nickname') ?? '')}
+            onVote={votePlay}
+            hasVoted={hasVoted}
+            winCounts={winCounts}
+            readyCount={readyCount}
+          />
+        </div>
+      )}
+
+      {/* ── Game board (dealing / bidding / gameplay / result) ──────────── */}
+      {phase !== 'lobby' && (
+        <GameBoard
+          gameState={gameState}
+          mySocketId={socket.id ?? ''}
+          onPlayCards={playCards}
+          onPass={pass}
+          onBid={bid}
+          onEmojiReact={reactEmoji}
+          onEmojiReceived={playEmoji}
+        />
+      )}
+    </>
   );
 }

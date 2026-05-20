@@ -18,7 +18,7 @@ interface SeatReaction {
 
 const REACTION_GROUPS = [
   { label: '表情', items: ['🖕', '🤏', '🤌'] },
-  { label: '語錄', items: ['EZ', 'GG', '什麼lin', '你會玩的嗎', '小癟三', '不用看了', '窩妖驗牌', '牌沒有問題', '在我者離', '給我搽皮鞋'] },
+  { label: '語錄', items: ['EZ', 'GG', '玩不了啦', '小兒科', '小癟三', '不用看了', '在我者離', '窩妖驗牌', '牌沒有問題', '給我搽皮鞋'] },
 ];
 
 interface GameBoardProps {
@@ -28,6 +28,7 @@ interface GameBoardProps {
   onPass: () => void;
   onBid: (value: 0 | 1) => void;
   onEmojiReact: (emoji: string) => void;
+  onEmojiReceived?: (emoji: string) => void;
 }
 
 export function GameBoard({
@@ -37,6 +38,7 @@ export function GameBoard({
   onPass,
   onBid,
   onEmojiReact,
+  onEmojiReceived,
 }: GameBoardProps) {
   const {
     members,
@@ -74,8 +76,12 @@ export function GameBoard({
 
   const socket = useSocket();
 
+  const latestOnEmojiReceived = useRef(onEmojiReceived);
+  latestOnEmojiReceived.current = onEmojiReceived;
+
   useEffect(() => {
     const handler = (data: { senderId: string; emoji: string }) => {
+      latestOnEmojiReceived.current?.(data.emoji);
       const globalIdx = latestPlayerOrder.current.indexOf(data.senderId);
       if (globalIdx === -1) return;
       const key = ++reactionKeyRef.current;

@@ -114,7 +114,7 @@ export class GameService {
         wantToPlay: m.wantToPlay,
       }));
     const readyCount = members.filter((m) => m.wantToPlay).length;
-    const canVote = room.state === 'waiting' && members.length >= 3;
+    const canVote = room.state === 'waiting';
     this.emitToRoom(room, 'members_update', { members, readyCount, canVote });
   }
 
@@ -221,6 +221,9 @@ export class GameService {
         wantToPlay: m.wantToPlay,
       }));
 
+    const readyCount = members.filter((m) => m.wantToPlay).length;
+    const canVote = room.state === 'waiting';
+
     return {
       roomCode,
       members,
@@ -228,6 +231,8 @@ export class GameService {
       playerIds: room.playerIds,
       seq: room.eventSeq,
       winCounts: room.winCounts,
+      readyCount,
+      canVote,
     };
   }
 

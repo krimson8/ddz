@@ -49,6 +49,8 @@ type Action =
       playerIds: string[];
       winCounts: Record<string, number>;
       phase?: GamePhase;
+      readyCount?: number;
+      canVote?: boolean;
     }
   | { type: "MEMBERS_UPDATE"; members: ClientMember[]; readyCount: number; canVote: boolean }
   | { type: "VOTE_CLOSED_START"; playerIds: string[]; phase: GamePhase }
@@ -94,6 +96,8 @@ function reducer(state: GameState, action: Action): GameState {
         playerOrder: action.playerIds,
         winCounts: action.winCounts,
         phase: action.phase ?? (action.playerIds.length > 0 ? state.phase : "lobby"),
+        readyCount: action.readyCount ?? state.readyCount,
+        canVote: action.canVote ?? state.canVote,
       };
     }
     case "MEMBERS_UPDATE":
@@ -256,6 +260,8 @@ export function useGame(): UseGameReturn {
         winCounts?: Record<string, number>;
         phase?: GamePhase;
         seq?: number;
+        readyCount?: number;
+        canVote?: boolean;
       }) => {
         if (typeof data.seq === "number") seqRef.current = data.seq;
         roomCodeRef.current = data.roomCode;
@@ -266,6 +272,8 @@ export function useGame(): UseGameReturn {
           playerIds: data.playerIds ?? [],
           winCounts: data.winCounts ?? {},
           phase: data.phase,
+          readyCount: data.readyCount,
+          canVote: data.canVote,
         });
       },
     );

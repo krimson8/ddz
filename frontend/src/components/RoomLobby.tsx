@@ -13,7 +13,6 @@ interface RoomLobbyProps {
   hasVoted: boolean;
   winCounts: Record<string, number>;
   readyCount: number;
-  canVote: boolean;
 }
 
 export function RoomLobby({
@@ -24,11 +23,8 @@ export function RoomLobby({
   hasVoted,
   winCounts,
   readyCount,
-  canVote,
 }: RoomLobbyProps) {
   const [copied, setCopied] = useState(false);
-  const playerCount = members.filter((m) => m.role === 'player').length;
-
   function copyCode() {
     navigator.clipboard.writeText(roomCode).then(() => {
       setCopied(true);
@@ -93,45 +89,38 @@ export function RoomLobby({
         </div>
       )}
 
-      {/* Status */}
-      <p className="text-white/60 text-sm">
-        {playerCount < 3 ? `等待玩家加入 (${members.length}/3)…` : `玩家人數已足夠`}
-      </p>
-
       {/* Vote prompt */}
-      {canVote && (
-        <div className="flex flex-col items-center gap-3">
-          <p className="text-white text-base font-bold">
-            準備出戰 ({readyCount}/3)
-          </p>
-          <div className="flex gap-2 flex-wrap justify-center">
-            {members.slice(0, 5).map((m) => (
-              <span
-                key={m.id}
-                className={[
-                  'text-xs px-2 py-1 rounded-full',
-                  m.wantToPlay
-                    ? 'bg-yellow-400 text-green-900 font-bold'
-                    : 'bg-white/20 text-white',
-                ].join(' ')}
-              >
-                {m.nickname}
-              </span>
-            ))}
-          </div>
-          <button
-            onClick={onVote}
-            className={[
-              'px-8 py-3 rounded-xl font-bold text-lg transition-colors min-h-[44px]',
-              hasVoted
-                ? 'bg-red-500 hover:bg-red-400 text-white'
-                : 'bg-yellow-400 hover:bg-yellow-300 text-green-900',
-            ].join(' ')}
-          >
-            {hasVoted ? '取消準備' : '我要玩！'}
-          </button>
+      <div className="flex flex-col items-center gap-3">
+        <p className="text-white text-base font-bold">
+          準備出戰 ({readyCount}/3)
+        </p>
+        <div className="flex gap-2 flex-wrap justify-center">
+          {members.slice(0, 5).map((m) => (
+            <span
+              key={m.id}
+              className={[
+                'text-xs px-2 py-1 rounded-full',
+                m.wantToPlay
+                  ? 'bg-yellow-400 text-green-900 font-bold'
+                  : 'bg-white/20 text-white',
+              ].join(' ')}
+            >
+              {m.nickname}
+            </span>
+          ))}
         </div>
-      )}
+        <button
+          onClick={onVote}
+          className={[
+            'px-8 py-3 rounded-xl font-bold text-lg transition-colors min-h-[44px]',
+            hasVoted
+              ? 'bg-red-500 hover:bg-red-400 text-white'
+              : 'bg-yellow-400 hover:bg-yellow-300 text-green-900',
+          ].join(' ')}
+        >
+          {hasVoted ? '取消準備' : '我要玩！'}
+        </button>
+      </div>
     </div>
   );
 }
