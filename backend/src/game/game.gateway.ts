@@ -12,9 +12,21 @@ import { GameService } from './game.service';
 import { Card } from './types';
 
 const ALLOWED_REACTIONS = new Set([
-  '🖕', '🤏', '🤌',
-  '我操', 'EZ', 'GG', '什麼lin', '你會玩的嗎', '小癟三', '不用看了',
-  '窩妖驗牌', '牌沒有問題', '在我者離', '給我搽皮鞋',
+  '🖕',
+  '🤏',
+  '🤌',
+  '我操',
+  'EZ',
+  'GG',
+  '玩不了啦',
+  '小兒科',
+  '你會玩的嗎',
+  '小癟三',
+  '不用看了',
+  '窩妖驗牌',
+  '牌沒有問題',
+  '在我者離',
+  '給我搽皮鞋',
 ]);
 const VALID_SUITS = new Set<string>([
   'spade',

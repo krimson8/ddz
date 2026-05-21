@@ -18,7 +18,7 @@ interface SeatReaction {
 
 const REACTION_GROUPS = [
   { label: '表情', items: ['🖕', '🤏', '🤌'] },
-  { label: '語錄', items: ['EZ', 'GG', '玩不了啦', '小兒科', '小癟三', '不用看了', '在我者離', '窩妖驗牌', '牌沒有問題', '給我搽皮鞋'] },
+  { label: '語錄', items: ['EZ', 'GG', '你會玩的嗎', '玩不了啦', '小兒科', '小癟三', '不用看了', '在我者離', '窩妖驗牌', '牌沒有問題', '給我搽皮鞋'] },
 ];
 
 interface GameBoardProps {
