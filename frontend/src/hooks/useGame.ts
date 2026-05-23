@@ -401,7 +401,9 @@ export function useGame(): UseGameReturn {
     );
 
     socket.on("game_over", (data: { winner: "landlord" | "peasants"; winCounts: Record<string, number>; winnerIds?: string[]; winningCards?: Card[]; phase?: GamePhase; seq?: number }) => {
-      if (!checkSeq(data.seq)) return;
+      // Always apply game_over — it's an authoritative phase transition.
+      // Advancing the seq here keeps subsequent in-order events accepted.
+      if (typeof data.seq === "number") seqRef.current = data.seq;
       dispatch({
         type: "GAME_OVER",
         winner: data.winner,
@@ -418,7 +420,9 @@ export function useGame(): UseGameReturn {
     });
 
     socket.on("return_to_lobby", (data: { phase?: GamePhase; seq?: number } = {}) => {
-      if (!checkSeq(data.seq)) return;
+      // Always apply return_to_lobby — seq gaps during the 5s result window
+      // (e.g. spectator join, emoji) would cause checkSeq to drop this event.
+      if (typeof data.seq === "number") seqRef.current = data.seq;
       dispatch({ type: "RETURN_TO_LOBBY", phase: data.phase ?? "lobby" });
     });
 
