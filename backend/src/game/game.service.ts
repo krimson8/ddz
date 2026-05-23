@@ -83,6 +83,10 @@ export class GameService {
       }),
       landlordIndex: room.landlordIndex,
       landlordCards: room.landlordCards,
+      playerHands: room.playerIds.map((id) => {
+        const m = room.members.find((mem) => mem.id === id);
+        return m ? m.hand : [];
+      }),
       phase: 'gameplay',
     };
   }

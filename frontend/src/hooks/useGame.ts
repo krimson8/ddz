@@ -20,6 +20,7 @@ const initialState: GameState = {
   playerOrder: [],
   myHand: [],
   landlordCards: null,
+  playerHands: [],
   landlordIndex: null,
   currentPlayer: null,
   currentPlayerEndTime: null,
@@ -79,6 +80,7 @@ type Action =
       playerCardCounts: number[];
       landlordIndex: number;
       landlordCards: Card[];
+      playerHands: Card[][];
       phase: GamePhase;
     }
   | { type: "GAME_OVER"; winner: "landlord" | "peasants"; winCounts: Record<string, number>; winnerIds: string[]; winningCards: Card[]; phase: GamePhase }
@@ -186,6 +188,7 @@ function reducer(state: GameState, action: Action): GameState {
         playerCardCounts: action.playerCardCounts,
         landlordIndex: action.landlordIndex,
         landlordCards: action.landlordCards,
+        playerHands: action.playerHands,
       };
     }
     case "PLAYER_DISCONNECTED":
@@ -377,6 +380,7 @@ export function useGame(): UseGameReturn {
         playerCardCounts: number[];
         landlordIndex: number;
         landlordCards: Card[];
+        playerHands: Card[][];
         phase: GamePhase;
         seq?: number;
       }) => {
@@ -390,6 +394,7 @@ export function useGame(): UseGameReturn {
           playerCardCounts: data.playerCardCounts,
           landlordIndex: data.landlordIndex,
           landlordCards: data.landlordCards,
+          playerHands: data.playerHands ?? [],
           phase: data.phase,
         });
       },

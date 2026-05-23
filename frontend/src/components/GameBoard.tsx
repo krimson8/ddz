@@ -48,6 +48,7 @@ export function GameBoard({
     currentPlayerEndTime,
     lastPlay,
     landlordCards,
+    playerHands,
     landlordIndex,
     phase,
     playHistory,
@@ -69,6 +70,20 @@ export function GameBoard({
   const reactionTimers = useRef<Record<number, ReturnType<typeof setTimeout>[]>>({});
   const reactionKeyRef = useRef(0);
   const [selectedCards, setSelectedCards] = useState<Card[]>([]);
+
+  // Spectator: which player index (in playerOrder) is shown at the bottom seat.
+  // Defaults to landlordIndex once known, otherwise 0.
+  const defaultSpectatorView = landlordIndex !== null && landlordIndex >= 0 ? landlordIndex : 0;
+  const [spectatorViewIndex, setSpectatorViewIndex] = useState<number>(defaultSpectatorView);
+
+  // When the landlord is decided, snap the spectator view to the landlord.
+  const prevLandlordIndex = useRef<number | null>(null);
+  useEffect(() => {
+    if (isSpectator && landlordIndex !== null && landlordIndex >= 0 && landlordIndex !== prevLandlordIndex.current) {
+      setSpectatorViewIndex(landlordIndex);
+      prevLandlordIndex.current = landlordIndex;
+    }
+  }, [isSpectator, landlordIndex]);
 
   // Keep latest values accessible inside the socket effect without re-subscribing
   const latestPlayerOrder = useRef(playerOrder);
@@ -108,9 +123,9 @@ export function GameBoard({
     onEmojiReact(selectedReaction);
   }
 
-  // Players seated: [0] = bottom, [1] = top-left, [2] = top-right.
+  // Players seated: [0] = bottom, [1] = top-left, [2] = top-right (clockwise).
   // Players: local player bottom, next clockwise top-left, then top-right.
-  // Spectators: landlord bottom (once known), peasants at top.
+  // Spectators: spectatorViewIndex bottom, next two clockwise at top.
   const orderedPlayers: (ClientMember | null)[] = (() => {
     if (!isSpectator) {
       return [
@@ -119,13 +134,14 @@ export function GameBoard({
         players[(myPlayerIndex + 2) % 3] ?? null,
       ];
     }
-    if (landlordIndex === null || landlordIndex < 0 || players.length < 3) {
+    if (players.length < 3) {
       return [players[0] ?? null, players[1] ?? null, players[2] ?? null];
     }
-    const p0 = players[landlordIndex];
-    const p1 = players[(landlordIndex + 1) % 3];
-    const p2 = players[(landlordIndex + 2) % 3];
-    return [p0 ?? null, p1 ?? null, p2 ?? null];
+    return [
+      players[spectatorViewIndex] ?? null,
+      players[(spectatorViewIndex + 1) % 3] ?? null,
+      players[(spectatorViewIndex + 2) % 3] ?? null,
+    ];
   })();
 
   // Compute who played last for the PlayArea indicator
@@ -142,18 +158,23 @@ export function GameBoard({
           if (!member) return null;
           const globalIdx = players.indexOf(member);
           return (
-            <PlayerSeat
+            <div
               key={member.id}
-              nickname={member.nickname}
-              role="player"
-              isLandlord={globalIdx === landlordIndex}
-              landlordCards={globalIdx === landlordIndex && landlordCards ? landlordCards : undefined}
-              cardCount={gameState.playerCardCounts[globalIdx]}
-              isActiveTurn={currentPlayer === member.id}
-              colorIndex={globalIdx}
-              reactions={seatReactions[globalIdx] ?? []}
-              compact
-            />
+              onClick={isSpectator ? () => setSpectatorViewIndex(globalIdx) : undefined}
+              className={isSpectator ? 'cursor-pointer' : undefined}
+            >
+              <PlayerSeat
+                nickname={member.nickname}
+                role="player"
+                isLandlord={globalIdx === landlordIndex}
+                landlordCards={globalIdx === landlordIndex && landlordCards ? landlordCards : undefined}
+                cardCount={gameState.playerCardCounts[globalIdx]}
+                isActiveTurn={currentPlayer === member.id}
+                colorIndex={globalIdx}
+                reactions={seatReactions[globalIdx] ?? []}
+                compact
+              />
+            </div>
           );
         })}
       </div>
@@ -196,24 +217,33 @@ export function GameBoard({
         }
       >
         {isSpectator ? (
-          /* Spectator bottom: landlord seat (or first player before landlord decided) */
-          <div className="flex items-center justify-between gap-2 px-2 py-2">
-            {orderedPlayers[0] && (() => {
-              const globalIdx = players.indexOf(orderedPlayers[0]!);
-              return (
-                <PlayerSeat
-                  nickname={orderedPlayers[0].nickname}
-                  role="player"
-                  isLandlord={globalIdx === landlordIndex}
-                  landlordCards={globalIdx === landlordIndex && landlordCards ? landlordCards : undefined}
-                  cardCount={gameState.playerCardCounts[globalIdx]}
-                  isActiveTurn={currentPlayer === orderedPlayers[0]!.id}
-                  colorIndex={globalIdx}
-                  reactions={seatReactions[globalIdx] ?? []}
-                />
-              );
-            })()}
-            <p className="text-white/40 text-xs italic ml-2">觀戰中</p>
+          /* Spectator bottom: viewed player seat + their hand (click top seats to swap) */
+          <div className="flex flex-col gap-1 px-2 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <PlayerSeat
+                nickname={orderedPlayers[0]?.nickname ?? ''}
+                role="player"
+                isLandlord={spectatorViewIndex === landlordIndex}
+                landlordCards={spectatorViewIndex === landlordIndex && landlordCards ? landlordCards : undefined}
+                cardCount={gameState.playerCardCounts[spectatorViewIndex]}
+                isActiveTurn={currentPlayer === orderedPlayers[0]?.id}
+                colorIndex={spectatorViewIndex}
+                reactions={seatReactions[spectatorViewIndex] ?? []}
+              />
+              <p className="text-white/40 text-xs italic ml-2">觀戰中</p>
+            </div>
+            {playerHands[spectatorViewIndex] && playerHands[spectatorViewIndex].length > 0 && (
+              <CardHand
+                cards={playerHands[spectatorViewIndex]}
+                onPlay={() => {}}
+                onPass={() => {}}
+                interactive={false}
+                playerIndex={spectatorViewIndex}
+                lastPlay={null}
+                onSelectionChange={() => {}}
+                turnEndTime={null}
+              />
+            )}
           </div>
         ) : (
           <>

@@ -72,7 +72,7 @@ A web-based multiplayer 鬥地主 (Fight the Landlord) card game for 3 players. 
 ### 3.3 Game Screen
 
 - **Players**: see their own hand at the bottom, two opponents above, play/pass controls.
-- **Spectators**: see all three players' card counts and the play area, but no hand of their own. Spectators see a read-only view with the play area and a spectator list panel.
+- **Spectators**: see all three players' card counts, the play area, and can browse any player's full hand. The bottom seat defaults to the landlord (once decided). Clicking a top opponent avatar swaps that player to the bottom seat; the seating order remains clockwise. The viewed player's hand is shown read-only below their seat.
 - Center area for played cards.
 - Cards are dealt and shown to each player **first**; after a ~2-second pause the bidding UI appears so players can review their hand before deciding.
 
@@ -222,6 +222,12 @@ On reconnect, the server includes a `phase` field in `room_joined` so the client
 │  OR spectator band       │     a scrollable spectator strip
 └──────────────────────────┘
 ```
+
+**Spectator bottom area (spectators only):**
+- Bottom seat defaults to the landlord player once landlord is decided; before that, defaults to `playerOrder[0]`.
+- The viewed player's full hand is shown read-only below their seat info (no action buttons).
+- Clicking either top opponent avatar swaps them to the bottom seat; the two remaining players fill the top seats in clockwise order.
+- A "觀戰中" label appears in the bottom-right corner of the spectator area.
 
 **Spectator Band (bottom of screen, players only see this on desktop):**
 - Horizontal row of small avatar bubbles (28px circles).
@@ -465,6 +471,7 @@ interface Play {
 | `bid_made` | `{ playerIndex, value, votedCount, seq }` | A player placed a bid. `votedCount` is the authoritative total number of players who have voted so far. |
 | `landlord_decided` | `{ playerIndex, landlordCards, playerCardCounts, phase: ‘gameplay’, seq }` | Landlord chosen; 3 face-down cards revealed to all; authoritative card counts for all 3 players included. Followed by a unicast `hand_updated` to the landlord. |
 | `hand_updated` | `{ hand: Card[] }` | Unicast — full sorted hand. Sent to the landlord after receiving the 3 bottom cards, and to any player after every successful `play_cards`. Clients must not modify their hand locally. |
+| `game_state` | `{ currentPlayer, currentPlayerEndTime, onTable, history, playerCardCounts, landlordIndex, landlordCards, playerHands: Card[][], phase, seq }` | Broadcast after every gameplay action. `playerHands` contains all 3 players’ current hands indexed by `playerOrder`; used by spectators to browse hands. Players receive this but the UI does not render opponent hands for them. |
 | `your_turn` | `{}` | Unicast — it’s your turn to play |
 | `cards_played` | `{ playerIndex, cards, handType, rank, remaining, seq }` | Cards were played |
 | `turn_changed` | `{ nextTurn, seq }` | Current turn index changed (emitted after every play or pass) |
@@ -635,7 +642,7 @@ All communication is via **WebSocket (Socket.IO)**. No REST endpoints except `/h
 ## 8. Security Considerations
 
 - **Input validation**: All incoming events are validated (nickname length, card legality, turn order).
-- **Anti-cheat**: The server is the source of truth — clients only receive their own hand. Opponent hands are never sent.
+- **Anti-cheat**: The server is the source of truth — clients only receive their own hand via the unicast `hand_updated` event. All three players' hands are additionally broadcast in `game_state` as `playerHands` for spectator viewing; players receive this data but the UI does not render it for them.
 - **Rate limiting**: Max 10 events/second per socket; emoji reactions additionally capped at 1 per 500 ms per socket.
 - **Emoji allowlist**: Server enforces `ALLOWED_REACTIONS` set in `game.gateway.ts` — any unlisted value is silently dropped.
 - **Room code**: 6-char alphanumeric, collision-checked on creation.

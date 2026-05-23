@@ -53,6 +53,8 @@ export interface GameState {
   playerOrder: string[];
   myHand: Card[];
   landlordCards: Card[] | null;
+  /** All 3 players' hands by playerOrder index — only meaningful for spectators */
+  playerHands: Card[][];
   landlordIndex: number | null;
   /** Socket ID of the player whose turn it currently is (server-authoritative) */
   currentPlayer: string | null;
