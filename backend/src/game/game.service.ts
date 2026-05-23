@@ -378,7 +378,7 @@ export class GameService {
     const room = this.roomManager.getRoomBySocketId(socketId);
     if (!room) return;
 
-    if (room.state === 'playing') {
+    if (room.state === 'playing' || room.resultPending) {
       this.server?.to(socketId).emit('room_error', { message: '遊戲進行中，無法投票' });
       return;
     }
@@ -805,9 +805,13 @@ export class GameService {
   }
 
   /**
-   * Handle a win condition — emit `game_over` and immediately re-open voting.
+   * Handle a win condition — emit `game_over`, block new votes during the 5s
+   * result screen, then emit `return_to_lobby` and re-open voting.
    */
   private handleWin(room: Room, winner: 'landlord' | 'peasants'): void {
+    // Capture the winning hand before tearing down game state
+    const winningCards = room.lastPlay ? room.lastPlay.cards : [];
+
     // Update per-room win tally before resetting game state
     const playerMembers = room.playerIds
       .map((id) => room.members.find((m) => m.id === id))
@@ -826,11 +830,16 @@ export class GameService {
     const winnerIds = room.playerIds.filter((_, i) =>
       winner === 'landlord' ? i === room.landlordIndex : i !== room.landlordIndex,
     );
+
+    // Block vote_play during the result screen delay
+    room.resultPending = true;
+
     this.emitToRoom(room, 'game_over', {
       winner,
       landlordIndex: room.landlordIndex,
       winCounts: room.winCounts,
       winnerIds,
+      winningCards,
       phase: 'result',
     });
 
@@ -860,8 +869,10 @@ export class GameService {
     room.reconnectTimers.clear();
 
     room.state = 'waiting';
-    // After win screen delay, tell all clients to return to lobby then sync member list
+
+    // After 5s result screen: open voting, then tell clients to return to lobby
     setTimeout(() => {
+      room.resultPending = false;
       this.emitToRoom(room, 'return_to_lobby', { phase: 'lobby' });
       this.emitMembersUpdate(room);
     }, 5_000);

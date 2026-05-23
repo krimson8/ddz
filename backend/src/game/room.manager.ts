@@ -77,6 +77,7 @@ export class RoomManager {
       idleTimeout: null,
       reconnectTimers: new Map(),
       winCounts: {},
+      resultPending: false,
     };
 
     this.rooms.set(code, room);

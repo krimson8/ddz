@@ -30,6 +30,7 @@ const initialState: GameState = {
   lastPlay: null,
   winner: null,
   winnerIds: [],
+  winningCards: [],
   playHistory: [],
   playerCardCounts: [],
   lastPlayedBy: null,
@@ -80,7 +81,7 @@ type Action =
       landlordCards: Card[];
       phase: GamePhase;
     }
-  | { type: "GAME_OVER"; winner: "landlord" | "peasants"; winCounts: Record<string, number>; winnerIds: string[]; phase: GamePhase }
+  | { type: "GAME_OVER"; winner: "landlord" | "peasants"; winCounts: Record<string, number>; winnerIds: string[]; winningCards: Card[]; phase: GamePhase }
   | { type: "TURN_CHANGED"; nextTurn: number }
   | { type: "PLAYER_DISCONNECTED"; nickname: string; timeoutMs: number }
   | { type: "PLAYER_RECONNECTED"; playerIds: string[] }
@@ -201,6 +202,7 @@ function reducer(state: GameState, action: Action): GameState {
         phase: action.phase,
         winner: action.winner,
         winnerIds: action.winnerIds,
+        winningCards: action.winningCards,
         winCounts: action.winCounts,
         disconnectedPlayer: null,
       };
@@ -393,13 +395,14 @@ export function useGame(): UseGameReturn {
       },
     );
 
-    socket.on("game_over", (data: { winner: "landlord" | "peasants"; winCounts: Record<string, number>; winnerIds?: string[]; phase?: GamePhase; seq?: number }) => {
+    socket.on("game_over", (data: { winner: "landlord" | "peasants"; winCounts: Record<string, number>; winnerIds?: string[]; winningCards?: Card[]; phase?: GamePhase; seq?: number }) => {
       if (!checkSeq(data.seq)) return;
       dispatch({
         type: "GAME_OVER",
         winner: data.winner,
         winCounts: data.winCounts ?? {},
         winnerIds: data.winnerIds ?? [],
+        winningCards: data.winningCards ?? [],
         phase: data.phase ?? "result",
       });
     });

@@ -72,6 +72,8 @@ export interface GameState {
   winner: "landlord" | "peasants" | null;
   /** Socket IDs of winning players (server-authoritative, set on game_over) */
   winnerIds: string[];
+  /** The cards played on the winning move (server-authoritative) */
+  winningCards: Card[];
   playHistory: HistoryEntry[];
   /** Card counts per player index (0-2) during gameplay */
   playerCardCounts: number[];

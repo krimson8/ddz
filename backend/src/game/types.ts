@@ -72,4 +72,5 @@ export interface Room {
   idleTimeout: NodeJS.Timeout | null; // 5-min auto-delete timer
   reconnectTimers: Map<string, NodeJS.Timeout>; // socketId → 60s grace timer
   winCounts: Record<string, number>; // nickname → total wins in this room
+  resultPending: boolean; // true during the 5s game_over → return_to_lobby delay
 }

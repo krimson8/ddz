@@ -328,60 +328,51 @@ export function GameBoard({
         )}
       </AnimatePresence>
 
-      {/* ── Win overlay ──────────────────────────────────────────────────── */}
+      {/* ── Win banner (inline, does not block the board) ───────────────── */}
       <AnimatePresence>
         {phase === 'result' && winner && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/75 flex items-center justify-center z-50"
+            initial={{ opacity: 0, y: -40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -40 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+            className="absolute top-0 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4 pt-3 pb-4 bg-gradient-to-b from-black/80 to-transparent pointer-events-none"
           >
-            <motion.div
-              initial={{ scale: 0.7, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 280, damping: 22 }}
-              className="bg-green-900/95 rounded-2xl p-8 w-full max-w-sm flex flex-col items-center gap-6 border border-yellow-400/30 shadow-2xl mx-4"
-            >
-              <div className="text-center">
-                <motion.div
-                  initial={{ y: -20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.2 }}
-                  className="text-5xl mb-2"
-                >
-                  {winner === 'landlord' ? '🏆' : '🎉'}
-                </motion.div>
-                <h2 className="text-2xl font-black text-white">
-                  {winner === 'landlord' ? '地主獲勝！' : '農民獲勝！'}
-                </h2>
-                <p className="text-yellow-300 text-sm font-bold mt-1">返回大廳中…</p>
+            {/* Announcement row */}
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">{winner === 'landlord' ? '🏆' : '🎉'}</span>
+              <h2 className="text-2xl font-black text-white drop-shadow-lg">
+                {winner === 'landlord' ? '地主獲勝！' : '農民獲勝！'}
+              </h2>
+            </div>
+
+            {/* Winner names */}
+            <div className="flex gap-2 flex-wrap justify-center">
+              {players.map((member, globalIdx) => {
+                if (!member) return null;
+                const isWinner = gameState.winnerIds.includes(playerOrder[globalIdx]);
+                const colors = ['bg-blue-500', 'bg-purple-500', 'bg-pink-500'];
+                return (
+                  <span
+                    key={member.id}
+                    className={`text-xs font-bold px-2 py-0.5 rounded-full ${isWinner ? `${colors[globalIdx % colors.length]} text-white ring-1 ring-yellow-400` : 'text-white/40'}`}
+                  >
+                    {isWinner ? '✓ ' : ''}{member.nickname}
+                  </span>
+                );
+              })}
+            </div>
+
+            {/* Winning hand cards */}
+            {gameState.winningCards.length > 0 && (
+              <div className="flex gap-1 flex-wrap justify-center mt-1">
+                {gameState.winningCards.map((card, i) => (
+                  <CardComponent key={`win-${card.suit}-${card.rank}-${i}`} {...card} mini />
+                ))}
               </div>
-              <div className="flex gap-4 flex-wrap justify-center">
-                {players.map((member, globalIdx) => {
-                  if (!member) return null;
-                  const isWinner = gameState.winnerIds.includes(playerOrder[globalIdx]);
-                  const colors = ['bg-blue-500', 'bg-purple-500', 'bg-pink-500'];
-                  return (
-                    <motion.div
-                      key={member.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.3 + globalIdx * 0.1 }}
-                      className="flex flex-col items-center gap-1"
-                    >
-                      <div
-                        className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${colors[globalIdx % colors.length]} ${isWinner ? 'ring-2 ring-yellow-400' : 'opacity-60'}`}
-                      >
-                        {member.nickname.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="text-white text-xs">{member.nickname}</span>
-                      {isWinner && <span className="text-yellow-400 text-xs font-bold">勝利</span>}
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </motion.div>
+            )}
+
+            <p className="text-yellow-300 text-xs font-bold mt-1 animate-pulse">返回大廳中…</p>
           </motion.div>
         )}
       </AnimatePresence>

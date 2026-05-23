@@ -247,14 +247,19 @@ On reconnect, the server includes a `phase` field in `room_joined` so the client
 - Each player can only vote once; the panel disables after submission
 - A live tally shows how many players have already voted (e.g. "1/3 已投票")
 
-#### Game End Overlay
-- Winner announcement shown immediately when `game_over` event is received. No client-side countdown.
-- Displays a static "返回大廳中…" message while the backend 5-second delay runs.
+#### Game End Banner
+- When `game_over` is received, an inline banner slides down from the top of the game board — it does **not** cover the board, so the winning hand remains visible.
+- The banner shows: winner announcement (地主獲勝 / 農民獲勝), winner names highlighted, and the **winning hand cards** played on the last move.
+- A pulsing "返回大廳中…" message is shown while the backend 5-second delay runs.
+- **Voting is blocked during this 5-second window** — the backend rejects any `vote_play` events while `resultPending` is true.
 - After 5 seconds the server emits `return_to_lobby` → all clients reset to the lobby screen.
 - All `wantToPlay` flags are cleared server-side; `members_update` follows `return_to_lobby`.
 - **All room members** see a **"再玩一局"** / **"取消準備"** toggle button — same mechanics as the lobby.
 - A live roster shows who is ready, highlighted in yellow as they toggle on.
 - No timeout — vote stays open until 3 are ready.
+
+#### `game_over` payload additions
+- `winningCards: Card[]` — the cards played on the winning move, included so the banner can render them without the client needing to cache `lastPlay`.
 
 ### 5.3 Animations (Framer Motion)
 
@@ -287,12 +292,71 @@ On reconnect, the server includes a `phase` field in `room_joined` so the client
 - When sent, the reaction text/emoji animates above the sender's avatar: scales up, floats upward, and fades out over ~3 seconds.
 - All players see every reaction in real time (broadcast via WebSocket).
 - Rate-limited: max 1 reaction per player per **500 ms** (silently dropped if too fast).
+- Every received `emoji_reaction` event also triggers the mapped emoji sound (see §5.6).
 - Reactions are grouped in the selector:
 
 | Group | Items |
 |-------|-------|
 | 表情 (Emoji) | 🖕, 🤏, 🤌 |
-| 語錄 (Phrases) | 我操, EZ, GG, 什麼lin, 你會玩的嗎, 小癟三, 不用看了, 窩妖驗牌, 牌沒有問題, 在我者離, 給我搽皮鞋 |
+| 語錄 (Phrases) | EZ, GG, 玩不了啦, 小兒科, 小癟三, 不用看了, 在我者離, 窩妖驗牌, 牌沒有問題, 給我搽皮鞋 |
+
+### 5.6 Sound Effects
+
+Implemented via the `useSoundEffects` hook (`frontend/src/hooks/useSoundEffects.ts`) using the browser's native `HTMLAudioElement`. No external audio library is required.
+
+#### Game event sounds
+
+| Key | File | Trigger |
+|-----|------|---------|
+| `cardPlay` | `/sounds/card-play.wav` | Any player plays cards (`lastPlay` changes to non-null) |
+| `pass` | `/sounds/pass.mp3` | Any player passes (newest history entry has 0 cards) |
+| `yourTurn` | `/sounds/your-turn.mp3` | `currentPlayer` becomes the local player's socket ID |
+| `landlord` | `/sounds/landlord.mp3` | `landlordIndex` is set for the first time (landlord decided) |
+| `deal` | `/sounds/deal.mp3` | Local hand goes from empty → full during `dealing` phase |
+| `gameStart` | `/sounds/game-ready.mp3` | Phase transitions into `dealing` (enough players voted) |
+| `win` | `/sounds/win.mp3` | Game over and local player is on the winning side |
+| `lose` | `/sounds/lose.mp3` | Game over and local player is on the losing side |
+
+- The `yourTurn` sound is stopped immediately when the local player's turn ends (they played or passed, or game over) — it does not play past the end of their turn.
+- Sound files are lazy-loaded on first interaction (browser autoplay policy). Missing files are silently skipped.
+- Each game-event sound uses a pool of 3 `HTMLAudioElement` instances (round-robin) to support rapid re-triggering without cutting off overlapping plays.
+
+#### Emoji sounds
+
+Each reaction has an optional mapped sound under `/sounds/emoji/`. Missing entries are silently skipped.
+
+| Reaction | File |
+|----------|------|
+| 🖕 | `/sounds/emoji/middle-finger.mp3` |
+| 🤏 | `/sounds/emoji/small.mp3` |
+| 🤌 | `/sounds/emoji/chef-kiss.mp3` |
+| EZ | `/sounds/emoji/ez.mp3` |
+| GG | `/sounds/emoji/gg.mp3` |
+| 玩不了啦 | `/sounds/emoji/wan-bu-liao-la.mp3` |
+| 小兒科 | `/sounds/emoji/xiao-er-ke.ogg` |
+| 小癟三 | `/sounds/emoji/xiao-bie-san1.ogg` |
+| 不用看了 | `/sounds/emoji/bu-yong-kan-le.ogg` |
+| 在我者離 | `/sounds/emoji/zai-wo-zhe-li.ogg` |
+| 窩妖驗牌 | `/sounds/emoji/wo-yao-yan-pai.ogg` |
+| 牌沒有問題 | `/sounds/emoji/pai-mei-you-wen-ti.ogg` |
+| 給我搽皮鞋 | `/sounds/emoji/gei-wo-cha-pixie.ogg` |
+
+Supported formats: MP3, WAV, OGG (OGG not supported on Safari).
+
+### 5.7 Volume Control
+
+A persistent volume widget is rendered on every page/phase via `frontend/src/components/VolumeControl.tsx`.
+
+- **Position**: fixed top-left corner (`z-50`), always on top of all other UI.
+- **Speaker icon button**: clicking toggles mute (volume 0 ↔ restores previous level). Icon changes based on current level (muted / low / high).
+- **Expand arrow**: a small `›` / `‹` toggle to the right of the speaker button reveals/hides a horizontal slider.
+- **Slider**: range 0–1, step 0.05, styled with `accent-yellow-400`.
+- Volume changes apply **immediately** to all currently-playing audio elements, not just future plays.
+- Volume is persisted to `localStorage` under key `ddz_volume` and restored on every page load.
+- **Reset button** (`⟳`): sits to the right of the expand arrow. Two-click confirmation flow:
+  - First click: button turns red and shows `確定？`; tooltip changes to `再按一次確認清除`. Auto-cancels after 3 seconds if not confirmed.
+  - Second click within 3 s: clears all `ddz_*` localStorage keys **except** `ddz_nickname` and `ddz_volume`, then reloads the page.
+  - Hover tooltip on first click: `點兩下清除房間連線（保留暱稱）`.
 
 ---
 
@@ -340,6 +404,7 @@ interface Room {
   idleTimeout: NodeJS.Timeout | null; // 5-min auto-delete timer
   reconnectTimers: Map<string, NodeJS.Timeout>; // socketId → 15s grace timer
   winCounts: Record<string, number>;  // nickname → total wins in this room session
+  resultPending: boolean;             // true during the 5s game_over → return_to_lobby delay; blocks vote_play
 }
 
 interface Member {
@@ -571,7 +636,8 @@ All communication is via **WebSocket (Socket.IO)**. No REST endpoints except `/h
 
 - **Input validation**: All incoming events are validated (nickname length, card legality, turn order).
 - **Anti-cheat**: The server is the source of truth — clients only receive their own hand. Opponent hands are never sent.
-- **Rate limiting**: Max 10 events/second per socket to prevent spam.
+- **Rate limiting**: Max 10 events/second per socket; emoji reactions additionally capped at 1 per 500 ms per socket.
+- **Emoji allowlist**: Server enforces `ALLOWED_REACTIONS` set in `game.gateway.ts` — any unlisted value is silently dropped.
 - **Room code**: 6-char alphanumeric, collision-checked on creation.
 - **No authentication needed** (by design), but nicknames are sanitized to prevent XSS.
 
@@ -607,7 +673,17 @@ ddz/
 │   ├── tailwind.config.ts
 │   ├── tsconfig.json
 │   ├── public/
-│   │   └── favicon.ico
+│   │   ├── favicon.ico
+│   │   └── sounds/
+│   │       ├── card-play.wav       # Game event sounds
+│   │       ├── pass.mp3
+│   │       ├── your-turn.mp3
+│   │       ├── deal.mp3
+│   │       ├── win.mp3
+│   │       ├── lose.mp3
+│   │       ├── landlord.mp3
+│   │       ├── game-ready.mp3
+│   │       └── emoji/              # Per-reaction sounds (optional)
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── layout.tsx
@@ -621,10 +697,12 @@ ddz/
 │   │   │   ├── PlayArea.tsx
 │   │   │   ├── RoomLobby.tsx
 │   │   │   ├── GameResult.tsx
-│   │   │   └── Countdown.tsx
+│   │   │   ├── Countdown.tsx
+│   │   │   └── VolumeControl.tsx   # Fixed top-left volume widget
 │   │   ├── hooks/
 │   │   │   ├── useSocket.ts
-│   │   │   └── useGame.ts
+│   │   │   ├── useGame.ts
+│   │   │   └── useSoundEffects.ts  # Game event + emoji sounds, volume control
 │   │   ├── lib/
 │   │   │   ├── socket.ts       # Socket.IO client singleton
 │   │   │   └── cardUtils.ts    # Client-side card helpers
@@ -693,7 +771,7 @@ Cards will be rendered as styled HTML/CSS components (not images) for simplicity
 - ❌ Full chat
 - ❌ AI/bot players
 - ❌ Scoring / points across games
-- ❌ Sound effects
+- ✅ Sound effects (game events + per-emoji sounds + volume control)
 - ❌ Tournament mode
 
 ---

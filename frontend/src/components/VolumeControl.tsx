@@ -32,6 +32,7 @@ function VolumeIcon({ volume }: { volume: number }) {
 export function VolumeControl({ onVolumeChange }: VolumeControlProps) {
   const [volume, setVolume] = useState(1);
   const [open, setOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   useEffect(() => {
     try {
@@ -50,6 +51,26 @@ export function VolumeControl({ onVolumeChange }: VolumeControlProps) {
     const next = volume === 0 ? 1 : 0;
     setVolume(next);
     onVolumeChange(next);
+  };
+
+  const handleClear = () => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      // Auto-cancel confirmation after 3 seconds
+      setTimeout(() => setConfirmClear(false), 3000);
+      return;
+    }
+    // Clear all ddz_ keys except nickname and volume
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('ddz_') && key !== 'ddz_nickname' && key !== 'ddz_volume') {
+        toRemove.push(key);
+      }
+    }
+    toRemove.forEach((k) => localStorage.removeItem(k));
+    setConfirmClear(false);
+    window.location.reload();
   };
 
   return (
@@ -83,6 +104,19 @@ export function VolumeControl({ onVolumeChange }: VolumeControlProps) {
         aria-label="展開音量"
       >
         {open ? '‹' : '›'}
+      </button>
+
+      <button
+        onClick={handleClear}
+        className={`h-6 px-2 flex items-center justify-center rounded-full text-xs font-bold transition-colors backdrop-blur-sm ${
+          confirmClear
+            ? 'bg-red-500 hover:bg-red-400 text-white'
+            : 'bg-black/40 hover:bg-black/60 text-white/50 hover:text-white'
+        }`}
+        aria-label="重置房間連線"
+        title={confirmClear ? '再按一次確認清除' : '點兩下清除房間連線（保留暱稱）'}
+      >
+        {confirmClear ? '確定？' : '⟳'}
       </button>
     </div>
   );
