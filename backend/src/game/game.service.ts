@@ -89,6 +89,10 @@ export class GameService {
 
   /** Broadcast game_state to the room, then unicast each player's hand. */
   private emitGameState(room: Room): void {
+    // Plays, passes, and any gameplay turn change cancel a pending landlord
+    // surrender — clear it BEFORE building the payload so the broadcast carries
+    // the post-clear `surrendered` array (avoids a transient mismatch).
+    this.clearLandlordPendingSurrender(room);
     this.emitToRoom(room, 'game_state', this.buildGameStatePayload(room));
     for (let i = 0; i < 3; i++) {
       const uid = room.playerUids[i];
@@ -114,21 +118,31 @@ export class GameService {
     }));
   }
 
+  /**
+   * Any meaningful room activity (play, pass, bid, member change, profile edit,
+   * etc.) cancels the landlord's pending surrender confirmation — they must
+   * re-press to commit. Peasant toggles persist.
+   * Returns true if a broadcast was sent.
+   */
+  private clearLandlordPendingSurrender(room: Room): boolean {
+    if (
+      room.landlordIndex === -1 ||
+      !room.surrendered.includes(room.landlordIndex)
+    ) {
+      return false;
+    }
+    room.surrendered = room.surrendered.filter(
+      (i) => i !== room.landlordIndex,
+    );
+    this.emitToRoom(room, 'surrender_update', {
+      surrendered: [...room.surrendered],
+    });
+    return true;
+  }
+
   /** Broadcast the full member list to the room. */
   private emitMembersUpdate(room: Room): void {
-    // Membership change cancels any pending landlord surrender confirmation —
-    // the landlord must re-press to commit. Peasant toggles persist.
-    if (
-      room.landlordIndex !== -1 &&
-      room.surrendered.includes(room.landlordIndex)
-    ) {
-      room.surrendered = room.surrendered.filter(
-        (i) => i !== room.landlordIndex,
-      );
-      this.emitToRoom(room, 'surrender_update', {
-        surrendered: [...room.surrendered],
-      });
-    }
+    this.clearLandlordPendingSurrender(room);
     const members = this.serializeMembers(room);
     const readyCount = members.filter((m) => m.wantToPlay).length;
     const canVote = room.state === 'waiting';

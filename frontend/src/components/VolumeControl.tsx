@@ -31,6 +31,7 @@ function VolumeIcon({ volume }: { volume: number }) {
 
 export function VolumeControl({ onVolumeChange }: VolumeControlProps) {
   const [volume, setVolume] = useState(1);
+  const [openMobile, setOpenMobile] = useState(false);
 
   useEffect(() => {
     try {
@@ -47,9 +48,14 @@ export function VolumeControl({ onVolumeChange }: VolumeControlProps) {
 
   return (
     <div className="fixed top-3 right-3 z-50 flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5">
-      <span className="text-white/70 flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpenMobile((o) => !o)}
+        className="text-white/70 flex-shrink-0 sm:cursor-default sm:pointer-events-none"
+        aria-label={openMobile ? '收起音量' : '展開音量'}
+      >
         <VolumeIcon volume={volume} />
-      </span>
+      </button>
       <input
         type="range"
         min={0}
@@ -57,7 +63,13 @@ export function VolumeControl({ onVolumeChange }: VolumeControlProps) {
         step={0.05}
         value={volume}
         onChange={handleChange}
-        className="w-24 accent-yellow-400 cursor-pointer"
+        className={[
+          'accent-yellow-400 cursor-pointer transition-all duration-200',
+          // Mobile: collapsible — width/opacity controlled by openMobile.
+          // sm+: always visible at full width.
+          openMobile ? 'w-24 opacity-100' : 'w-0 opacity-0',
+          'sm:w-24 sm:opacity-100',
+        ].join(' ')}
         aria-label="音量"
       />
     </div>
