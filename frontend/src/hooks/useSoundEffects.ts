@@ -12,6 +12,9 @@ const SOUNDS: Record<string, string> = {
   lose: '/sounds/lose.mp3',
   landlord: '/sounds/landlord.mp3',
   gameStart: '/sounds/game-ready.mp3',
+  // Loops while the local player has toggled surrender on (before confirm).
+  // Rename this file as needed — just update the path here.
+  surrenderPending: '/sounds/surrender.mp3',
 };
 
 // Map each emoji/reaction text to a sound file under /sounds/emoji/
@@ -56,6 +59,7 @@ export function useSoundEffects(gameState: GameState, mySocketId: string) {
   const prevStateRef = useRef<GameState>(gameState);
   const volumeRef = useRef<number>(1);
   const yourTurnAudioRef = useRef<HTMLAudioElement | null>(null);
+  const surrenderLoopRef = useRef<HTMLAudioElement | null>(null);
 
   // Hydrate volume from localStorage once on mount
   useEffect(() => {
@@ -87,6 +91,30 @@ export function useSoundEffects(gameState: GameState, mySocketId: string) {
     audio.currentTime = 0;
     audio.play().catch(() => {});
     return audio;
+  };
+
+  const startSurrenderLoop = () => {
+    if (volumeRef.current === 0) return;
+    if (surrenderLoopRef.current && !surrenderLoopRef.current.paused) return;
+    ensurePools();
+    const pool = poolsRef.current['surrenderPending'];
+    if (!pool?.length) return;
+    const audio = pool[0];
+    audio.loop = true;
+    audio.volume = volumeRef.current;
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+    surrenderLoopRef.current = audio;
+  };
+
+  const stopSurrenderLoop = () => {
+    const a = surrenderLoopRef.current;
+    if (a) {
+      a.pause();
+      a.currentTime = 0;
+      a.loop = false;
+    }
+    surrenderLoopRef.current = null;
   };
 
   const stopYourTurn = () => {
@@ -152,8 +180,19 @@ export function useSoundEffects(gameState: GameState, mySocketId: string) {
       play('deal');
     }
 
+    // Surrender toggle (local player only): loop sound while pending, stop on cancel
+    const myIdx = curr.playerOrder.indexOf(mySocketId);
+    const wasSurrendered = myIdx !== -1 && prev.surrendered.includes(myIdx);
+    const isSurrendered = myIdx !== -1 && curr.surrendered.includes(myIdx);
+    if (!wasSurrendered && isSurrendered) {
+      startSurrenderLoop();
+    } else if (wasSurrendered && !isSurrendered) {
+      stopSurrenderLoop();
+    }
+
     // Game over
     if (curr.winner !== null && prev.winner === null) {
+      stopSurrenderLoop();
       stopYourTurn();
       const iAmLandlord = curr.playerOrder[curr.landlordIndex ?? -1] === mySocketId;
       const landlordWon = curr.winner === 'landlord';
