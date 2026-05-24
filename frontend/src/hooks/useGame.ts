@@ -39,6 +39,8 @@ const initialState: GameState = {
   readyCount: 0,
   canVote: false,
   disconnectedPlayer: null,
+  winReason: "normal",
+  surrendered: [],
 };
 
 // ── Actions ──────────────────────────────────────────────────────────────────
@@ -82,11 +84,14 @@ type Action =
       landlordCards: Card[];
       playerHands: Card[][];
       phase: GamePhase;
+      surrendered: number[];
     }
-  | { type: "GAME_OVER"; winner: "landlord" | "peasants"; winCounts: Record<string, number>; winnerIds: string[]; winningCards: Card[]; phase: GamePhase }
+  | { type: "GAME_OVER"; winner: "landlord" | "peasants"; winReason: "normal" | "surrender"; winCounts: Record<string, number>; winnerIds: string[]; winningCards: Card[]; phase: GamePhase }
+  | { type: "SURRENDER_UPDATE"; surrendered: number[] }
   | { type: "TURN_CHANGED"; nextTurn: number }
   | { type: "PLAYER_DISCONNECTED"; nickname: string; timeoutMs: number }
   | { type: "PLAYER_RECONNECTED"; playerIds: string[] }
+  | { type: "LEFT_ROOM" }
   | { type: "ERROR"; message: string };
 
 function reducer(state: GameState, action: Action): GameState {
@@ -103,6 +108,8 @@ function reducer(state: GameState, action: Action): GameState {
         canVote: action.canVote ?? state.canVote,
       };
     }
+    case "LEFT_ROOM":
+      return { ...initialState };
     case "MEMBERS_UPDATE":
       return { ...state, members: action.members, readyCount: action.readyCount, canVote: action.canVote };
     case "VOTE_CLOSED_START":
@@ -142,6 +149,8 @@ function reducer(state: GameState, action: Action): GameState {
         lastPlayedBy: null,
         currentPlayer: null,
         currentPlayerEndTime: null,
+        surrendered: [],
+        winReason: "normal",
       };
     case "BID_OPEN":
       return { ...state, phase: action.phase, bidVotedCount: 0, bidSubmitted: false, bidTimeoutMs: action.timeoutMs };
@@ -189,6 +198,7 @@ function reducer(state: GameState, action: Action): GameState {
         landlordIndex: action.landlordIndex,
         landlordCards: action.landlordCards,
         playerHands: action.playerHands,
+        surrendered: action.surrendered,
       };
     }
     case "PLAYER_DISCONNECTED":
@@ -204,11 +214,14 @@ function reducer(state: GameState, action: Action): GameState {
         ...state,
         phase: action.phase,
         winner: action.winner,
+        winReason: action.winReason,
         winnerIds: action.winnerIds,
         winningCards: action.winningCards,
         winCounts: action.winCounts,
         disconnectedPlayer: null,
       };
+    case "SURRENDER_UPDATE":
+      return { ...state, surrendered: action.surrendered };
     case "TURN_CHANGED":
       return { ...state, currentPlayer: state.playerOrder[action.nextTurn] ?? null };
     default:
@@ -227,6 +240,7 @@ export interface UseGameReturn {
   bid: (amount: 0 | 1) => void;
   playCards: (cards: Card[]) => void;
   pass: () => void;
+  surrender: () => void;
   reactEmoji: (emoji: string) => void;
 }
 
@@ -382,6 +396,7 @@ export function useGame(): UseGameReturn {
         landlordCards: Card[];
         playerHands: Card[][];
         phase: GamePhase;
+        surrendered?: number[];
         seq?: number;
       }) => {
         if (!checkSeq(data.seq)) return;
@@ -396,17 +411,19 @@ export function useGame(): UseGameReturn {
           landlordCards: data.landlordCards,
           playerHands: data.playerHands ?? [],
           phase: data.phase,
+          surrendered: data.surrendered ?? [],
         });
       },
     );
 
-    socket.on("game_over", (data: { winner: "landlord" | "peasants"; winCounts: Record<string, number>; winnerIds?: string[]; winningCards?: Card[]; phase?: GamePhase; seq?: number }) => {
+    socket.on("game_over", (data: { winner: "landlord" | "peasants"; winReason?: "normal" | "surrender"; winCounts: Record<string, number>; winnerIds?: string[]; winningCards?: Card[]; phase?: GamePhase; seq?: number }) => {
       // Always apply game_over — it's an authoritative phase transition.
       // Advancing the seq here keeps subsequent in-order events accepted.
       if (typeof data.seq === "number") seqRef.current = data.seq;
       dispatch({
         type: "GAME_OVER",
         winner: data.winner,
+        winReason: data.winReason ?? "normal",
         winCounts: data.winCounts ?? {},
         winnerIds: data.winnerIds ?? [],
         winningCards: data.winningCards ?? [],
@@ -414,9 +431,20 @@ export function useGame(): UseGameReturn {
       });
     });
 
+    socket.on("surrender_update", (data: { surrendered: number[]; seq?: number }) => {
+      if (!checkSeq(data.seq)) return;
+      dispatch({ type: "SURRENDER_UPDATE", surrendered: data.surrendered ?? [] });
+    });
+
     socket.on("turn_changed", (data: { nextTurn: number; seq?: number }) => {
       if (!checkSeq(data.seq)) return;
       dispatch({ type: "TURN_CHANGED", nextTurn: data.nextTurn });
+    });
+
+    socket.on("left_room", () => {
+      roomCodeRef.current = null;
+      seqRef.current = 0;
+      dispatch({ type: "LEFT_ROOM" });
     });
 
     socket.on("return_to_lobby", (data: { phase?: GamePhase; seq?: number } = {}) => {
@@ -451,6 +479,8 @@ export function useGame(): UseGameReturn {
       socket.off("hand_updated");
       socket.off("game_state");
       socket.off("game_over");
+      socket.off("surrender_update");
+      socket.off("left_room");
       socket.off("return_to_lobby");
       socket.off("player_disconnected");
       socket.off("player_reconnected");
@@ -490,10 +520,12 @@ export function useGame(): UseGameReturn {
 
   const pass = useCallback(() => { socket.emit("pass"); }, [socket]);
 
+  const surrender = useCallback(() => { socket.emit("surrender"); }, [socket]);
+
   const reactEmoji = useCallback(
     (emoji: string) => { socket.emit("react_emoji", { emoji }); },
     [socket],
   );
 
-  return { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, playCards, pass, reactEmoji };
+  return { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, playCards, pass, surrender, reactEmoji };
 }

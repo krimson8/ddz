@@ -323,6 +323,17 @@ export class GameGateway
     this.gameService.handlePass(socket.id);
   }
 
+  // ── surrender ────────────────────────────────────────────────────────────────
+
+  @SubscribeMessage('surrender')
+  handleSurrender(@ConnectedSocket() socket: Socket): void {
+    if (this.isRateLimited(socket.id)) {
+      this.rejectRateLimit(socket);
+      return;
+    }
+    this.gameService.handleSurrender(socket.id);
+  }
+
   // ── react_emoji ───────────────────────────────────────────────────────────────
 
   @SubscribeMessage('react_emoji')
@@ -368,6 +379,8 @@ export class GameGateway
     const roomCode = this.getGameRoomCode(socket);
     this.gameService.handleLeaveRoom(socket.id);
     if (roomCode) void socket.leave(roomCode);
+    // Notify the leaving socket first so it can reset UI before receiving the room list.
+    socket.emit('left_room');
     // Re-subscribe to lobby broadcasts and send fresh list.
     await socket.join(LOBBY_ROOM);
     const user = (socket as AuthedSocket).data.user;

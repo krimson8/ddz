@@ -64,20 +64,18 @@ interface RoomLobbyProps {
   roomCode: string;
   members: ClientMember[];
   myNickname?: string;
+  myUid: string;
   onVote: () => void;
   hasVoted: boolean;
-  readyCount: number;
 }
 
 export function RoomLobby({
   roomCode,
   members,
-  myNickname,
+  myUid,
   onVote,
   hasVoted,
-  readyCount,
 }: RoomLobbyProps) {
-  const [copied, setCopied] = useState(false);
   const [clicked, setClicked] = useState(false);
   const rainbowColor = useRainbowColor();
   const socket = useSocket();
@@ -89,51 +87,91 @@ export function RoomLobby({
     setTimeout(() => setClicked(false), 400);
     onVote();
   }
-  function copyCode() {
-    navigator.clipboard.writeText(roomCode).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  }
 
   return (
     <div className="flex flex-col items-center gap-6 w-full max-w-md mx-auto px-4">
 
-      {/* Room code */}
-      <div className="flex flex-col items-center gap-1">
-        <span className="text-white/60 text-sm">房間代碼</span>
-        <button
-          onClick={copyCode}
-          className="text-3xl font-bold tracking-widest text-yellow-400 hover:text-yellow-300 transition-colors"
-        >
-          {roomCode}
-        </button>
-        <AnimatePresence>
-          {copied && (
-            <motion.span
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="text-green-300 text-xs"
-            >
-              已複製！
-            </motion.span>
-          )}
-        </AnimatePresence>
+      {/* Room code inline title */}
+      <p className="text-white/50 text-sm tracking-wide">
+        房間：<span className="text-yellow-400 font-bold">{roomCode}</span>
+      </p>
+
+      {/* Vote button */}
+      <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+        {!hasVoted && ORBIT_EMOJIS.map((emoji, i) => (
+          <OrbitEmoji key={i} emoji={emoji} index={i} />
+        ))}
+        {hasVoted ? (
+          <div className="px-8 py-3 rounded-xl font-bold text-lg bg-green-600 text-white min-h-[44px] flex items-center select-none opacity-80 cursor-not-allowed">
+            ✅ 已準備！
+          </div>
+        ) : (
+          <motion.button
+            onClick={handleVote}
+            style={{
+              backgroundColor: rainbowColor,
+              boxShadow: `0 0 24px 6px ${rainbowColor}99, 0 0 60px 12px ${rainbowColor}44`,
+              color: '#fff',
+              fontWeight: 900,
+              fontSize: '1.25rem',
+              letterSpacing: '0.05em',
+              padding: '12px 36px',
+              borderRadius: '14px',
+              border: 'none',
+              cursor: 'pointer',
+              position: 'relative',
+              zIndex: 1,
+              textShadow: '0 1px 4px rgba(0,0,0,0.6)',
+              minHeight: '44px',
+              userSelect: 'none',
+            }}
+            animate={
+              clicked
+                ? { scale: [1, 1.35, 0.9, 1.1, 1] }
+                : {
+                    scale: [1, 1.07, 1, 1.07, 1],
+                    rotate: [0, -3, 3, -2, 2, -1, 1, 0],
+                  }
+            }
+            transition={
+              clicked
+                ? { duration: 0.35, ease: 'easeOut' }
+                : {
+                    scale: { duration: 1.4, repeat: Infinity, ease: 'easeInOut' },
+                    rotate: { duration: 0.55, repeat: Infinity, repeatDelay: 2.5, ease: 'easeInOut' },
+                  }
+            }
+          >
+            🎮 我要玩！
+          </motion.button>
+        )}
       </div>
 
       {/* Member strip */}
       <div className="flex gap-4 flex-wrap justify-center">
         <AnimatePresence>
-          {members.map((member, i) => (
-            <PlayerSeat
-              key={member.id}
-              nickname={member.nickname}
-              avatarUrl={member.avatarUrl}
-              role={member.role}
-              colorIndex={i}
-            />
-          ))}
+          {members.map((member, i) => {
+            const isMe = member.id === myUid;
+            const isReady = member.wantToPlay;
+            return (
+              <div
+                key={member.id}
+                className={[
+                  'rounded-2xl transition-all duration-300',
+                  isMe && isReady
+                    ? 'ring-4 ring-yellow-400 shadow-[0_0_18px_4px_rgba(250,204,21,0.6)] p-1'
+                    : 'p-1',
+                ].join(' ')}
+              >
+                <PlayerSeat
+                  nickname={member.nickname}
+                  avatarUrl={member.avatarUrl}
+                  role={member.role}
+                  colorIndex={i}
+                />
+              </div>
+            );
+          })}
         </AnimatePresence>
       </div>
 
@@ -146,7 +184,6 @@ export function RoomLobby({
           <p className="text-white/40 text-xs text-center">尚無比賽記錄</p>
         ) : (
           <div className="flex flex-col gap-1">
-            {/* Column headers */}
             <div className="flex items-center gap-2 px-3 py-1 text-white/50 text-[10px] uppercase tracking-wider">
               <span className="w-6 text-right">#</span>
               <span className="flex-1">玩家</span>
@@ -182,77 +219,6 @@ export function RoomLobby({
                 <span className="w-10 text-right text-white/50">{entry.games}</span>
               </div>
             ))}
-          </div>
-        )}
-      </div>
-
-      {/* Vote prompt */}
-      <div className="flex flex-col items-center gap-3">
-        <p className="text-white text-base font-bold">
-          準備出戰 ({readyCount}/3)
-        </p>
-        <div className="flex gap-2 flex-wrap justify-center">
-          {members.slice(0, 5).map((m) => (
-            <span
-              key={m.id}
-              className={[
-                'text-xs px-2 py-1 rounded-full',
-                m.wantToPlay
-                  ? 'bg-yellow-400 text-green-900 font-bold'
-                  : 'bg-white/20 text-white',
-              ].join(' ')}
-            >
-              {m.nickname}
-            </span>
-          ))}
-        </div>
-        {hasVoted ? (
-          <div className="px-8 py-3 rounded-xl font-bold text-lg bg-green-600 text-white min-h-[44px] flex items-center select-none opacity-80 cursor-not-allowed">
-            ✅ 已準備！
-          </div>
-        ) : (
-          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-            {ORBIT_EMOJIS.map((emoji, i) => (
-              <OrbitEmoji key={i} emoji={emoji} index={i} />
-            ))}
-            <motion.button
-              onClick={handleVote}
-              style={{
-                backgroundColor: rainbowColor,
-                boxShadow: `0 0 24px 6px ${rainbowColor}99, 0 0 60px 12px ${rainbowColor}44`,
-                color: '#fff',
-                fontWeight: 900,
-                fontSize: '1.25rem',
-                letterSpacing: '0.05em',
-                padding: '12px 36px',
-                borderRadius: '14px',
-                border: 'none',
-                cursor: 'pointer',
-                position: 'relative',
-                zIndex: 1,
-                textShadow: '0 1px 4px rgba(0,0,0,0.6)',
-                minHeight: '44px',
-                userSelect: 'none',
-              }}
-              animate={
-                clicked
-                  ? { scale: [1, 1.35, 0.9, 1.1, 1] }
-                  : {
-                      scale: [1, 1.07, 1, 1.07, 1],
-                      rotate: [0, -3, 3, -2, 2, -1, 1, 0],
-                    }
-              }
-              transition={
-                clicked
-                  ? { duration: 0.35, ease: 'easeOut' }
-                  : {
-                      scale: { duration: 1.4, repeat: Infinity, ease: 'easeInOut' },
-                      rotate: { duration: 0.55, repeat: Infinity, repeatDelay: 2.5, ease: 'easeInOut' },
-                    }
-              }
-            >
-              🎮 我要玩！
-            </motion.button>
           </div>
         )}
       </div>

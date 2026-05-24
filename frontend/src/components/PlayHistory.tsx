@@ -42,11 +42,17 @@ export function PlayHistory({ history, playerOrder, members }: PlayHistoryProps)
             <span className="text-white/60 text-[9px] whitespace-nowrap">
               {getPlayerName(entry.playerIndex)}
             </span>
-            <div className="flex gap-[2px]">
-              {entry.play.cards.map((card, j) => (
-                <Card key={j} {...card} mini />
-              ))}
-            </div>
+            {entry.surrender ? (
+              <span className="bg-red-500/80 text-white text-[10px] font-bold px-2 py-1 rounded-md whitespace-nowrap">
+                投降
+              </span>
+            ) : (
+              <div className="flex gap-[2px]">
+                {entry.play.cards.map((card, j) => (
+                  <Card key={j} {...card} mini />
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>

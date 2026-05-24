@@ -27,6 +27,8 @@ interface PlayerSeatProps {
   reactions?: { key: number; text: string }[];
   /** Compact row layout: avatar left, labels right (for opponent seats) */
   compact?: boolean;
+  /** When true, overlay a blinking white pulse on the avatar to signal surrender */
+  surrendered?: boolean;
 }
 
 export function PlayerSeat({
@@ -40,11 +42,12 @@ export function PlayerSeat({
   colorIndex = 0,
   reactions = [],
   compact = false,
+  surrendered = false,
 }: PlayerSeatProps) {
   const initial = nickname.charAt(0).toUpperCase();
   const avatarColor = AVATAR_COLORS[colorIndex % AVATAR_COLORS.length];
 
-  const avatarInner = avatarUrl ? (
+  const avatarImg = avatarUrl ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={avatarUrl}
@@ -56,6 +59,19 @@ export function PlayerSeat({
       className={`w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-3xl ${avatarColor}`}
     >
       {initial}
+    </div>
+  );
+
+  const avatarInner = (
+    <div className="relative w-24 h-24">
+      {avatarImg}
+      {surrendered && (
+        <motion.div
+          className="absolute inset-0 rounded-full bg-white pointer-events-none"
+          animate={{ opacity: [0, 0.7, 0] }}
+          transition={{ duration: 1.0, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      )}
     </div>
   );
 

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Server } from 'socket.io';
 import { createDeck, shuffle, sortHand, validatePlay } from './card.utils';
 import { RoomManager } from './room.manager';
-import { Card, Member, Room } from './types';
+import { Card, HandType, Member, Room } from './types';
 import type { AuthedUser } from '../auth/auth.service';
 import { LeaderboardService } from '../leaderboard/leaderboard.service';
 
@@ -77,6 +77,7 @@ export class GameService {
         const m = room.members.find((mem) => mem.uid === uid);
         return m ? m.hand : [];
       }),
+      surrendered: [...room.surrendered],
       phase: 'gameplay',
     };
   }
@@ -115,6 +116,19 @@ export class GameService {
 
   /** Broadcast the full member list to the room. */
   private emitMembersUpdate(room: Room): void {
+    // Membership change cancels any pending landlord surrender confirmation —
+    // the landlord must re-press to commit. Peasant toggles persist.
+    if (
+      room.landlordIndex !== -1 &&
+      room.surrendered.includes(room.landlordIndex)
+    ) {
+      room.surrendered = room.surrendered.filter(
+        (i) => i !== room.landlordIndex,
+      );
+      this.emitToRoom(room, 'surrender_update', {
+        surrendered: [...room.surrendered],
+      });
+    }
     const members = this.serializeMembers(room);
     const readyCount = members.filter((m) => m.wantToPlay).length;
     const canVote = room.state === 'waiting';
@@ -353,6 +367,69 @@ export class GameService {
     this.emitGameState(room);
   }
 
+  /**
+   * Handle a surrender toggle from a player.
+   * Both landlord and peasants toggle in/out of `room.surrendered` — this broadcasts
+   * `surrender_update` so all clients (players + spectators) can render the
+   * pending blink on the corresponding avatar.
+   *
+   * Loss conditions:
+   *  - Landlord toggled in twice consecutively (i.e. second press while still in
+   *    the set) → landlord loses immediately. The first press only sets the
+   *    blink; the second press finalizes.
+   *  - Both peasants simultaneously in the set → landlord wins.
+   */
+  handleSurrender(socketId: string): void {
+    const room = this.roomManager.getRoomBySocketId(socketId);
+    if (!room || room.state !== 'playing' || room.landlordIndex === -1) {
+      return;
+    }
+    const member = room.members.find((m) => m.socketId === socketId);
+    if (!member) return;
+    const playerIndex = room.playerUids.indexOf(member.uid);
+    if (playerIndex === -1) return; // spectator
+
+    const isLandlord = playerIndex === room.landlordIndex;
+    const alreadyFlagged = room.surrendered.includes(playerIndex);
+
+    if (isLandlord && alreadyFlagged) {
+      // Landlord pressed again → finalize: peasants win
+      room.playHistory.push({
+        playerIndex,
+        play: { type: HandType.Single, cards: [], rank: 0 },
+        surrender: true,
+      });
+      this.handleWin(room, 'peasants', 'surrender');
+      return;
+    }
+
+    // Toggle (any role): adds on first press, removes on second press (peasant only;
+    // landlord's second press is handled above as the finalize path).
+    const idx = room.surrendered.indexOf(playerIndex);
+    if (idx === -1) {
+      room.surrendered.push(playerIndex);
+    } else {
+      room.surrendered.splice(idx, 1);
+    }
+    this.emitToRoom(room, 'surrender_update', { surrendered: [...room.surrendered] });
+
+    // Peasant loss check: both peasants currently flagged → landlord wins
+    if (!isLandlord) {
+      const peasantIndices = [0, 1, 2].filter((i) => i !== room.landlordIndex);
+      const bothSurrendered = peasantIndices.every((i) => room.surrendered.includes(i));
+      if (bothSurrendered) {
+        for (const pi of peasantIndices) {
+          room.playHistory.push({
+            playerIndex: pi,
+            play: { type: HandType.Single, cards: [], rank: 0 },
+            surrender: true,
+          });
+        }
+        this.handleWin(room, 'landlord', 'surrender');
+      }
+    }
+  }
+
   handlePass(socketId: string): void {
     const room = this.roomManager.getRoomBySocketId(socketId);
     if (!room || room.state !== 'playing' || room.landlordIndex === -1) {
@@ -458,6 +535,7 @@ export class GameService {
     room.lastPlay = null;
     room.lastPlayedBy = -1;
     room.passCount = 0;
+    room.surrendered = [];
     if (room.bidTimer) { clearTimeout(room.bidTimer); room.bidTimer = null; }
 
     const deck = shuffle(createDeck());
@@ -570,7 +648,11 @@ export class GameService {
     if (room.turnTimer) { clearTimeout(room.turnTimer); room.turnTimer = null; }
   }
 
-  private handleWin(room: Room, winner: 'landlord' | 'peasants'): void {
+  private handleWin(
+    room: Room,
+    winner: 'landlord' | 'peasants',
+    reason: 'normal' | 'surrender' = 'normal',
+  ): void {
     const winningCards = room.lastPlay ? room.lastPlay.cards : [];
 
     // Update per-room win tally (keyed by uid)
@@ -614,6 +696,7 @@ export class GameService {
 
     this.emitToRoom(room, 'game_over', {
       winner,
+      winReason: reason,
       landlordIndex: room.landlordIndex,
       winCounts: room.winCounts,
       winnerIds,
@@ -638,6 +721,7 @@ export class GameService {
     room.turnEndTime = 0;
     room.bidPassCount = 0;
     room.bidVotedIndices = [];
+    room.surrendered = [];
     if (room.bidTimer) { clearTimeout(room.bidTimer); room.bidTimer = null; }
     this.clearTurnTimer(room);
     room.playerUids = [];
@@ -682,6 +766,7 @@ export class GameService {
     room.bidPassCount = 0;
     room.bidYesVoters = [];
     room.bidVotedIndices = [];
+    room.surrendered = [];
 
     this.emitToRoom(room, 'game_aborted', { phase: 'lobby' });
     this.emitMembersUpdate(room);

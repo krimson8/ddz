@@ -83,6 +83,7 @@ export class RoomManager {
       turnTimer: null,
       winCounts: {},
       resultPending: false,
+      surrendered: [],
     };
 
     this.rooms.set(code, room);

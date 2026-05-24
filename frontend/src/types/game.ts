@@ -44,6 +44,8 @@ export type GamePhase = "lobby" | "dealing" | "bidding" | "gameplay" | "result";
 export interface HistoryEntry {
   playerIndex: number;
   play: Play;
+  /** If true, this entry represents a surrender (no cards). */
+  surrender?: boolean;
 }
 
 export interface GameState {
@@ -73,6 +75,10 @@ export interface GameState {
   /** Socket ID of the player who made the last play */
   lastPlayedBy: string | null;
   winner: "landlord" | "peasants" | null;
+  /** Reason the round ended — 'surrender' shows a different win banner */
+  winReason: "normal" | "surrender";
+  /** Player indices (0-2) currently flagged as surrendered (peasant toggles) */
+  surrendered: number[];
   /** Socket IDs of winning players (server-authoritative, set on game_over) */
   winnerIds: string[];
   /** The cards played on the winning move (server-authoritative) */

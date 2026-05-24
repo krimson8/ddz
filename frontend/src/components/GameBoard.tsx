@@ -27,6 +27,7 @@ interface GameBoardProps {
   onPlayCards: (cards: Card[]) => void;
   onPass: () => void;
   onBid: (value: 0 | 1) => void;
+  onSurrender: () => void;
   onEmojiReact: (emoji: string) => void;
   onEmojiReceived?: (emoji: string) => void;
 }
@@ -37,6 +38,7 @@ export function GameBoard({
   onPlayCards,
   onPass,
   onBid,
+  onSurrender,
   onEmojiReact,
   onEmojiReceived,
 }: GameBoardProps) {
@@ -53,6 +55,8 @@ export function GameBoard({
     phase,
     playHistory,
     winner,
+    winReason,
+    surrendered,
     disconnectedPlayer,
   } = gameState;
 
@@ -70,6 +74,9 @@ export function GameBoard({
   const reactionTimers = useRef<Record<number, ReturnType<typeof setTimeout>[]>>({});
   const reactionKeyRef = useRef(0);
   const [selectedCards, setSelectedCards] = useState<Card[]>([]);
+
+  const amLandlord = !isSpectator && myPlayerIndex !== -1 && myPlayerIndex === landlordIndex;
+  const iSurrendered = !isSpectator && myPlayerIndex !== -1 && surrendered.includes(myPlayerIndex);
 
   // Spectator: which player index (in playerOrder) is shown at the bottom seat.
   // Defaults to landlordIndex once known, otherwise 0.
@@ -173,6 +180,7 @@ export function GameBoard({
                 isActiveTurn={currentPlayer === member.id}
                 colorIndex={globalIdx}
                 reactions={seatReactions[globalIdx] ?? []}
+                surrendered={surrendered.includes(globalIdx)}
                 compact
               />
             </div>
@@ -231,6 +239,7 @@ export function GameBoard({
                 isActiveTurn={currentPlayer === orderedPlayers[0]?.id}
                 colorIndex={spectatorViewIndex}
                 reactions={seatReactions[spectatorViewIndex] ?? []}
+                surrendered={surrendered.includes(spectatorViewIndex)}
               />
               <p className="text-white/40 text-xs italic ml-2">觀戰中</p>
             </div>
@@ -251,17 +260,38 @@ export function GameBoard({
           <>
             {/* Row 1: player seat (left) + emoji selector (right) */}
             <div className="flex items-center justify-between gap-2 mb-1 px-2">
-              {orderedPlayers[0] && (
-                <PlayerSeat
-                  nickname={orderedPlayers[0].nickname}
-                  avatarUrl={orderedPlayers[0].avatarUrl}
-                  role="player"
-                  isLandlord={myPlayerIndex === landlordIndex}
-                  landlordCards={myPlayerIndex === landlordIndex && landlordCards ? landlordCards : undefined}
-                  isActiveTurn={isMyTurn}
-                  colorIndex={myPlayerIndex}
-                />
-              )}
+              <div className="flex items-end gap-2">
+                {orderedPlayers[0] && (
+                  <PlayerSeat
+                    nickname={orderedPlayers[0].nickname}
+                    avatarUrl={orderedPlayers[0].avatarUrl}
+                    role="player"
+                    isLandlord={myPlayerIndex === landlordIndex}
+                    landlordCards={myPlayerIndex === landlordIndex && landlordCards ? landlordCards : undefined}
+                    isActiveTurn={isMyTurn}
+                    colorIndex={myPlayerIndex}
+                    surrendered={iSurrendered}
+                  />
+                )}
+                {phase === 'gameplay' && (
+                  <button
+                    onClick={onSurrender}
+                    className={[
+                      'text-[11px] font-bold px-2 py-1 rounded-md border transition-colors min-h-[28px] whitespace-nowrap',
+                      amLandlord && iSurrendered
+                        ? 'bg-red-500 hover:bg-red-400 text-white border-red-300 animate-pulse'
+                        : iSurrendered
+                          ? 'bg-yellow-400 text-green-900 border-yellow-300'
+                          : 'bg-black/50 hover:bg-black/70 text-white/80 hover:text-white border-white/20',
+                    ].join(' ')}
+                    title={amLandlord ? '地主投降（連按兩次確認）' : '投降（兩位農民同時投降即敗）'}
+                  >
+                    {amLandlord
+                      ? (iSurrendered ? '確定投降？' : '投降')
+                      : (iSurrendered ? '✓ 已投降' : '投降')}
+                  </button>
+                )}
+              </div>
 
               {/* Emoji reaction dropdown + send */}
               <div className="relative flex items-center gap-2 flex-shrink-0 -mt-3">
@@ -375,7 +405,9 @@ export function GameBoard({
             <div className="flex items-center gap-3">
               <span className="text-3xl">{winner === 'landlord' ? '🏆' : '🎉'}</span>
               <h2 className="text-2xl font-black text-white drop-shadow-lg">
-                {winner === 'landlord' ? '地主獲勝！' : '農民獲勝！'}
+                {winReason === 'surrender'
+                  ? (winner === 'landlord' ? '農民投降！' : '地主投降！')
+                  : (winner === 'landlord' ? '地主獲勝！' : '農民獲勝！')}
               </h2>
             </div>
 

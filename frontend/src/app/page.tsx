@@ -18,7 +18,7 @@ export default function Home() {
   const { user, loading: authLoading, signOut } = useAuth();
   const { me } = useProfile();
   const socket = useSocket();
-  const { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, playCards, pass, reactEmoji } = useGame();
+  const { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, playCards, pass, surrender, reactEmoji } = useGame();
   const { setVolume, playEmoji } = useSoundEffects(gameState, user?.uid ?? '');
   const { phase, roomCode, members, readyCount } = gameState;
 
@@ -87,7 +87,7 @@ export default function Home() {
         <div className="min-h-screen bg-green-900 flex flex-col items-center justify-center gap-6 py-10">
           <button
             onClick={leaveRoom}
-            className="self-start ml-4 text-white/60 hover:text-white text-sm flex items-center gap-1 transition-colors"
+            className="fixed top-3 left-3 z-50 text-white/70 hover:text-white text-sm flex items-center gap-1 transition-colors bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5"
           >
             ← 離開房間
           </button>
@@ -96,9 +96,9 @@ export default function Home() {
             roomCode={roomCode}
             members={members}
             myNickname={myNickname}
+            myUid={user.uid}
             onVote={votePlay}
             hasVoted={hasVoted}
-            readyCount={readyCount}
           />
         </div>
       )}
@@ -111,6 +111,7 @@ export default function Home() {
           onPlayCards={playCards}
           onPass={pass}
           onBid={bid}
+          onSurrender={surrender}
           onEmojiReact={reactEmoji}
           onEmojiReceived={playEmoji}
         />

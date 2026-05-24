@@ -45,6 +45,8 @@ export type RoomState = 'waiting' | 'playing';
 export interface HistoryEntry {
   playerIndex: number;
   play: Play;
+  /** If true, this entry represents a surrender, not an actual play. `play.cards` is empty. */
+  surrender?: boolean;
 }
 
 export interface Room {
@@ -74,4 +76,6 @@ export interface Room {
   /** uid → total wins in this room session (kept for in-game GameResult overlay) */
   winCounts: Record<string, number>;
   resultPending: boolean; // true during the 5s game_over → return_to_lobby delay
+  /** Player indices (0-2) that have surrendered this round. Peasants toggle; landlord requires double-press. */
+  surrendered: number[];
 }
