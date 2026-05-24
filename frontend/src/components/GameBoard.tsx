@@ -16,6 +16,21 @@ interface SeatReaction {
   text: string;
 }
 
+/** Pure render of remaining grace seconds — backend owns the truth (endTime). */
+function DisconnectCountdown({ endTime }: { endTime: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, []);
+  const secondsLeft = Math.max(0, Math.ceil((endTime - now) / 1000));
+  return (
+    <div className="text-5xl font-black text-yellow-400 tabular-nums drop-shadow">
+      {secondsLeft}
+    </div>
+  );
+}
+
 const REACTION_GROUPS = [
   { label: '表情', items: ['🖕', '🤏', '🤌'] },
   { label: '語錄', items: ['EZ', 'GG', '你會玩的嗎', '玩不了啦', '小兒科', '小癟三', '不用看了', '在我者離', '窩妖驗牌', '牌沒有問題', '給我搽皮鞋'] },
@@ -385,6 +400,7 @@ export function GameBoard({
             >
               <div className="text-4xl">⏳</div>
               <h2 className="text-xl font-black text-white">{disconnectedPlayer.nickname} 斷線了</h2>
+              <DisconnectCountdown endTime={disconnectedPlayer.endTime} />
               <p className="text-white/70 text-sm">等待重連中，若逾時遊戲將中止</p>
             </motion.div>
           </motion.div>

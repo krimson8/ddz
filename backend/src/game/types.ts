@@ -31,13 +31,15 @@ export interface Play {
 export interface Member {
   /** Firebase UID — stable identity across reconnects */
   uid: string;
-  /** Current socket.id — rotates per connection */
+  /** Current socket.id — rotates per connection. Empty string when disconnected mid-game. */
   socketId: string;
   nickname: string;
   avatarUrl: string | null;
   role: 'spectator' | 'player';
   hand: Card[];
   wantToPlay: boolean;
+  /** True iff this player dropped their socket mid-game and is within the reconnect grace window. */
+  disconnected: boolean;
 }
 
 export type RoomState = 'waiting' | 'playing';
@@ -78,4 +80,10 @@ export interface Room {
   resultPending: boolean; // true during the 5s game_over → return_to_lobby delay
   /** Player indices (0-2) that have surrendered this round. Peasants toggle; landlord requires double-press. */
   surrendered: number[];
+  /** Active mid-game disconnect grace window, if any. */
+  reconnect: {
+    uid: string;
+    endTime: number; // epoch ms when the grace window expires → game aborts
+    timer: NodeJS.Timeout;
+  } | null;
 }

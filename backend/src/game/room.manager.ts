@@ -56,6 +56,7 @@ export class RoomManager {
       role: 'spectator',
       hand: [],
       wantToPlay: false,
+      disconnected: false,
     };
 
     const room: Room = {
@@ -84,6 +85,7 @@ export class RoomManager {
       winCounts: {},
       resultPending: false,
       surrendered: [],
+      reconnect: null,
     };
 
     this.rooms.set(code, room);
@@ -115,6 +117,7 @@ export class RoomManager {
       role: 'spectator',
       hand: [],
       wantToPlay: false,
+      disconnected: false,
     };
 
     room.members.push(member);
@@ -182,6 +185,7 @@ export class RoomManager {
     if (!room) return;
     if (room.bidTimer) clearTimeout(room.bidTimer);
     if (room.turnTimer) clearTimeout(room.turnTimer);
+    if (room.reconnect) clearTimeout(room.reconnect.timer);
     this.rooms.delete(code);
   }
 

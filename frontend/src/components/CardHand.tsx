@@ -96,27 +96,28 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, playerInde
       {/* Card strip */}
       <div
         ref={scrollRef}
-        className="flex flex-row items-end overflow-x-auto pb-2 px-2 gap-1 max-w-full"
+        className="flex flex-row items-end justify-center overflow-x-auto pb-2 px-2 gap-1 max-w-full"
         onWheel={(e) => {
           if (e.deltaY === 0 || !scrollRef.current) return;
           e.preventDefault();
           scrollRef.current.scrollLeft += e.deltaY;
         }}
       >
-        <AnimatePresence initial={false}>
+        <AnimatePresence initial={false} mode="popLayout">
           {cards.map((card, idx) => (
             <motion.div
-              key={`${card.suit}-${card.rank}-${idx}`}
+              key={`${card.suit}-${card.rank}`}
+              layout
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 25, delay: idx * 0.03 }}
+              transition={{ type: 'spring', stiffness: 350, damping: 30 }}
             >
               <Card
                 {...card}
                 selected={selected.has(idx)}
                 onClick={() => toggle(idx)}
-                layoutId={`card-p${playerIndex}-${card.suit}-${card.rank}-${idx}`}
+                layoutId={`card-p${playerIndex}-${card.suit}-${card.rank}`}
               />
             </motion.div>
           ))}

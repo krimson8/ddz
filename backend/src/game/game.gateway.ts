@@ -107,6 +107,19 @@ export class GameGateway
     this.logger.log(
       `WS connected: socket=${socket.id} uid=${user.uid} email=${user.email}`,
     );
+
+    // Reattach to an existing room (e.g. reconnect during the 30s grace window
+    // after a transient disconnect). The service rebinds the new socketId,
+    // cancels any pending abort timer, and emits a snapshot back to us.
+    const reattachedRoom = this.gameService.reattachSocketToRoom(
+      user.uid,
+      socket.id,
+    );
+    if (reattachedRoom) {
+      await socket.join(reattachedRoom);
+      return;
+    }
+
     await socket.join(LOBBY_ROOM);
     this.gameService.emitRoomListToSocket(socket.id, user.uid);
   }

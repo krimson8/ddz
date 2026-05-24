@@ -92,6 +92,6 @@ export interface GameState {
   readyCount: number;
   /** Whether voting is currently allowed (server-authoritative, >=3 members in waiting state) */
   canVote: boolean;
-  /** Set when a player disconnects mid-game; cleared on reconnect or abort */
-  disconnectedPlayer: { nickname: string; timeoutMs: number } | null;
+  /** Set when a player disconnects mid-game; cleared on reconnect or abort. `endTime` is server epoch ms when the grace window expires. */
+  disconnectedPlayer: { nickname: string; endTime: number; timeoutMs: number } | null;
 }

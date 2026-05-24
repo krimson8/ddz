@@ -133,11 +133,39 @@ DB scripts (all in `backend/`):
 
 In-memory `Map<code, Room>` in [backend/src/game/room.manager.ts](backend/src/game/room.manager.ts). Identity is uid throughout.
 
-**Key invariants (different from original spec):**
+**Key invariants:**
 - **One room per uid** — user cannot create or join a second room while already in one
-- **No reconnect grace window** — disconnect splices the member immediately
-- **Empty room → killed immediately** on last disconnect (no idle timer)
-- **Refresh during a live game forfeits the round** — explicit tradeoff for simplicity
+- **30-second reconnect grace window mid-game** — see §5a. Outside an active game (`waiting`/`result`), disconnect splices the member immediately.
+- **Empty room → killed immediately** on last disconnect (skipping any pending grace)
+- **Explicit `leave_room` always forfeits the round immediately** — only socket-level disconnects open the grace window
+
+### 5a. Reconnect grace window (mid-game disconnect)
+
+**Goal:** survive transient network drops, refreshes, and tab navigations during an active round without forcing all 3 players to restart. Out-of-game (waiting/result phases) keeps the immediate-splice behaviour from §5.
+
+**Backend-owned state machine** ([backend/src/game/game.service.ts](backend/src/game/game.service.ts)):
+- Constant: `RECONNECT_GRACE_MS = 30_000`. Per-room state lives on `Room.reconnect = { uid, endTime, timer } | null`.
+- On socket disconnect of a `player` while `state === 'playing'`:
+  1. Mark `member.disconnected = true`, clear `member.socketId` (so future broadcasts skip them until they reattach).
+  2. **Pause the turn timer** (`clearTurnTimer`, `turnEndTime = 0`) so we don't auto-pass on someone who isn't there.
+  3. Start a 30 s `setTimeout` and store it on `room.reconnect`.
+  4. Emit `player_disconnected { uid, nickname, endTime, timeoutMs }` to the whole room.
+- On (re)connection of a socket whose uid already owns a room (in `handleConnection`, before joining the lobby):
+  - `GameService.reattachSocketToRoom(uid, newSocketId)` rebinds `member.socketId`, and if a matching grace timer is pending, it cancels it, clears `disconnected`, restarts the turn timer (if we're in gameplay), broadcasts `player_reconnected`, and unicasts a full-state snapshot via `emitFullStateToSocket` so the returning client can render.
+- On grace expiry: splice the still-disconnected member, then `resetToWaiting(room)` (which emits `game_aborted` and returns the remaining members to the in-room lobby). If the room ends up empty, delete it.
+- `resetToWaiting`, `handleWin`, and `deleteRoom` all defensively clear `room.reconnect` so timers never leak.
+
+**Frontend is a pure renderer** of these events ([frontend/src/hooks/useGame.ts](frontend/src/hooks/useGame.ts), [frontend/src/components/GameBoard.tsx](frontend/src/components/GameBoard.tsx)):
+- `player_disconnected` → set `disconnectedPlayer = { nickname, endTime, timeoutMs }` in `GameState`. The overlay reads `endTime - Date.now()` once per 250 ms to display the countdown.
+- `player_reconnected` → clear `disconnectedPlayer`. No client-side timer fires the abort — that's exclusively the server's `setTimeout`.
+- `game_aborted` → reducer wipes round state and returns to the in-room lobby (same handler used for grace expiry and for genuine errors).
+
+**Wire format:**
+```ts
+// Server → Client
+player_disconnected { uid: string, nickname: string, endTime: number, timeoutMs: number, seq }
+player_reconnected  { uid: string, nickname: string, playerIds: string[], seq }
+```
 
 **Game flow:** user lands on lobby → sees active room list (broadcast over `__lobby` socket.io room) → creates or joins → in-room vote-to-play → game starts when 3 voters → bidding → gameplay → result → return to in-room lobby (room persists for next round). Spectator path also works (join a room mid-game).
 
@@ -189,7 +217,9 @@ Connection-time auth + lobby broadcasts.
 - `game_state { currentPlayer, currentPlayerEndTime, onTable, history, playerCardCounts, landlordIndex, landlordCards, playerHands, phase, seq }`
 - `game_over { winner, landlordIndex, winCounts, winnerIds, winningCards, phase, seq }`
 - `return_to_lobby { phase, seq }`
-- `game_aborted { phase, seq }` (someone disconnected mid-game)
+- `game_aborted { phase, seq }` (reconnect grace window expired, or a player explicitly left mid-game)
+- `player_disconnected { uid, nickname, endTime, timeoutMs, seq }` (mid-game socket drop; 30s reconnect window starts — see §5a)
+- `player_reconnected { uid, nickname, playerIds, seq }` (disconnected player came back inside the grace window)
 - `emoji_reaction { senderUid, senderId, senderNickname, role, emoji }`
 - `room_error { message }`, `invalid_play { reason }`, `auth_error { message }`
 
@@ -409,7 +439,7 @@ Root dir = `frontend`.
 
 - [x] Phase 1A — DB schema + Drizzle wiring + seed scripts
 - [x] Phase 1B — Firebase Auth (originally magic-link, switched to email+password due to Spark plan daily email cap; auto-creates account on first sign-in)
-- [x] Phase 1C — Room mechanism rewrite (uid-based, no reconnect grace, empty room kill, one-room-per-uid, lobby room list)
+- [x] Phase 1C — Room mechanism rewrite (uid-based, empty room kill, one-room-per-uid, lobby room list). 30-second reconnect grace window for mid-game disconnects added later (see §5a).
 - [x] Phase 1D — Leaderboard (recordResult on game_over, GET /leaderboard, global leaderboard panel in RoomLobby)
 - [x] Phase 2 — Profile page (`/profile`) with nickname edit and stats; instant propagation to live rooms via `refreshUserInRoom`
 

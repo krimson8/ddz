@@ -7,6 +7,7 @@ import type { AuthedUser } from '../auth/auth.service';
 import { LeaderboardService } from '../leaderboard/leaderboard.service';
 
 const TURN_TIMEOUT_MS = 30_000;
+const RECONNECT_GRACE_MS = 30_000;
 
 /** Socket.io room name used to broadcast lobby updates to all not-yet-in-a-room sockets. */
 export const LOBBY_ROOM = '__lobby';
@@ -470,17 +471,145 @@ export class GameService {
 
   // ── Disconnect / leave ──────────────────────────────────────────────────────
 
-  /** Explicit leave_room from the client. */
+  /** Explicit leave_room from the client — immediate splice, aborts the round. */
   handleLeaveRoom(socketId: string): void {
     this.removeSocketFromRoom(socketId);
   }
 
-  /** Socket.io disconnect (tab close / network drop). Same handling as leave. */
+  /**
+   * Socket.io disconnect (tab close, refresh, network drop). Different from leave_room:
+   *  - If this socket belongs to an active player mid-game (`state === 'playing'`),
+   *    we KEEP the member in the room and start a 30s reconnect grace window.
+   *    The game pauses (no turn auto-pass during grace). If the same uid opens
+   *    a new socket before the timer expires → game resumes. Otherwise →
+   *    `resetToWaiting` aborts the round and returns survivors to the in-room lobby.
+   *  - Otherwise (spectator, or game not in progress), splice immediately.
+   */
   handleDisconnect(socketId: string): void {
+    const room = this.roomManager.getRoomBySocketId(socketId);
+    if (!room) return;
+
+    const member = room.members.find((m) => m.socketId === socketId);
+    if (!member) return;
+
+    const isPlayerMidGame =
+      room.state === 'playing' && room.playerUids.includes(member.uid);
+
+    if (isPlayerMidGame) {
+      this.beginReconnectGrace(room, member.uid);
+      return;
+    }
+
     this.removeSocketFromRoom(socketId);
   }
 
+  /**
+   * Attempt to reattach an incoming socket to a room that the uid is already in.
+   * Called from gateway handleConnection. Returns the room code if a reattach
+   * happened, otherwise null.
+   *
+   * Two reattach paths:
+   *  - A pending reconnect grace window exists for this uid → cancel the timer,
+   *    clear the `disconnected` flag, broadcast `player_reconnected`, and
+   *    deliver a full-state snapshot to the new socket.
+   *  - The uid is already a member of a room but has no active socket (e.g.
+   *    second tab) → just update socketId so future messages reach them.
+   */
+  reattachSocketToRoom(uid: string, newSocketId: string): string | null {
+    const room = this.roomManager.getRoomByUid(uid);
+    if (!room) return null;
+
+    const member = room.members.find((m) => m.uid === uid);
+    if (!member) return null;
+
+    // Swap to the new socket either way.
+    member.socketId = newSocketId;
+
+    if (room.reconnect && room.reconnect.uid === uid) {
+      clearTimeout(room.reconnect.timer);
+      room.reconnect = null;
+      member.disconnected = false;
+
+      // Resume the turn timer if we paused it and we're in gameplay.
+      if (room.state === 'playing' && room.landlordIndex !== -1) {
+        this.startTurnTimer(room, room.currentTurn);
+      }
+
+      this.emitToRoom(room, 'player_reconnected', {
+        uid,
+        nickname: member.nickname,
+        playerIds: room.playerUids,
+      });
+      this.emitMembersUpdate(room);
+      this.emitFullStateToSocket(newSocketId, room.code);
+      this.broadcastRoomList();
+      return room.code;
+    }
+
+    // No grace window — just send a fresh snapshot so the client renders correctly.
+    this.emitFullStateToSocket(newSocketId, room.code);
+    return room.code;
+  }
+
   // ── Private helpers ──────────────────────────────────────────────────────────
+
+  /**
+   * Mark a player as disconnected (without removing them) and start a 30s grace
+   * window. The game is effectively paused — the turn timer keeps running on
+   * its existing deadline, but a `player_disconnected` overlay covers the board
+   * client-side. If the timer fires, the round is aborted.
+   */
+  private beginReconnectGrace(room: Room, uid: string): void {
+    const member = room.members.find((m) => m.uid === uid);
+    if (!member) return;
+
+    // If another grace is already running (different uid) — let the first one
+    // win: abort immediately so we don't accumulate dangling timers.
+    if (room.reconnect && room.reconnect.uid !== uid) {
+      clearTimeout(room.reconnect.timer);
+      room.reconnect = null;
+    }
+
+    // Same uid disconnecting again before the previous timer fired — reset clock.
+    if (room.reconnect && room.reconnect.uid === uid) {
+      clearTimeout(room.reconnect.timer);
+    }
+
+    member.disconnected = true;
+    member.socketId = ''; // detach — next reconnect will rebind
+
+    // Pause turn timer during grace so we don't auto-pass on a disconnected player.
+    this.clearTurnTimer(room);
+    room.turnEndTime = 0;
+
+    const endTime = Date.now() + RECONNECT_GRACE_MS;
+    const timer = setTimeout(() => {
+      // Grace expired — confirm the room and uid are still in the same state.
+      if (room.reconnect?.uid !== uid) return;
+      room.reconnect = null;
+      // Splice the still-disconnected member, then abort the round.
+      const idx = room.members.findIndex((m) => m.uid === uid);
+      if (idx !== -1) room.members.splice(idx, 1);
+      if (room.members.length === 0) {
+        this.roomManager.deleteRoom(room.code);
+        this.broadcastRoomList();
+        return;
+      }
+      this.resetToWaiting(room);
+      this.broadcastRoomList();
+    }, RECONNECT_GRACE_MS);
+
+    room.reconnect = { uid, endTime, timer };
+
+    this.emitToRoom(room, 'player_disconnected', {
+      uid,
+      nickname: member.nickname,
+      endTime,
+      timeoutMs: RECONNECT_GRACE_MS,
+    });
+    this.emitMembersUpdate(room);
+    this.broadcastRoomList();
+  }
 
   /**
    * Remove a socket immediately. If the member was an active player mid-game,
@@ -493,7 +622,13 @@ export class GameService {
     const removed = this.roomManager.removeSocket(socketId);
     if (!removed) return;
 
-    const { wasPlayer } = removed;
+    const { member, wasPlayer } = removed;
+
+    // If a pending reconnect grace was for this uid, clear it — they're leaving for real.
+    if (room.reconnect?.uid === member.uid) {
+      clearTimeout(room.reconnect.timer);
+      room.reconnect = null;
+    }
 
     // If the room is now empty, kill it immediately.
     if (room.members.length === 0) {
@@ -723,7 +858,9 @@ export class GameService {
       m.role = 'spectator';
       m.hand = [];
       m.wantToPlay = false;
+      m.disconnected = false;
     }
+    if (room.reconnect) { clearTimeout(room.reconnect.timer); room.reconnect = null; }
 
     room.deck = [];
     room.landlordCards = [];
@@ -756,12 +893,14 @@ export class GameService {
    */
   private resetToWaiting(room: Room): void {
     if (room.bidTimer) { clearTimeout(room.bidTimer); room.bidTimer = null; }
+    if (room.reconnect) { clearTimeout(room.reconnect.timer); room.reconnect = null; }
     this.clearTurnTimer(room);
 
     for (const m of room.members) {
       m.role = 'spectator';
       m.hand = [];
       m.wantToPlay = false;
+      m.disconnected = false;
     }
 
     room.state = 'waiting';

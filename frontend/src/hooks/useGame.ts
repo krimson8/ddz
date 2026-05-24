@@ -89,7 +89,7 @@ type Action =
   | { type: "GAME_OVER"; winner: "landlord" | "peasants"; winReason: "normal" | "surrender"; winCounts: Record<string, number>; winnerIds: string[]; winningCards: Card[]; phase: GamePhase }
   | { type: "SURRENDER_UPDATE"; surrendered: number[] }
   | { type: "TURN_CHANGED"; nextTurn: number }
-  | { type: "PLAYER_DISCONNECTED"; nickname: string; timeoutMs: number }
+  | { type: "PLAYER_DISCONNECTED"; nickname: string; endTime: number; timeoutMs: number }
   | { type: "PLAYER_RECONNECTED"; playerIds: string[] }
   | { type: "LEFT_ROOM" }
   | { type: "ERROR"; message: string };
@@ -202,7 +202,7 @@ function reducer(state: GameState, action: Action): GameState {
       };
     }
     case "PLAYER_DISCONNECTED":
-      return { ...state, disconnectedPlayer: { nickname: action.nickname, timeoutMs: action.timeoutMs } };
+      return { ...state, disconnectedPlayer: { nickname: action.nickname, endTime: action.endTime, timeoutMs: action.timeoutMs } };
     case "PLAYER_RECONNECTED":
       return {
         ...state,
@@ -454,9 +454,9 @@ export function useGame(): UseGameReturn {
       dispatch({ type: "RETURN_TO_LOBBY", phase: data.phase ?? "lobby" });
     });
 
-    socket.on("player_disconnected", (data: { nickname: string; timeoutMs: number; seq?: number }) => {
+    socket.on("player_disconnected", (data: { nickname: string; endTime: number; timeoutMs: number; seq?: number }) => {
       if (!checkSeq(data.seq)) return;
-      dispatch({ type: "PLAYER_DISCONNECTED", nickname: data.nickname, timeoutMs: data.timeoutMs });
+      dispatch({ type: "PLAYER_DISCONNECTED", nickname: data.nickname, endTime: data.endTime, timeoutMs: data.timeoutMs });
     });
 
     socket.on("player_reconnected", (data: { nickname: string; playerIds?: string[]; seq?: number }) => {

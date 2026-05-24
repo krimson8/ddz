@@ -157,10 +157,12 @@ export function RoomLobby({
               <div
                 key={member.id}
                 className={[
-                  'rounded-2xl transition-all duration-300',
-                  isMe && isReady
-                    ? 'ring-4 ring-yellow-400 shadow-[0_0_18px_4px_rgba(250,204,21,0.6)] p-1'
-                    : 'p-1',
+                  'rounded-2xl transition-all duration-300 p-1',
+                  isReady && isMe
+                    ? 'ring-4 ring-yellow-400 shadow-[0_0_18px_4px_rgba(250,204,21,0.6)]'
+                    : isReady
+                      ? 'ring-2 ring-green-400 shadow-[0_0_12px_2px_rgba(74,222,128,0.5)]'
+                      : '',
                 ].join(' ')}
               >
                 <PlayerSeat
