@@ -1,25 +1,85 @@
 import { io, Socket } from "socket.io-client";
 
-let socket: Socket | null = null;
+/**
+ * Persist socket state on `window` (or `globalThis` on the server) so that
+ * Next.js HMR module reloads do not lose the live connection. Without this,
+ * editing any file causes lib/socket.ts to re-execute, resetting the module-
+ * level singletons, which causes useSocket to construct a fresh socket on the
+ * next render and disconnect the user from any room they're in.
+ */
+interface SocketGlobal {
+  __ddz_socket?: Socket | null;
+  __ddz_uid?: string | null;
+}
+const g = (typeof window !== "undefined" ? window : globalThis) as SocketGlobal;
 
-export function getSocket(): Socket {
-  if (!socket) {
-    const url = process.env.NEXT_PUBLIC_WS_URL ?? "http://localhost:4896";
-    console.log("[socket] creating new socket, url:", url);
-    socket = io(url, {
-      autoConnect: false,
-      transports: ["websocket"],
-    });
-    socket.on("connect", () => console.log("[socket] connected, id:", socket?.id));
-    socket.on("disconnect", (reason) => console.log("[socket] disconnected:", reason));
-    socket.on("connect_error", (err) => console.error("[socket] connect_error:", err.message));
+/**
+ * Get the singleton socket for the given Firebase user.
+ *
+ * Important: we key the socket on UID (stable identity), NOT on the ID token.
+ * Firebase rotates the ID token internally roughly every hour; we don't want
+ * to tear down the live WebSocket every time that happens (it would drop the
+ * player from the current game). Auth only matters at handshake time — once
+ * connected, the backend has attached the AuthedUser to socket.data.user
+ * and the connection stays valid for as long as it's open.
+ */
+/**
+ * Get the singleton socket for the given Firebase user.
+ *
+ * Recreation policy (carefully chosen to survive React Strict Mode and HMR):
+ *   - Same uid as before → return the existing socket. No-op.
+ *   - Null uid while we already have an authed socket → return the existing
+ *     socket UNCHANGED. The "no user" state is treated as transient (Firebase
+ *     auth resolving, Strict Mode double-render, etc). Real sign-out is
+ *     handled via destroySocket() called explicitly.
+ *   - Different non-null uid → tear down + recreate (real user switch).
+ *   - First call with no uid → return inert placeholder.
+ */
+export function getSocket(uid: string | null, idToken: string | null): Socket {
+  // Same uid (including same null) → reuse
+  if (g.__ddz_socket && g.__ddz_uid === uid) return g.__ddz_socket;
+
+  // Transient "no user" while we already have a real socket → keep the socket
+  if (g.__ddz_socket && g.__ddz_uid && !uid) return g.__ddz_socket;
+
+  // Real user switch (uid → different uid) → tear down old
+  if (g.__ddz_socket && g.__ddz_uid && uid && g.__ddz_uid !== uid) {
+    g.__ddz_socket.disconnect();
+    g.__ddz_socket.removeAllListeners();
+    g.__ddz_socket = null;
   }
-  return socket;
+
+  // No uid and no existing socket → return inert placeholder so callers don't crash.
+  if (!uid || !idToken) {
+    g.__ddz_uid = null;
+    g.__ddz_socket = io("ws://0.0.0.0:1", { autoConnect: false, reconnection: false });
+    return g.__ddz_socket;
+  }
+
+  const url = process.env.NEXT_PUBLIC_WS_URL ?? "http://localhost:4896";
+  console.log("[socket] creating new authed socket for uid:", uid);
+  const s = io(url, {
+    autoConnect: false,
+    transports: ["websocket"],
+    auth: { token: idToken },
+  });
+  g.__ddz_socket = s;
+  g.__ddz_uid = uid;
+  s.on("connect", () => console.log("[socket] connected, id:", s.id));
+  s.on("disconnect", (reason) => console.log("[socket] disconnected:", reason));
+  s.on("connect_error", (err) => console.error("[socket] connect_error:", err.message));
+  s.on("auth_error", (data: { message: string }) => {
+    console.error("[socket] auth_error:", data.message);
+  });
+  return s;
 }
 
+/** Explicit sign-out: tear down the live socket. Call from signOutUser flow. */
 export function destroySocket(): void {
-  if (socket) {
-    socket.disconnect();
-    socket = null;
+  if (g.__ddz_socket) {
+    g.__ddz_socket.disconnect();
+    g.__ddz_socket.removeAllListeners();
+    g.__ddz_socket = null;
+    g.__ddz_uid = null;
   }
 }

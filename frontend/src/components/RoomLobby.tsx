@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { PlayerSeat } from './PlayerSeat';
+import { useSocket } from '@/hooks/useSocket';
+import { useLeaderboard } from '@/hooks/useLeaderboard';
 import type { ClientMember } from '@/types/game';
 
 const NEON_COLORS = [
@@ -64,7 +66,6 @@ interface RoomLobbyProps {
   myNickname?: string;
   onVote: () => void;
   hasVoted: boolean;
-  winCounts: Record<string, number>;
   readyCount: number;
 }
 
@@ -74,12 +75,13 @@ export function RoomLobby({
   myNickname,
   onVote,
   hasVoted,
-  winCounts,
   readyCount,
 }: RoomLobbyProps) {
   const [copied, setCopied] = useState(false);
   const [clicked, setClicked] = useState(false);
   const rainbowColor = useRainbowColor();
+  const socket = useSocket();
+  const { entries: leaderboard, loading: leaderboardLoading } = useLeaderboard(socket);
 
   function handleVote() {
     if (hasVoted) return;
@@ -134,22 +136,40 @@ export function RoomLobby({
         </AnimatePresence>
       </div>
 
-      {/* Scoreboard */}
-      {Object.keys(winCounts).length > 0 && (
-        <div className="w-full">
-          <p className="text-white/60 text-xs text-center mb-1">本局戰績</p>
+      {/* Global leaderboard */}
+      <div className="w-full">
+        <p className="text-white/60 text-xs text-center mb-2">🏆 全球排行榜</p>
+        {leaderboardLoading ? (
+          <p className="text-white/40 text-xs text-center">載入中…</p>
+        ) : leaderboard.length === 0 ? (
+          <p className="text-white/40 text-xs text-center">尚無比賽記錄</p>
+        ) : (
           <div className="flex flex-col gap-1">
-            {Object.entries(winCounts)
-              .sort(([, a], [, b]) => b - a)
-              .map(([nickname, wins]) => (
-                <div key={nickname} className="flex justify-between items-center bg-white/10 rounded-lg px-3 py-1">
-                  <span className="text-white text-sm">{nickname}</span>
-                  <span className="text-yellow-400 font-bold text-sm">{wins} 勝</span>
-                </div>
-              ))}
+            {/* Column headers */}
+            <div className="flex items-center gap-2 px-3 py-1 text-white/50 text-[10px] uppercase tracking-wider">
+              <span className="w-6 text-right">#</span>
+              <span className="flex-1">玩家</span>
+              <span className="w-10 text-right">總勝</span>
+              <span className="w-8 text-right" title="地主勝">地</span>
+              <span className="w-8 text-right" title="農民勝">農</span>
+              <span className="w-10 text-right">場次</span>
+            </div>
+            {leaderboard.slice(0, 10).map((entry, i) => (
+              <div
+                key={entry.uid}
+                className="flex items-center gap-2 bg-white/10 rounded-lg px-3 py-1.5 text-sm"
+              >
+                <span className="w-6 text-right text-white/60">{i + 1}</span>
+                <span className="flex-1 text-white truncate">{entry.nickname}</span>
+                <span className="w-10 text-right text-yellow-400 font-bold">{entry.totalWins}</span>
+                <span className="w-8 text-right text-red-300">{entry.landlordWins}</span>
+                <span className="w-8 text-right text-green-300">{entry.farmerWins}</span>
+                <span className="w-10 text-right text-white/50">{entry.games}</span>
+              </div>
+            ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Vote prompt */}
       <div className="flex flex-col items-center gap-3">

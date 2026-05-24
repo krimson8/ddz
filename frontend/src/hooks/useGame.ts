@@ -220,8 +220,8 @@ function reducer(state: GameState, action: Action): GameState {
 
 export interface UseGameReturn {
   gameState: GameState;
-  createRoom: (nickname: string) => void;
-  joinRoom: (code: string, nickname: string) => void;
+  createRoom: () => void;
+  joinRoom: (code: string) => void;
   leaveRoom: () => void;
   votePlay: () => void;
   bid: (amount: 0 | 1) => void;
@@ -460,13 +460,13 @@ export function useGame(): UseGameReturn {
   // ── Actions ──────────────────────────────────────────────────────────────
 
   const createRoom = useCallback(
-    (nickname: string) => { socket.emit("create_room", { nickname }); },
+    () => { socket.emit("create_room"); },
     [socket],
   );
 
   const joinRoom = useCallback(
-    (code: string, nickname: string) => {
-      socket.emit("join_room", { code, nickname });
+    (code: string) => {
+      socket.emit("join_room", { code });
     },
     [socket],
   );

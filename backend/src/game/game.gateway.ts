@@ -1,15 +1,19 @@
 import {
   ConnectedSocket,
   MessageBody,
+  OnGatewayConnection,
   OnGatewayDisconnect,
   OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
+import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
-import { GameService } from './game.service';
+import { GameService, LOBBY_ROOM } from './game.service';
 import { Card } from './types';
+import { AuthService, AuthedUser } from '../auth/auth.service';
+import type { AuthedSocket } from '../auth/ws-auth.guard';
 
 const ALLOWED_REACTIONS = new Set([
   '🖕',
@@ -42,23 +46,69 @@ const VALID_SUITS = new Set<string>([
     credentials: true,
   },
 })
-export class GameGateway implements OnGatewayInit, OnGatewayDisconnect {
+export class GameGateway
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
+  private readonly logger = new Logger(GameGateway.name);
+
   @WebSocketServer()
   server!: Server;
 
-  /** Fixed 1-second window event counter per socket (max 10 events/s). */
   private readonly eventWindows = new Map<
     string,
     { count: number; windowStart: number }
   >();
 
-  /** Last emoji send timestamp per socket (max 1 per 3 s). */
   private readonly emojiTimestamps = new Map<string, number>();
 
-  constructor(private readonly gameService: GameService) {}
+  constructor(
+    private readonly gameService: GameService,
+    private readonly authService: AuthService,
+  ) {}
 
   afterInit(server: Server): void {
     this.gameService.setServer(server);
+
+    // Authenticate via connection-level middleware: this runs BEFORE the socket
+    // joins the connection pool, so no message handlers can fire until the
+    // token is verified and socket.data.user is attached. Without this guard,
+    // fast client-side emits (e.g. list_rooms) can race past handleConnection
+    // and hit handlers with no user attached.
+    server.use(async (socket, next) => {
+      const token = (socket.handshake.auth as { token?: string } | undefined)
+        ?.token;
+      if (!token) {
+        next(new Error('未登入'));
+        return;
+      }
+      try {
+        const user = await this.authService.authenticate(token);
+        (socket as AuthedSocket).data.user = user;
+        next();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Auth failed';
+        this.logger.warn(`WS auth rejected (socket=${socket.id}): ${msg}`);
+        next(new Error('驗證失敗'));
+      }
+    });
+  }
+
+  /**
+   * Called only after the auth middleware has accepted the connection.
+   * socket.data.user is guaranteed to be set here.
+   */
+  async handleConnection(socket: AuthedSocket): Promise<void> {
+    const user = socket.data.user;
+    if (!user) {
+      // Defensive: should never happen because middleware rejects unauthed sockets.
+      socket.disconnect();
+      return;
+    }
+    this.logger.log(
+      `WS connected: socket=${socket.id} uid=${user.uid} email=${user.email}`,
+    );
+    await socket.join(LOBBY_ROOM);
+    this.gameService.emitRoomListToSocket(socket.id, user.uid);
   }
 
   handleDisconnect(socket: Socket): void {
@@ -69,13 +119,9 @@ export class GameGateway implements OnGatewayInit, OnGatewayDisconnect {
 
   // ── Rate-limit helpers ───────────────────────────────────────────────────────
 
-  /**
-   * Returns true if this socket has exceeded 10 events in the current
-   * 1-second window. Resets the window automatically after 1 s.
-   */
   private isRateLimited(socketId: string): boolean {
     const now = Date.now();
-    let entry = this.eventWindows.get(socketId);
+    const entry = this.eventWindows.get(socketId);
     if (!entry) {
       this.eventWindows.set(socketId, { count: 1, windowStart: now });
       return false;
@@ -93,44 +139,45 @@ export class GameGateway implements OnGatewayInit, OnGatewayDisconnect {
     socket.emit('room_error', { message: '訊息頻率過高，請稍後再試' });
   }
 
+  /** Get the authenticated user attached at connection time. */
+  private user(socket: Socket): AuthedUser | null {
+    const u = (socket as AuthedSocket).data.user;
+    if (!u) {
+      socket.emit('auth_error', { message: '未登入' });
+      socket.disconnect();
+      return null;
+    }
+    return u;
+  }
+
   // ── create_room ──────────────────────────────────────────────────────────────
 
   @SubscribeMessage('create_room')
-  handleCreateRoom(
-    @ConnectedSocket() socket: Socket,
-    @MessageBody() payload: unknown,
-  ): void {
+  handleCreateRoom(@ConnectedSocket() socket: Socket): void {
     if (this.isRateLimited(socket.id)) {
       this.rejectRateLimit(socket);
       return;
     }
+    const user = this.user(socket);
+    if (!user) return;
 
-    const nickname = extractString(payload, 'nickname');
-    const result = this.gameService.handleCreateRoom(socket.id, nickname);
-
+    const result = this.gameService.handleCreateRoom(user, socket.id);
     if ('error' in result) {
       socket.emit('room_error', { message: result.error });
       return;
     }
 
-    console.log('[create_room] socket.id:', socket.id, 'roomCode:', result.roomCode, 'reconnectToken:', result.reconnectToken);
     void socket.join(result.roomCode);
+    void socket.leave(LOBBY_ROOM);
 
-    socket.emit('room_created', {
-      roomCode: result.roomCode,
-      reconnectToken: result.reconnectToken,
-    });
+    socket.emit('room_created', { roomCode: result.roomCode });
 
     const joined = this.gameService.buildRoomJoinedPayload(
-      socket.id,
+      user.uid,
       result.roomCode,
     );
     if (joined) {
-      socket.emit('room_joined', {
-        ...joined,
-        reconnectToken: result.reconnectToken,
-        nickname: result.nickname,
-      });
+      socket.emit('room_joined', { ...joined, nickname: result.nickname });
     }
   }
 
@@ -145,10 +192,11 @@ export class GameGateway implements OnGatewayInit, OnGatewayDisconnect {
       this.rejectRateLimit(socket);
       return;
     }
+    const user = this.user(socket);
+    if (!user) return;
 
     const roomCode = extractString(payload, 'code');
-    const nickname = extractString(payload, 'nickname');
-    const result = this.gameService.handleJoinRoom(socket.id, roomCode, nickname);
+    const result = this.gameService.handleJoinRoom(user, roomCode, socket.id);
 
     if ('error' in result) {
       socket.emit('room_error', { message: result.error });
@@ -156,49 +204,28 @@ export class GameGateway implements OnGatewayInit, OnGatewayDisconnect {
     }
 
     void socket.join(result.roomCode);
+    void socket.leave(LOBBY_ROOM);
 
     const joined = this.gameService.buildRoomJoinedPayload(
-      socket.id,
+      user.uid,
       result.roomCode,
     );
     if (joined) {
-      socket.emit('room_joined', {
-        ...joined,
-        reconnectToken: result.reconnectToken,
-        nickname: result.nickname,
-      });
+      socket.emit('room_joined', { ...joined, nickname: result.nickname });
     }
   }
 
-  // ── reconnect ────────────────────────────────────────────────────────────────
+  // ── list_rooms ───────────────────────────────────────────────────────────────
 
-  @SubscribeMessage('rejoin')
-  handleReconnect(
-    @ConnectedSocket() socket: Socket,
-    @MessageBody() payload: unknown,
-  ): void {
+  @SubscribeMessage('list_rooms')
+  handleListRooms(@ConnectedSocket() socket: Socket): void {
     if (this.isRateLimited(socket.id)) {
       this.rejectRateLimit(socket);
       return;
     }
-
-    const reconnectToken = extractString(payload, 'reconnectToken');
-    const roomCode = extractString(payload, 'code');
-    console.log('[reconnect] socket.id:', socket.id, 'roomCode:', roomCode, 'token:', reconnectToken);
-    const result = this.gameService.handleReconnect(
-      socket.id,
-      reconnectToken,
-      roomCode,
-    );
-    console.log('[reconnect] result:', result);
-
-    if (!result) {
-      socket.emit('room_error', { message: '重連失敗，找不到對應的遊戲階段' });
-      return;
-    }
-
-    void socket.join(result.roomCode);
-    this.gameService.emitReconnectState(socket.id, result.roomCode, result.wasDisconnected, result.newReconnectToken);
+    const user = this.user(socket);
+    if (!user) return;
+    this.gameService.emitRoomListToSocket(socket.id, user.uid);
   }
 
   // ── vote_play ────────────────────────────────────────────────────────────────
@@ -314,7 +341,6 @@ export class GameGateway implements OnGatewayInit, OnGatewayDisconnect {
       return;
     }
 
-    // Per-socket 500ms cooldown — silently drop (no error, per spec §8)
     const now = Date.now();
     const last = this.emojiTimestamps.get(socket.id) ?? 0;
     if (now - last < 500) return;
@@ -332,23 +358,22 @@ export class GameGateway implements OnGatewayInit, OnGatewayDisconnect {
   ): void {
     const roomCode = extractString(payload, 'roomCode');
     if (!roomCode) return;
-    // Reuse the existing full-state snapshot path — safe and already tested.
-    this.gameService.emitReconnectState(socket.id, roomCode.toUpperCase(), false);
+    this.gameService.emitFullStateToSocket(socket.id, roomCode.toUpperCase());
   }
 
   // ── leave_room ────────────────────────────────────────────────────────────────
 
   @SubscribeMessage('leave_room')
-  handleLeaveRoom(@ConnectedSocket() socket: Socket): void {
-    // Intentionally NOT rate-limited — leaving must always be allowed
+  async handleLeaveRoom(@ConnectedSocket() socket: Socket): Promise<void> {
     const roomCode = this.getGameRoomCode(socket);
     this.gameService.handleLeaveRoom(socket.id);
     if (roomCode) void socket.leave(roomCode);
+    // Re-subscribe to lobby broadcasts and send fresh list.
+    await socket.join(LOBBY_ROOM);
+    const user = (socket as AuthedSocket).data.user;
+    this.gameService.emitRoomListToSocket(socket.id, user?.uid ?? null);
   }
 
-  // ── Private helpers ──────────────────────────────────────────────────────────
-
-  /** Returns the game room code the socket is in (excluding its own socket room). */
   private getGameRoomCode(socket: Socket): string {
     for (const r of socket.rooms) {
       if (r !== socket.id) return r;
@@ -356,8 +381,6 @@ export class GameGateway implements OnGatewayInit, OnGatewayDisconnect {
     return '';
   }
 }
-
-// ── Module-level pure helpers ─────────────────────────────────────────────────
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' && !Array.isArray(v)

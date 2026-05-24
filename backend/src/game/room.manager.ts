@@ -1,11 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { randomUUID } from 'crypto';
 import { Member, Room } from './types';
 
 /**
  * RoomManager — pure in-memory data store.
  * Owns the Map<string, Room> and all CRUD operations.
  * Does NOT emit events or own timers; that responsibility belongs to GameService.
+ *
+ * Identity model:
+ *   - Members are identified by `uid` (Firebase UID). socketId rotates per connection.
+ *   - One uid may exist in at most ONE room at a time (enforced by callers via findByUid).
+ *   - On disconnect, the member is removed immediately. No reconnect grace window.
+ *   - Empty rooms are deleted immediately by the caller (GameService.removeSocketFromRoom).
  */
 @Injectable()
 export class RoomManager {
@@ -33,19 +38,21 @@ export class RoomManager {
 
   /**
    * Create a new room. The creator is added as the first member (spectator).
-   * Returns the newly created Room, including the reconnectToken assigned to the creator.
+   * Caller is responsible for rejecting if uid is already in another room.
    */
   createRoom(
+    uid: string,
     nickname: string,
+    avatarUrl: string | null,
     socketId: string,
-  ): { room: Room; reconnectToken: string } {
+  ): Room {
     const code = this.generateCode();
-    const reconnectToken = randomUUID();
 
     const member: Member = {
-      id: socketId,
+      uid,
+      socketId,
       nickname,
-      reconnectToken,
+      avatarUrl,
       role: 'spectator',
       hand: [],
       wantToPlay: false,
@@ -56,7 +63,7 @@ export class RoomManager {
       members: [member],
       state: 'waiting',
       eventSeq: 0,
-      playerIds: [],
+      playerUids: [],
       deck: [],
       landlordCards: [],
       landlordIndex: -1,
@@ -74,53 +81,43 @@ export class RoomManager {
       bidTimer: null,
       bidVotedIndices: [],
       turnTimer: null,
-      idleTimeout: null,
-      reconnectTimers: new Map(),
       winCounts: {},
       resultPending: false,
     };
 
     this.rooms.set(code, room);
-    return { room, reconnectToken };
+    return room;
   }
 
   // ── Join ─────────────────────────────────────────────────────────────────────
 
   /**
-   * Add a member to an existing room.
-   * Deduplicates the nickname within the room (appends a numeric suffix if taken).
-   * Returns the Room + the new Member (with assigned reconnectToken), or null if
-   * the room code doesn't exist.
+   * Add a member to an existing room as a spectator.
+   * Returns null if the room doesn't exist.
+   * Caller must ensure the uid is not already in any room before calling.
    */
   joinRoom(
     code: string,
+    uid: string,
     nickname: string,
+    avatarUrl: string | null,
     socketId: string,
-  ): { room: Room; member: Member; reconnectToken: string } | null {
+  ): { room: Room; member: Member } | null {
     const room = this.rooms.get(code);
     if (!room) return null;
 
-    // Deduplicate nickname within this room
-    const takenNicknames = new Set(room.members.map((m) => m.nickname));
-    let finalNickname = nickname;
-    if (takenNicknames.has(nickname)) {
-      let suffix = 2;
-      while (takenNicknames.has(`${nickname}${suffix}`)) suffix++;
-      finalNickname = `${nickname}${suffix}`;
-    }
-
-    const reconnectToken = randomUUID();
     const member: Member = {
-      id: socketId,
-      nickname: finalNickname,
-      reconnectToken,
+      uid,
+      socketId,
+      nickname,
+      avatarUrl,
       role: 'spectator',
       hand: [],
       wantToPlay: false,
     };
 
     room.members.push(member);
-    return { room, member, reconnectToken };
+    return { room, member };
   }
 
   // ── Remove ───────────────────────────────────────────────────────────────────
@@ -130,9 +127,7 @@ export class RoomManager {
    * Returns { room, member, wasPlayer } on success, or null if the socket
    * wasn't found in any room.
    *
-   * Note: callers (GameService) decide whether to immediately splice or keep
-   * the member for a reconnect window; this method always splices for simplicity.
-   * GameService re-inserts the member when granting a reconnect window.
+   * Splices immediately — no reconnect grace window.
    */
   removeSocket(socketId: string): {
     room: Room;
@@ -140,7 +135,7 @@ export class RoomManager {
     wasPlayer: boolean;
   } | null {
     for (const room of this.rooms.values()) {
-      const idx = room.members.findIndex((m) => m.id === socketId);
+      const idx = room.members.findIndex((m) => m.socketId === socketId);
       if (idx === -1) continue;
 
       const member = room.members[idx];
@@ -159,24 +154,21 @@ export class RoomManager {
 
   getRoomBySocketId(socketId: string): Room | undefined {
     for (const room of this.rooms.values()) {
-      if (room.members.some((m) => m.id === socketId)) return room;
+      if (room.members.some((m) => m.socketId === socketId)) return room;
     }
     return undefined;
   }
 
-  /**
-   * Find a room + member by reconnect token + room code.
-   * The member's socket ID will be stale at this point — the caller is
-   * responsible for updating it after successful reconnection.
-   */
-  findByReconnectToken(
-    token: string,
-    code: string,
-  ): { room: Room; member: Member } | null {
-    const room = this.rooms.get(code);
-    if (!room) return null;
-    const member = room.members.find((m) => m.reconnectToken === token);
-    return member ? { room, member } : null;
+  /** Find the room (if any) that the given uid is currently a member of. */
+  getRoomByUid(uid: string): Room | undefined {
+    for (const room of this.rooms.values()) {
+      if (room.members.some((m) => m.uid === uid)) return room;
+    }
+    return undefined;
+  }
+
+  getMemberByUid(roomCode: string, uid: string): Member | undefined {
+    return this.rooms.get(roomCode)?.members.find((m) => m.uid === uid);
   }
 
   // ── Delete ───────────────────────────────────────────────────────────────────
@@ -187,9 +179,15 @@ export class RoomManager {
   deleteRoom(code: string): void {
     const room = this.rooms.get(code);
     if (!room) return;
-    if (room.idleTimeout) clearTimeout(room.idleTimeout);
-    room.reconnectTimers.forEach((t) => clearTimeout(t));
+    if (room.bidTimer) clearTimeout(room.bidTimer);
+    if (room.turnTimer) clearTimeout(room.turnTimer);
     this.rooms.delete(code);
+  }
+
+  // ── Iteration (for lobby room list) ─────────────────────────────────────────
+
+  allRooms(): Room[] {
+    return Array.from(this.rooms.values());
   }
 
   // ── Stats ────────────────────────────────────────────────────────────────────

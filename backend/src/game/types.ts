@@ -29,13 +29,15 @@ export interface Play {
 }
 
 export interface Member {
-  id: string; // socket.id
+  /** Firebase UID — stable identity across reconnects */
+  uid: string;
+  /** Current socket.id — rotates per connection */
+  socketId: string;
   nickname: string;
-  reconnectToken: string; // UUID stored in client localStorage (per room key)
+  avatarUrl: string | null;
   role: 'spectator' | 'player';
   hand: Card[];
-  wantToPlay: boolean; // toggled by vote_play; locked once game starts
-  disconnectedAt?: number; // timestamp (ms) for reconnect-window tracking
+  wantToPlay: boolean;
 }
 
 export type RoomState = 'waiting' | 'playing';
@@ -50,11 +52,11 @@ export interface Room {
   members: Member[];
   state: RoomState;
   eventSeq: number; // monotonically increasing counter; included in every room broadcast
-  /** socket IDs of the 3 players, set when game starts */
-  playerIds: string[];
+  /** uids of the 3 players, set when game starts */
+  playerUids: string[];
   deck: Card[];
   landlordCards: Card[]; // 3 face-down cards
-  landlordIndex: number; // player index (0-2) within playerIds[0..2]
+  landlordIndex: number; // player index (0-2) within playerUids[0..2]
   currentTurn: number; // player index 0-2
   currentBid: number; // unused in yes/no bidding (kept for compat)
   currentBidder: number; // player index chosen as landlord
@@ -69,8 +71,7 @@ export interface Room {
   bidTimer: NodeJS.Timeout | null; // 8s simultaneous bid window
   bidVotedIndices: number[]; // player indices who have already cast their bid
   turnTimer: NodeJS.Timeout | null; // per-turn 30s auto-pass timer
-  idleTimeout: NodeJS.Timeout | null; // 5-min auto-delete timer
-  reconnectTimers: Map<string, NodeJS.Timeout>; // socketId → 60s grace timer
-  winCounts: Record<string, number>; // nickname → total wins in this room
+  /** uid → total wins in this room session (kept for in-game GameResult overlay) */
+  winCounts: Record<string, number>;
   resultPending: boolean; // true during the 5s game_over → return_to_lobby delay
 }
