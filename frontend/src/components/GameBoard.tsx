@@ -299,11 +299,11 @@ export function GameBoard({
                           ? 'bg-yellow-400 text-green-900 border-yellow-300'
                           : 'bg-black/50 hover:bg-black/70 text-white/80 hover:text-white border-white/20',
                     ].join(' ')}
-                    title={amLandlord ? '地主投降（連按兩次確認）' : '投降（兩位農民同時投降即敗）'}
+                    title={amLandlord ? '地主投降輸一半（連按兩次確認）' : '投降輸一半（兩位農民同時投降輸一半即敗）'}
                   >
                     {amLandlord
-                      ? (iSurrendered ? '確定投降？' : '投降')
-                      : (iSurrendered ? '✓ 已投降' : '投降')}
+                      ? (iSurrendered ? '確定投降輸一半？' : '投降輸一半')
+                      : (iSurrendered ? '✓ 已投降輸一半' : '投降輸一半')}
                   </button>
                 )}
               </div>
@@ -422,7 +422,7 @@ export function GameBoard({
               <span className="text-3xl">{winner === 'landlord' ? '🏆' : '🎉'}</span>
               <h2 className="text-2xl font-black text-white drop-shadow-lg">
                 {winReason === 'surrender'
-                  ? (winner === 'landlord' ? '農民投降！' : '地主投降！')
+                  ? (winner === 'landlord' ? '農民投降輸一半！' : '地主投降輸一半！')
                   : (winner === 'landlord' ? '地主獲勝！' : '農民獲勝！')}
               </h2>
             </div>

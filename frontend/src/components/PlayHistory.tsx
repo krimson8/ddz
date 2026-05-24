@@ -44,7 +44,7 @@ export function PlayHistory({ history, playerOrder, members }: PlayHistoryProps)
             </span>
             {entry.surrender ? (
               <span className="bg-red-500/80 text-white text-[10px] font-bold px-2 py-1 rounded-md whitespace-nowrap">
-                投降
+                投降輸一半
               </span>
             ) : (
               <div className="flex gap-[2px]">
