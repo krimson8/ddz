@@ -180,13 +180,12 @@ export function useSoundEffects(gameState: GameState, mySocketId: string) {
       play('deal');
     }
 
-    // Surrender toggle (local player only): loop sound while pending, stop on cancel
-    const myIdx = curr.playerOrder.indexOf(mySocketId);
-    const wasSurrendered = myIdx !== -1 && prev.surrendered.includes(myIdx);
-    const isSurrendered = myIdx !== -1 && curr.surrendered.includes(myIdx);
-    if (!wasSurrendered && isSurrendered) {
+    // Surrender toggle (any player): loop sound while at least one is pending, stop when none
+    const anyWasSurrendered = prev.surrendered.length > 0;
+    const anyIsSurrendered = curr.surrendered.length > 0;
+    if (!anyWasSurrendered && anyIsSurrendered) {
       startSurrenderLoop();
-    } else if (wasSurrendered && !isSurrendered) {
+    } else if (anyWasSurrendered && !anyIsSurrendered) {
       stopSurrenderLoop();
     }
 
