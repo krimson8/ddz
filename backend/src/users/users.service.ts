@@ -7,6 +7,12 @@ import { GameService } from '../game/game.service';
 
 const NICKNAME_MIN = 2;
 const NICKNAME_MAX = 20;
+/**
+ * Hard cap on the stored avatar string. Avatars are base64-encoded JPEG data
+ * URLs (`data:image/jpeg;base64,...`) produced by client-side resize to
+ * 256×256. The client tries to stay under 64 KB; this is a sanity cap.
+ */
+const AVATAR_MAX_BYTES = 64 * 1024;
 
 function sanitizeNickname(raw: string): string | null {
   const cleaned = raw
@@ -17,6 +23,19 @@ function sanitizeNickname(raw: string): string | null {
   return cleaned;
 }
 
+function validateAvatarUrl(raw: string | null): string | null {
+  if (raw === null) return null;
+  if (raw.length > AVATAR_MAX_BYTES) return null;
+  // Accept base64-encoded JPEG/PNG/WebP data URLs only.
+  if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(raw)) return null;
+  return raw;
+}
+
+export interface ProfilePatch {
+  nickname?: string;
+  avatarUrl?: string | null;
+}
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -24,17 +43,36 @@ export class UsersService {
     private readonly gameService: GameService,
   ) {}
 
-  async updateNickname(uid: string, rawNickname: string): Promise<AuthedUser> {
-    const nickname = sanitizeNickname(rawNickname);
-    if (!nickname) {
-      throw new BadRequestException(
-        `Nickname must be ${NICKNAME_MIN}-${NICKNAME_MAX} characters`,
-      );
+  async updateProfile(uid: string, patch: ProfilePatch): Promise<AuthedUser> {
+    const set: { nickname?: string; avatarUrl?: string | null } = {};
+
+    if (patch.nickname !== undefined) {
+      const nickname = sanitizeNickname(patch.nickname);
+      if (!nickname) {
+        throw new BadRequestException(
+          `Nickname must be ${NICKNAME_MIN}-${NICKNAME_MAX} characters`,
+        );
+      }
+      set.nickname = nickname;
+    }
+
+    if (patch.avatarUrl !== undefined) {
+      const avatarUrl = validateAvatarUrl(patch.avatarUrl);
+      if (patch.avatarUrl !== null && avatarUrl === null) {
+        throw new BadRequestException(
+          `avatarUrl must be a base64 image data URL under ${AVATAR_MAX_BYTES} bytes`,
+        );
+      }
+      set.avatarUrl = avatarUrl;
+    }
+
+    if (Object.keys(set).length === 0) {
+      throw new BadRequestException('No fields to update');
     }
 
     const updated = await this.db
       .update(users)
-      .set({ nickname })
+      .set(set)
       .where(eq(users.uid, uid))
       .returning();
 
@@ -45,7 +83,10 @@ export class UsersService {
     const u = updated[0];
 
     // Propagate to live socket sessions + any room the user is in.
-    this.gameService.refreshUserInRoom(uid, { nickname: u.nickname });
+    this.gameService.refreshUserInRoom(uid, {
+      ...(set.nickname !== undefined ? { nickname: u.nickname } : {}),
+      ...(set.avatarUrl !== undefined ? { avatarUrl: u.avatarUrl } : {}),
+    });
 
     return {
       uid: u.uid,
@@ -53,5 +94,10 @@ export class UsersService {
       nickname: u.nickname,
       avatarUrl: u.avatarUrl,
     };
+  }
+
+  /** @deprecated Use updateProfile. Retained for backward compat. */
+  async updateNickname(uid: string, rawNickname: string): Promise<AuthedUser> {
+    return this.updateProfile(uid, { nickname: rawNickname });
   }
 }

@@ -28,6 +28,7 @@ export interface UseProfileReturn {
   loading: boolean;
   error: string | null;
   updateNickname: (nickname: string) => Promise<void>;
+  updateAvatar: (avatarUrl: string | null) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -86,5 +87,23 @@ export function useProfile(): UseProfileReturn {
     [me],
   );
 
-  return { me, stats, loading, error, updateNickname, refresh };
+  const updateAvatar = useCallback(
+    async (avatarUrl: string | null) => {
+      const prev = me;
+      if (me) setMe({ ...me, avatarUrl });
+      try {
+        const updated = await apiFetch<MeResponse>("/users/me", {
+          method: "PATCH",
+          body: JSON.stringify({ avatarUrl }),
+        });
+        setMe(updated);
+      } catch (err) {
+        if (prev) setMe(prev);
+        throw err;
+      }
+    },
+    [me],
+  );
+
+  return { me, stats, loading, error, updateNickname, updateAvatar, refresh };
 }

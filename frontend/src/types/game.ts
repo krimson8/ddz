@@ -31,6 +31,7 @@ export interface Play {
 export interface ClientMember {
   id: string;
   nickname: string;
+  avatarUrl: string | null;
   role: "spectator" | "player";
   wantToPlay: boolean;
   cardCount?: number;

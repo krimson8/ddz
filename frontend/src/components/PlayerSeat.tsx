@@ -14,6 +14,7 @@ const AVATAR_COLORS = [
 
 interface PlayerSeatProps {
   nickname: string;
+  avatarUrl?: string | null;
   role?: 'player' | 'spectator';
   isLandlord?: boolean;
   /** The 3 landlord bottom-cards to display next to the landlord avatar */
@@ -30,6 +31,7 @@ interface PlayerSeatProps {
 
 export function PlayerSeat({
   nickname,
+  avatarUrl,
   role = 'spectator',
   isLandlord,
   landlordCards,
@@ -41,6 +43,21 @@ export function PlayerSeat({
 }: PlayerSeatProps) {
   const initial = nickname.charAt(0).toUpperCase();
   const avatarColor = AVATAR_COLORS[colorIndex % AVATAR_COLORS.length];
+
+  const avatarInner = avatarUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={avatarUrl}
+      alt={nickname}
+      className="w-24 h-24 rounded-full object-cover bg-white/10"
+    />
+  ) : (
+    <div
+      className={`w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-3xl ${avatarColor}`}
+    >
+      {initial}
+    </div>
+  );
 
   const avatarEl = (
     <motion.div
@@ -58,11 +75,7 @@ export function PlayerSeat({
       transition={isActiveTurn ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' } : {}}
       className="rounded-full p-0.5 flex-shrink-0"
     >
-      <div
-        className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${avatarColor}`}
-      >
-        {initial}
-      </div>
+      {avatarInner}
     </motion.div>
   );
 
@@ -148,11 +161,7 @@ export function PlayerSeat({
         transition={isActiveTurn ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' } : {}}
         className="rounded-full p-0.5"
       >
-        <div
-          className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${avatarColor}`}
-        >
-          {initial}
-        </div>
+        {avatarInner}
       </motion.div>
 
       {/* Nickname */}

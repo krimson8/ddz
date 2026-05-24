@@ -165,6 +165,7 @@ export function GameBoard({
             >
               <PlayerSeat
                 nickname={member.nickname}
+                avatarUrl={member.avatarUrl}
                 role="player"
                 isLandlord={globalIdx === landlordIndex}
                 landlordCards={globalIdx === landlordIndex && landlordCards ? landlordCards : undefined}
@@ -222,6 +223,7 @@ export function GameBoard({
             <div className="flex items-center justify-between gap-2">
               <PlayerSeat
                 nickname={orderedPlayers[0]?.nickname ?? ''}
+                avatarUrl={orderedPlayers[0]?.avatarUrl ?? null}
                 role="player"
                 isLandlord={spectatorViewIndex === landlordIndex}
                 landlordCards={spectatorViewIndex === landlordIndex && landlordCards ? landlordCards : undefined}
@@ -252,6 +254,7 @@ export function GameBoard({
               {orderedPlayers[0] && (
                 <PlayerSeat
                   nickname={orderedPlayers[0].nickname}
+                  avatarUrl={orderedPlayers[0].avatarUrl}
                   role="player"
                   isLandlord={myPlayerIndex === landlordIndex}
                   landlordCards={myPlayerIndex === landlordIndex && landlordCards ? landlordCards : undefined}

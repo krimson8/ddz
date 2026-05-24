@@ -590,6 +590,10 @@ export class GameService {
     // Persist to leaderboard DB (fire-and-forget; service logs errors internally).
     if (playerMembers.length === 3) {
       const dbWinnerRole: 'landlord' | 'farmer' = winner === 'landlord' ? 'landlord' : 'farmer';
+      const storedPlays = room.playHistory.map((h) => ({
+        seat: h.playerIndex,
+        cards: h.play.cards,
+      }));
       void this.leaderboardService.recordResult(
         dbWinnerRole,
         playerMembers.map((m, seat) => {
@@ -597,6 +601,7 @@ export class GameService {
           const won = winner === 'landlord' ? seat === room.landlordIndex : seat !== room.landlordIndex;
           return { uid: m.uid, role, won, seat };
         }),
+        storedPlays,
       );
     }
 

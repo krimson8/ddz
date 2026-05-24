@@ -149,7 +149,7 @@ export function LobbyRoomList({
                   {room.phase === "waiting"
                     ? room.members.map((m) => (
                         <div key={m.uid} className="flex flex-col items-center gap-1">
-                          <Avatar url={m.avatarUrl} nickname={m.nickname} size={36} />
+                          <Avatar url={m.avatarUrl} nickname={m.nickname} size={72} />
                           <span className="text-xs text-white/70 max-w-[60px] truncate">
                             {m.nickname}
                           </span>
@@ -166,7 +166,7 @@ export function LobbyRoomList({
                                 : ""
                             }`}
                           >
-                            <Avatar url={m.avatarUrl} nickname={m.nickname} size={40} />
+                            <Avatar url={m.avatarUrl} nickname={m.nickname} size={80} />
                             <span className="text-xs text-white/80 max-w-[60px] truncate">
                               {m.nickname}
                             </span>

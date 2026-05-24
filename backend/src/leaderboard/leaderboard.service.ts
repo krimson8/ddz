@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { and, desc, eq, lt, sql } from 'drizzle-orm';
 import { DB, Db } from '../db/db.module';
 import { gamePlayers, gameResults, users } from '../db/schema';
 
@@ -9,6 +9,18 @@ export interface GamePlayerInput {
   won: boolean;
   seat: number; // 0/1/2
 }
+
+/**
+ * Single play row stored inside `game_results.plays` JSONB.
+ * `seat` is 0/1/2 and indexes into the `game_players` rows of the same game.
+ */
+export interface StoredPlay {
+  seat: number;
+  cards: { suit: string; rank: number }[];
+}
+
+/** Keep full plays for the newest N games; older games have plays = []. */
+const PLAYS_RETENTION = 200;
 
 export interface LeaderboardEntry {
   uid: string;
@@ -35,6 +47,7 @@ export class LeaderboardService {
   async recordResult(
     winnerRole: 'landlord' | 'farmer',
     players: GamePlayerInput[],
+    plays: StoredPlay[] = [],
   ): Promise<void> {
     if (players.length !== 3) {
       this.logger.warn(`recordResult: expected 3 players, got ${players.length}`);
@@ -45,7 +58,7 @@ export class LeaderboardService {
       await this.db.transaction(async (tx) => {
         const [inserted] = await tx
           .insert(gameResults)
-          .values({ winnerRole })
+          .values({ winnerRole, plays })
           .returning({ id: gameResults.id });
 
         await tx.insert(gamePlayers).values(
@@ -57,12 +70,165 @@ export class LeaderboardService {
             seat: p.seat,
           })),
         );
+
+        // Prune: clear plays from any game outside the newest PLAYS_RETENTION.
+        // Find the cutoff id (the oldest "kept" game), then null out plays for older ids.
+        const cutoff = await tx
+          .select({ id: gameResults.id })
+          .from(gameResults)
+          .orderBy(desc(gameResults.id))
+          .limit(1)
+          .offset(PLAYS_RETENTION - 1);
+
+        if (cutoff.length > 0) {
+          await tx
+            .update(gameResults)
+            .set({ plays: [] })
+            .where(
+              and(
+                lt(gameResults.id, cutoff[0].id),
+                sql`jsonb_array_length(${gameResults.plays}) > 0`,
+              ),
+            );
+        }
       });
     } catch (err) {
       this.logger.error(
         `recordResult failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+  }
+
+  // ── Per-user history ───────────────────────────────────────────────────────
+
+  /**
+   * Paginated list of games a user has played, newest first.
+   * Returns lightweight rows for the history list (no plays payload).
+   * `before` is a keyset cursor: the gameId from the previous page's last row.
+   */
+  async getUserGames(uid: string, limit = 20, before?: number) {
+    const rows = await this.db.execute<{
+      game_id: number;
+      played_at: string;
+      winner_role: string;
+      has_plays: boolean;
+      my_role: string;
+      my_won: boolean;
+      my_seat: number;
+      players: Array<{
+        uid: string;
+        nickname: string;
+        avatar_url: string | null;
+        role: string;
+        won: boolean;
+        seat: number;
+      }>;
+    }>(sql`
+      WITH my_games AS (
+        SELECT
+          gr.id           AS game_id,
+          gr.played_at,
+          gr.winner_role,
+          jsonb_array_length(gr.plays) > 0 AS has_plays,
+          gp_me.role      AS my_role,
+          gp_me.won       AS my_won,
+          gp_me.seat      AS my_seat
+        FROM ${gameResults} gr
+        JOIN ${gamePlayers} gp_me
+          ON gp_me.game_id = gr.id AND gp_me.uid = ${uid}
+        WHERE ${before === undefined ? sql`TRUE` : sql`gr.id < ${before}`}
+        ORDER BY gr.id DESC
+        LIMIT ${limit}
+      )
+      SELECT
+        mg.game_id,
+        mg.played_at,
+        mg.winner_role,
+        mg.has_plays,
+        mg.my_role,
+        mg.my_won,
+        mg.my_seat,
+        (
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'uid', u.uid,
+              'nickname', u.nickname,
+              'avatar_url', u.avatar_url,
+              'role', gp.role,
+              'won', gp.won,
+              'seat', gp.seat
+            )
+            ORDER BY gp.seat
+          )
+          FROM ${gamePlayers} gp
+          JOIN ${users} u ON u.uid = gp.uid
+          WHERE gp.game_id = mg.game_id
+        ) AS players
+      FROM my_games mg
+      ORDER BY mg.game_id DESC
+    `);
+
+    return rows.map((r) => ({
+      gameId: Number(r.game_id),
+      playedAt: r.played_at,
+      winnerRole: r.winner_role as 'landlord' | 'farmer',
+      hasPlays: r.has_plays,
+      myRole: r.my_role as 'landlord' | 'farmer',
+      myWon: r.my_won,
+      mySeat: Number(r.my_seat),
+      players: (r.players ?? []).map((p) => ({
+        uid: p.uid,
+        nickname: p.nickname,
+        avatarUrl: p.avatar_url,
+        role: p.role as 'landlord' | 'farmer',
+        won: p.won,
+        seat: Number(p.seat),
+      })),
+    }));
+  }
+
+  /**
+   * Full game detail with the stored plays array. Returns null if the game
+   * doesn't exist. Plays may be empty if the game was outside the retention window.
+   */
+  async getGameDetail(gameId: number) {
+    const games = await this.db
+      .select()
+      .from(gameResults)
+      .where(eq(gameResults.id, gameId))
+      .limit(1);
+    if (games.length === 0) return null;
+    const game = games[0];
+
+    const playerRows = await this.db.execute<{
+      uid: string;
+      nickname: string;
+      avatar_url: string | null;
+      role: string;
+      won: boolean;
+      seat: number;
+    }>(sql`
+      SELECT u.uid, u.nickname, u.avatar_url, gp.role, gp.won, gp.seat
+      FROM ${gamePlayers} gp
+      JOIN ${users} u ON u.uid = gp.uid
+      WHERE gp.game_id = ${gameId}
+      ORDER BY gp.seat ASC
+    `);
+
+    return {
+      gameId: game.id,
+      playedAt: game.playedAt,
+      winnerRole: game.winnerRole as 'landlord' | 'farmer',
+      plays: (game.plays as StoredPlay[]) ?? [],
+      players: playerRows.map((p) => ({
+        uid: p.uid,
+        nickname: p.nickname,
+        avatarUrl: p.avatar_url,
+        role: p.role as 'landlord' | 'farmer',
+        won: p.won,
+        seat: Number(p.seat),
+      })),
+    };
   }
 
   /**

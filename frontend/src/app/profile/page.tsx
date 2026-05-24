@@ -1,12 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
+import { resizeAvatarToDataUrl } from "@/lib/avatar";
+import { GameHistory } from "@/components/GameHistory";
 
-function Avatar({ nickname, size = 96 }: { nickname: string; size?: number }) {
+function Avatar({
+  nickname,
+  avatarUrl,
+  size = 480,
+}: {
+  nickname: string;
+  avatarUrl: string | null;
+  size?: number;
+}) {
+  if (avatarUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={avatarUrl}
+        alt={nickname}
+        className="rounded-full object-cover bg-white/10"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
   const initial = nickname.slice(0, 1).toUpperCase();
   return (
     <div
@@ -30,16 +51,49 @@ function StatCell({ label, value, accent }: { label: string; value: number | str
 export default function ProfilePage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const { me, stats, loading, error, updateNickname } = useProfile();
+  const { me, stats, loading, error, updateNickname, updateAvatar } = useProfile();
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
   }, [authLoading, user, router]);
+
+  async function handleAvatarFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // reset so same file can be picked again
+    if (!file || !user) return;
+    setAvatarError(null);
+    setUploading(true);
+    try {
+      const dataUrl = await resizeAvatarToDataUrl(file);
+      await updateAvatar(dataUrl);
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleRemoveAvatar() {
+    if (!me?.avatarUrl) return;
+    setAvatarError(null);
+    setUploading(true);
+    try {
+      await updateAvatar(null);
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+    }
+  }
 
   function startEdit() {
     if (!me) return;
@@ -95,7 +149,35 @@ export default function ProfilePage() {
 
         {/* Header */}
         <div className="bg-white/10 backdrop-blur rounded-2xl p-6 flex flex-col items-center gap-4">
-          <Avatar nickname={me.nickname} />
+          <div className="relative">
+            <Avatar nickname={me.nickname} avatarUrl={me.avatarUrl} />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              title="更換頭像"
+              className="absolute bottom-2 right-2 w-16 h-16 rounded-full bg-yellow-400 text-green-900 text-2xl font-bold flex items-center justify-center hover:bg-yellow-300 disabled:opacity-50 shadow-lg"
+            >
+              {uploading ? "…" : "📷"}
+            </button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleAvatarFile}
+          />
+          {me.avatarUrl && !uploading && (
+            <button
+              onClick={handleRemoveAvatar}
+              className="text-white/50 hover:text-white text-xs underline"
+            >
+              移除頭像
+            </button>
+          )}
+          {avatarError && (
+            <p className="text-red-300 text-xs text-center break-all">{avatarError}</p>
+          )}
 
           {!editing ? (
             <div className="flex items-center gap-2">
@@ -170,6 +252,9 @@ export default function ProfilePage() {
             <p className="text-white/40 text-sm text-center py-4">尚無比賽記錄</p>
           )}
         </div>
+
+        {/* Game history */}
+        <GameHistory />
       </div>
     </div>
   );

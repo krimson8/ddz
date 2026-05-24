@@ -129,6 +129,7 @@ export function RoomLobby({
             <PlayerSeat
               key={member.id}
               nickname={member.nickname}
+              avatarUrl={member.avatarUrl}
               role={member.role}
               colorIndex={i}
             />
@@ -160,7 +161,21 @@ export function RoomLobby({
                 className="flex items-center gap-2 bg-white/10 rounded-lg px-3 py-1.5 text-sm"
               >
                 <span className="w-6 text-right text-white/60">{i + 1}</span>
-                <span className="flex-1 text-white truncate">{entry.nickname}</span>
+                <span className="flex-1 flex items-center gap-2 min-w-0">
+                  {entry.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={entry.avatarUrl}
+                      alt={entry.nickname}
+                      className="w-12 h-12 rounded-full object-cover bg-white/10 flex-shrink-0"
+                    />
+                  ) : (
+                    <span className="w-12 h-12 rounded-full bg-yellow-400 text-green-900 text-base font-bold flex items-center justify-center flex-shrink-0">
+                      {entry.nickname.slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                  <span className="text-white truncate">{entry.nickname}</span>
+                </span>
                 <span className="w-10 text-right text-yellow-400 font-bold">{entry.totalWins}</span>
                 <span className="w-8 text-right text-red-300">{entry.landlordWins}</span>
                 <span className="w-8 text-right text-green-300">{entry.farmerWins}</span>
