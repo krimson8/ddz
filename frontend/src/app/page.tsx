@@ -18,7 +18,7 @@ export default function Home() {
   const { user, loading: authLoading, signOut } = useAuth();
   const { me } = useProfile();
   const socket = useSocket();
-  const { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, playCards, pass, surrender, reactEmoji } = useGame();
+  const { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, coinVote, playCards, pass, surrender, reactEmoji } = useGame();
   const { setVolume, playEmoji } = useSoundEffects(gameState, user?.uid ?? '');
   const { phase, roomCode, members, readyCount } = gameState;
 
@@ -111,6 +111,7 @@ export default function Home() {
           onPlayCards={playCards}
           onPass={pass}
           onBid={bid}
+          onCoinVote={coinVote}
           onSurrender={surrender}
           onEmojiReact={reactEmoji}
           onEmojiReceived={playEmoji}

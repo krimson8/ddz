@@ -39,7 +39,7 @@ export interface ClientMember {
 
 export type RoomState = "waiting" | "playing";
 
-export type GamePhase = "lobby" | "dealing" | "bidding" | "gameplay" | "result";
+export type GamePhase = "lobby" | "dealing" | "bidding" | "coinflip" | "gameplay" | "result";
 
 export interface HistoryEntry {
   playerIndex: number;
@@ -71,6 +71,10 @@ export interface GameState {
   bidSubmitted: boolean;
   /** Milliseconds for the current bid window (from server bid_open) */
   bidTimeoutMs: number;
+  /** How many players have cast their 黑白 (white/black) tiebreak vote */
+  coinVotedCount: number;
+  /** Whether the local player has already cast their 黑白 vote */
+  coinSubmitted: boolean;
   lastPlay: Play | null;
   /** Socket ID of the player who made the last play */
   lastPlayedBy: string | null;

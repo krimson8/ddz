@@ -28,6 +28,8 @@ const initialState: GameState = {
   bidVotedCount: 0,
   bidTimeoutMs: 8000,
   bidSubmitted: false,
+  coinVotedCount: 0,
+  coinSubmitted: false,
   lastPlay: null,
   winner: null,
   winnerIds: [],
@@ -65,6 +67,9 @@ type Action =
   | { type: "BID_STATUS"; submitted: boolean }
   | { type: "BID_TURN"; playerIndex: number; currentBid: number; submitted?: boolean }
   | { type: "BID_MADE"; value: number; votedCount: number }
+  | { type: "COINFLIP_OPEN"; votedCount?: number; submitted?: boolean }
+  | { type: "COIN_MADE"; votedCount: number }
+  | { type: "COIN_SUBMIT" }
   | {
       type: "LANDLORD_DECIDED";
       landlordIndex: number;
@@ -169,6 +174,17 @@ function reducer(state: GameState, action: Action): GameState {
         currentBid: action.value > 0 ? action.value : state.currentBid,
         bidVotedCount: action.votedCount,
       };
+    case "COINFLIP_OPEN":
+      return {
+        ...state,
+        phase: "coinflip",
+        coinVotedCount: action.votedCount ?? 0,
+        coinSubmitted: action.submitted ?? false,
+      };
+    case "COIN_MADE":
+      return { ...state, coinVotedCount: action.votedCount };
+    case "COIN_SUBMIT":
+      return { ...state, coinSubmitted: true };
     case "LANDLORD_DECIDED":
       return {
         ...state,
@@ -238,6 +254,7 @@ export interface UseGameReturn {
   leaveRoom: () => void;
   votePlay: () => void;
   bid: (amount: 0 | 1) => void;
+  coinVote: (color: "white" | "black") => void;
   playCards: (cards: Card[]) => void;
   pass: () => void;
   surrender: () => void;
@@ -366,6 +383,16 @@ export function useGame(): UseGameReturn {
       dispatch({ type: "BID_MADE", value: data.value, votedCount: data.votedCount ?? 0 });
     });
 
+    socket.on("coinflip_open", (data: { votedCount?: number; submitted?: boolean; seq?: number } = {}) => {
+      if (!checkSeq(data.seq)) return;
+      dispatch({ type: "COINFLIP_OPEN", votedCount: data.votedCount, submitted: data.submitted });
+    });
+
+    socket.on("coin_made", (data: { playerIndex: number; votedCount?: number; seq?: number }) => {
+      if (!checkSeq(data.seq)) return;
+      dispatch({ type: "COIN_MADE", votedCount: data.votedCount ?? 0 });
+    });
+
     socket.on(
       "landlord_decided",
       (data: { playerIndex: number; landlordCards: Card[]; playerCardCounts: number[]; phase?: GamePhase; seq?: number }) => {
@@ -475,6 +502,8 @@ export function useGame(): UseGameReturn {
       socket.off("bid_status");
       socket.off("bid_turn");
       socket.off("bid_made");
+      socket.off("coinflip_open");
+      socket.off("coin_made");
       socket.off("landlord_decided");
       socket.off("hand_updated");
       socket.off("game_state");
@@ -513,6 +542,15 @@ export function useGame(): UseGameReturn {
     [socket],
   );
 
+  const coinVote = useCallback(
+    (color: "white" | "black") => {
+      // Lock the local choice immediately — the vote can't be changed once cast.
+      dispatch({ type: "COIN_SUBMIT" });
+      socket.emit("coin_vote", { color });
+    },
+    [socket],
+  );
+
   const playCards = useCallback(
     (cards: Card[]) => { socket.emit("play_cards", { cards }); },
     [socket],
@@ -527,5 +565,5 @@ export function useGame(): UseGameReturn {
     [socket],
   );
 
-  return { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, playCards, pass, surrender, reactEmoji };
+  return { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, coinVote, playCards, pass, surrender, reactEmoji };
 }

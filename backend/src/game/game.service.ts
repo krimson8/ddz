@@ -707,6 +707,9 @@ export class GameService {
     room.bidPassCount = 0;
     room.bidYesVoters = [];
     room.bidVotedIndices = [];
+    room.coinVotes = [null, null, null];
+    room.coinVotedIndices = [];
+    room.coinflipActive = false;
     room.landlordIndex = -1;
     room.landlordCards = [];
     room.lastPlay = null;
@@ -806,12 +809,94 @@ export class GameService {
     // set, the round has moved on — bail.
     if (room.state !== 'playing' || room.landlordIndex !== -1) return;
     if (room.bidTimer) { clearTimeout(room.bidTimer); room.bidTimer = null; }
-    let chosen: number;
+    // Nobody volunteered → fall back to the 黑白 (white/black) tiebreak vote
+    // instead of picking a landlord at random.
     if (room.bidYesVoters.length === 0) {
-      chosen = Math.floor(Math.random() * 3);
-    } else {
-      chosen = room.bidYesVoters[Math.floor(Math.random() * room.bidYesVoters.length)];
+      this.startCoinflip(room);
+      return;
     }
+    const chosen = room.bidYesVoters[Math.floor(Math.random() * room.bidYesVoters.length)];
+    room.currentBidder = chosen;
+    this.determineLandlord(room);
+  }
+
+  // ── 黑白 tiebreak ──────────────────────────────────────────────────────────────
+
+  /**
+   * Open a 黑白 (white/black) vote: each of the 3 players picks a colour. There
+   * is no countdown — the round only resolves once exactly 3 votes are in.
+   * Any seated player who is disconnected is auto-assigned a random colour so a
+   * dropped player can never stall the vote forever.
+   */
+  private startCoinflip(room: Room): void {
+    if (room.state !== 'playing' || room.landlordIndex !== -1) return;
+
+    room.coinVotes = [null, null, null];
+    room.coinVotedIndices = [];
+    room.coinflipActive = true;
+
+    this.emitToRoom(room, 'coinflip_open', { phase: 'coinflip' });
+
+    for (let i = 0; i < 3; i++) {
+      const m = room.members.find((mem) => mem.uid === room.playerUids[i]);
+      if (m && (m.disconnected || !m.socketId)) {
+        // Auto-vote on behalf of a disconnected player.
+        this.recordCoinVote(room, i, Math.random() < 0.5 ? 'white' : 'black');
+      }
+    }
+  }
+
+  handleCoinVote(socketId: string, color: 'white' | 'black'): void {
+    const room = this.roomManager.getRoomBySocketId(socketId);
+    if (!room || room.state !== 'playing' || room.landlordIndex !== -1) {
+      this.server?.to(socketId).emit('room_error', { message: '現在不是投票階段' });
+      return;
+    }
+    const member = room.members.find((m) => m.socketId === socketId);
+    if (!member) return;
+    const playerIndex = room.playerUids.indexOf(member.uid);
+    if (playerIndex === -1) return; // spectator
+
+    this.recordCoinVote(room, playerIndex, color);
+  }
+
+  private recordCoinVote(
+    room: Room,
+    playerIndex: number,
+    color: 'white' | 'black',
+  ): void {
+    // A vote is locked once cast — ignore duplicates / changes.
+    if (room.coinVotedIndices.includes(playerIndex)) return;
+    room.coinVotedIndices.push(playerIndex);
+    room.coinVotes[playerIndex] = color;
+
+    this.emitToRoom(room, 'coin_made', {
+      playerIndex,
+      votedCount: room.coinVotedIndices.length,
+    });
+
+    if (room.coinVotedIndices.length >= 3) {
+      this.resolveCoinflip(room);
+    }
+  }
+
+  private resolveCoinflip(room: Room): void {
+    if (room.state !== 'playing' || room.landlordIndex !== -1) return;
+
+    const votes = room.coinVotes;
+    const whites = votes.filter((c) => c === 'white').length;
+    const blacks = votes.filter((c) => c === 'black').length;
+
+    // All three matched → no minority, restart the vote (loop until decided).
+    if (whites === 0 || blacks === 0) {
+      this.startCoinflip(room);
+      return;
+    }
+
+    // The lone colour (1 vs 2) decides the landlord.
+    const minority: 'white' | 'black' = whites === 1 ? 'white' : 'black';
+    const chosen = votes.findIndex((c) => c === minority);
+    room.coinflipActive = false;
     room.currentBidder = chosen;
     this.determineLandlord(room);
   }
@@ -994,7 +1079,11 @@ export class GameService {
     const canVote = room.state === 'waiting';
 
     const phase = room.state === 'playing'
-      ? (room.landlordIndex >= 0 ? 'gameplay' : 'bidding')
+      ? (room.landlordIndex >= 0
+          ? 'gameplay'
+          : room.coinflipActive
+            ? 'coinflip'
+            : 'bidding')
       : 'lobby';
 
     this.server?.to(socketId).emit('room_joined', {
@@ -1018,7 +1107,13 @@ export class GameService {
         reconnect: true,
       });
       const pi = room.playerUids.indexOf(member.uid);
-      if (room.landlordIndex === -1) {
+      if (room.landlordIndex === -1 && room.coinflipActive) {
+        this.emitToSocket(member.socketId, 'coinflip_open', {
+          phase: 'coinflip',
+          votedCount: room.coinVotedIndices.length,
+          submitted: room.coinVotedIndices.includes(pi),
+        });
+      } else if (room.landlordIndex === -1) {
         this.emitToSocket(member.socketId, 'bid_turn', {
           playerIndex: room.currentTurn,
           currentBid: room.currentBid,

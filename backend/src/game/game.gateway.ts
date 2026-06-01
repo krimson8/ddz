@@ -274,6 +274,28 @@ export class GameGateway
     this.gameService.handleBid(socket.id, rawValue as 0 | 1);
   }
 
+  // ── coin_vote (黑白 tiebreak) ──────────────────────────────────────────────────
+
+  @SubscribeMessage('coin_vote')
+  handleCoinVote(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() payload: unknown,
+  ): void {
+    if (this.isRateLimited(socket.id)) {
+      this.rejectRateLimit(socket);
+      return;
+    }
+
+    const p = asRecord(payload);
+    const rawColor = p?.color;
+    if (rawColor !== 'white' && rawColor !== 'black') {
+      socket.emit('room_error', { message: '無效的投票值' });
+      return;
+    }
+
+    this.gameService.handleCoinVote(socket.id, rawColor as 'white' | 'black');
+  }
+
   // ── play_cards ───────────────────────────────────────────────────────────────
 
   @SubscribeMessage('play_cards')

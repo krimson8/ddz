@@ -7,6 +7,7 @@ import { Card as CardComponent } from './Card';
 import { PlayerSeat } from './PlayerSeat';
 import { PlayArea } from './PlayArea';
 import { BiddingPanel } from './BiddingPanel';
+import { CoinflipPanel } from './CoinflipPanel';
 import { PlayHistory } from './PlayHistory';
 import { useSocket } from '@/hooks/useSocket';
 import type { Card, ClientMember, GameState } from '@/types/game';
@@ -42,6 +43,7 @@ interface GameBoardProps {
   onPlayCards: (cards: Card[]) => void;
   onPass: () => void;
   onBid: (value: 0 | 1) => void;
+  onCoinVote: (color: 'white' | 'black') => void;
   onSurrender: () => void;
   onEmojiReact: (emoji: string) => void;
   onEmojiReceived?: (emoji: string) => void;
@@ -53,6 +55,7 @@ export function GameBoard({
   onPlayCards,
   onPass,
   onBid,
+  onCoinVote,
   onSurrender,
   onEmojiReact,
   onEmojiReceived,
@@ -212,6 +215,12 @@ export function GameBoard({
               onVoteYes={() => onBid(1)}
               votedCount={gameState.bidVotedCount}
               timeoutMs={gameState.bidTimeoutMs}
+            />
+          ) : phase === 'coinflip' && !isSpectator ? (
+            <CoinflipPanel
+              hasVoted={gameState.coinSubmitted}
+              onVote={onCoinVote}
+              votedCount={gameState.coinVotedCount}
             />
           ) : (
             <PlayArea lastPlay={lastPlay} playerName={lastPlayedByName} />

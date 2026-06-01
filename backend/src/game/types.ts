@@ -80,6 +80,13 @@ export interface Room {
   firstBidder: number; // player index who starts bidding
   bidTimer: NodeJS.Timeout | null; // 8s simultaneous bid window
   bidVotedIndices: number[]; // player indices who have already cast their bid
+  /**
+   * 黑白 (white/black) tiebreak vote, used only when nobody volunteered for
+   * landlord. Index 0-2 → the colour that player chose, or null if not yet cast.
+   */
+  coinVotes: (('white' | 'black') | null)[];
+  coinVotedIndices: number[]; // player indices who have cast their 黑白 vote
+  coinflipActive: boolean; // true while a 黑白 vote round is open (drives reconnect phase)
   turnTimer: NodeJS.Timeout | null; // per-turn 30s auto-pass timer
   /** uid → total wins in this room session (kept for in-game GameResult overlay) */
   winCounts: Record<string, number>;

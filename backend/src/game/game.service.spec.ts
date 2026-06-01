@@ -155,8 +155,8 @@ describe('GameService — start-flow idempotency', () => {
     expect(room.state).toBe('playing');
     expect(room.landlordIndex).toBe(-1);
 
-    // All three pass — the 3rd bid triggers finalizeBidding inline.
-    svc.handleBid('s-a', 0);
+    // One volunteer + two passes — the 3rd bid triggers finalizeBidding inline.
+    svc.handleBid('s-a', 1);
     svc.handleBid('s-b', 0);
     svc.handleBid('s-c', 0);
 
@@ -193,5 +193,68 @@ describe('GameService — start-flow idempotency', () => {
     const after = room.members.find((m) => m.uid === landlordUid)!.hand.length;
     expect(after).toBe(before);
     expect(totalCards(room)).toBe(54);
+  });
+
+  // ── 黑白 tiebreak ──────────────────────────────────────────────────────────────
+
+  function startNoVolunteerCoinflip(): Room {
+    const room = seedRoom(3);
+    svc.handleVotePlay('s-a');
+    svc.handleVotePlay('s-b');
+    svc.handleVotePlay('s-c');
+    advanceToBidding(room);
+    // Everyone passes → nobody volunteers → 黑白 vote opens instead of random.
+    svc.handleBid('s-a', 0);
+    svc.handleBid('s-b', 0);
+    svc.handleBid('s-c', 0);
+    return room;
+  }
+
+  it('opens the 黑白 vote (no landlord yet) when nobody volunteers', () => {
+    const room = startNoVolunteerCoinflip();
+    expect(room.landlordIndex).toBe(-1);
+    expect(room.coinflipActive).toBe(true);
+    expect(emitted.some((e) => e.event === 'coinflip_open')).toBe(true);
+  });
+
+  it('makes the lone (1-vs-2) voter the landlord', () => {
+    const room = startNoVolunteerCoinflip();
+    // a = white, b,c = black → a is the minority → a (index 0) is landlord.
+    svc.handleCoinVote('s-a', 'white');
+    svc.handleCoinVote('s-b', 'black');
+    svc.handleCoinVote('s-c', 'black');
+
+    expect(room.landlordIndex).toBe(0);
+    expect(room.coinflipActive).toBe(false);
+    const landlord = room.members.find((m) => m.uid === room.playerUids[0])!;
+    expect(landlord.hand).toHaveLength(20); // 17 + 3 landlord cards
+    expect(totalCards(room)).toBe(54);
+  });
+
+  it('restarts the 黑白 vote when all three pick the same colour', () => {
+    const room = startNoVolunteerCoinflip();
+    svc.handleCoinVote('s-a', 'white');
+    svc.handleCoinVote('s-b', 'white');
+    svc.handleCoinVote('s-c', 'white');
+
+    // No minority → still no landlord, vote re-opened, tallies cleared.
+    expect(room.landlordIndex).toBe(-1);
+    expect(room.coinflipActive).toBe(true);
+    expect(room.coinVotedIndices).toEqual([]);
+
+    // A fresh decisive round resolves it.
+    svc.handleCoinVote('s-a', 'black');
+    svc.handleCoinVote('s-b', 'white');
+    svc.handleCoinVote('s-c', 'white');
+    expect(room.landlordIndex).toBe(0);
+  });
+
+  it('ignores a duplicate 黑白 vote (locked once cast)', () => {
+    const room = startNoVolunteerCoinflip();
+    svc.handleCoinVote('s-a', 'white');
+    svc.handleCoinVote('s-a', 'black'); // duplicate — must be ignored
+    expect(room.coinVotedIndices).toEqual([0]);
+    expect(room.coinVotes[0]).toBe('white');
+    expect(room.landlordIndex).toBe(-1); // still waiting on b & c
   });
 });
