@@ -170,6 +170,7 @@ export function RoomLobby({
                   avatarUrl={member.avatarUrl}
                   role={member.role}
                   colorIndex={i}
+                  fixedSize
                 />
               </div>
             );

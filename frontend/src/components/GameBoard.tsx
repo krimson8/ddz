@@ -255,6 +255,7 @@ export function GameBoard({
                 colorIndex={spectatorViewIndex}
                 reactions={seatReactions[spectatorViewIndex] ?? []}
                 surrendered={surrendered.includes(spectatorViewIndex)}
+                inGame
               />
               <p className="text-white/40 text-xs italic ml-2">觀戰中</p>
             </div>
@@ -286,6 +287,7 @@ export function GameBoard({
                     isActiveTurn={isMyTurn}
                     colorIndex={myPlayerIndex}
                     surrendered={iSurrendered}
+                    inGame
                   />
                 )}
                 {phase === 'gameplay' && (
