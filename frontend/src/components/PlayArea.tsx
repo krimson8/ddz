@@ -28,7 +28,7 @@ interface PlayAreaProps {
 
 export function PlayArea({ lastPlay, playerName }: PlayAreaProps) {
   return (
-    <div className="flex flex-col items-center gap-3 min-h-[120px] justify-center">
+    <div className="flex flex-col items-center gap-2 justify-center">
       {/* Last played cards */}
       <AnimatePresence mode="wait">
         {lastPlay ? (

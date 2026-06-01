@@ -173,7 +173,7 @@ export function GameBoard({
     : undefined;
 
   return (
-    <div className="relative min-h-screen bg-green-900 flex flex-col select-none overflow-hidden">
+    <div className="relative min-h-screen bg-green-900 flex flex-col select-none overflow-hidden h-screen">
       {/* ── Top opponents ───────────────────────────────── */}
       <div className="flex justify-around px-4 pt-4">
         {orderedPlayers.slice(1).map((member) => {
@@ -204,8 +204,8 @@ export function GameBoard({
       </div>
 
       {/* ── Centre: play area (top 60%) + history strip (bottom 40%) ── */}
-      <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex-[3] flex items-center justify-center px-4 min-h-0">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="flex-[2] flex items-center justify-center px-4 min-h-0">
           {phase === 'bidding' && !isSpectator ? (
             <BiddingPanel
               hasVoted={gameState.bidSubmitted}
@@ -217,7 +217,7 @@ export function GameBoard({
             <PlayArea lastPlay={lastPlay} playerName={lastPlayedByName} />
           )}
         </div>
-        <div className="flex-[2] flex items-end min-h-0">
+        <div className="flex-[1] flex items-end min-h-0">
           <PlayHistory
             history={playHistory}
             playerOrder={playerOrder}
