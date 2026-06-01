@@ -42,7 +42,13 @@ export interface Member {
   disconnected: boolean;
 }
 
-export type RoomState = 'waiting' | 'playing';
+/**
+ * - `waiting`  — in-room lobby; votes accepted.
+ * - `starting` — 3rd vote locked in; players frozen, dealing countdown running.
+ *                No further votes or re-entry into the start flow are allowed.
+ * - `playing`  — bidding + gameplay.
+ */
+export type RoomState = 'waiting' | 'starting' | 'playing';
 
 export interface HistoryEntry {
   playerIndex: number;

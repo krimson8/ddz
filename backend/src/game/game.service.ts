@@ -271,7 +271,10 @@ export class GameService {
     const room = this.roomManager.getRoomBySocketId(socketId);
     if (!room) return;
 
-    if (room.state === 'playing' || room.resultPending) {
+    // Votes are only accepted in the lobby. Once the 3rd vote flips the room
+    // into `starting`, the start flow owns the player set — any further vote
+    // (e.g. a 4th player racing in during the dealing countdown) is rejected.
+    if (room.state !== 'waiting' || room.resultPending) {
       this.server?.to(socketId).emit('room_error', { message: '遊戲進行中，無法投票' });
       return;
     }
@@ -280,12 +283,16 @@ export class GameService {
     if (!member) return;
 
     member.wantToPlay = !member.wantToPlay;
-    this.emitMembersUpdate(room);
 
     const voters = room.members.filter((m) => m.wantToPlay);
     if (voters.length >= 3) {
+      // Flip the lock BEFORE any broadcast or async hop so a concurrently
+      // queued vote_play can never observe `waiting` and re-enter startGame.
       this.startGame(room);
+      return;
     }
+
+    this.emitMembersUpdate(room);
   }
 
   // ── Bidding ─────────────────────────────────────────────────────────────────
@@ -651,6 +658,12 @@ export class GameService {
    * a 3-second countdown before kicking off the first bidding round.
    */
   private startGame(room: Room): void {
+    // Idempotency guard: only the `waiting → starting` transition may proceed.
+    // A duplicate/late entry (re-triggered vote, race) finds a non-waiting state
+    // and bails, so the player set and dealing countdown are locked exactly once.
+    if (room.state !== 'waiting') return;
+    room.state = 'starting';
+
     const voters = room.members.filter((m) => m.wantToPlay).slice(0, 3);
     room.playerUids = voters.map((m) => m.uid);
 
@@ -672,6 +685,21 @@ export class GameService {
   }
 
   private startBiddingRound(room: Room): void {
+    // The dealing countdown scheduled this. If anything aborted the start in the
+    // meantime (a player left → resetToWaiting, room deleted, etc.) the state is
+    // no longer `starting`, so we must not deal a deck into a stale room.
+    if (room.state !== 'starting') return;
+    // Defensive: a valid round needs exactly 3 connected players. If the set
+    // shrank during the countdown, abort back to the lobby instead of dealing
+    // a corrupt hand layout.
+    const playerMembers = room.playerUids.map((uid) =>
+      room.members.find((m) => m.uid === uid),
+    );
+    if (room.playerUids.length !== 3 || playerMembers.some((m) => !m)) {
+      this.resetToWaiting(room);
+      return;
+    }
+
     room.state = 'playing';
 
     room.currentBid = 0;
@@ -771,6 +799,12 @@ export class GameService {
   }
 
   private finalizeBidding(room: Room): void {
+    // Idempotency guard: the landlord is only ever chosen once per round.
+    // This can be reached from the 3rd bid AND from the 8s bid-timer callback;
+    // if both race, the second entry must not re-push the landlord cards
+    // (which would inflate the landlord's hand to 23+). Once landlordIndex is
+    // set, the round has moved on — bail.
+    if (room.state !== 'playing' || room.landlordIndex !== -1) return;
     if (room.bidTimer) { clearTimeout(room.bidTimer); room.bidTimer = null; }
     let chosen: number;
     if (room.bidYesVoters.length === 0) {
