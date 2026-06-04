@@ -4,7 +4,22 @@
       "Bash(npx tsc *)",
       "Bash(git check-ignore *)",
       "Bash(npm run *)",
-      "Bash(node dist/main.js)"
+      "Bash(node dist/main.js)",
+      "Bash(npm install *)",
+      "Bash(npm ci *)",
+      "Bash(npx eslint *)",
+      "Bash(npx next *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add *)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "PowerShell(Set-Location c:\\Programming\\ddz\\frontend; npm run *)",
+      "PowerShell(Set-Location c:\\Programming\\ddz\\frontend; npx *)",
+      "PowerShell(Set-Location c:\\Programming\\ddz\\wuziqi_backend; npm run *)",
+      "Bash(npx drizzle-kit *)",
+      "Bash(npx jest *)"
     ]
   }
 }
