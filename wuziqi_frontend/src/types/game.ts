@@ -65,4 +65,6 @@ export interface GameState {
   canVote: boolean;
   /** Set when a player disconnects mid-game; cleared on reconnect or abort. */
   disconnectedPlayer: { nickname: string; endTime: number; timeoutMs: number } | null;
+  /** uids of players who currently want a draw (和局). Both → game ends in a draw. */
+  drawVoters: string[];
 }

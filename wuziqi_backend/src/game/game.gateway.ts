@@ -286,6 +286,18 @@ export class GameGateway
     this.gameService.handleResign(socket.id);
   }
 
+  // ── vote_draw (和局) ───────────────────────────────────────────────────────────
+  // Per-player draw toggle; the game ends in a draw only once both players vote.
+
+  @SubscribeMessage('vote_draw')
+  handleVoteDraw(@ConnectedSocket() socket: Socket): void {
+    if (this.isRateLimited(socket.id)) {
+      this.rejectRateLimit(socket);
+      return;
+    }
+    this.gameService.handleDrawVote(socket.id);
+  }
+
   // ── react_emoji ───────────────────────────────────────────────────────────────
 
   @SubscribeMessage('react_emoji')

@@ -284,6 +284,7 @@ export class GameService {
     room.whiteUid = white.uid;
     room.winnerColor = null;
     room.winReason = null;
+    room.drawVotes.clear();
 
     // Unicast game_start per member so each learns its own colour.
     for (const m of room.members) {
@@ -362,6 +363,12 @@ export class GameService {
     room.moves.push({ color, x, y });
     this.clearTurnTimer(room);
 
+    // A new stone retracts any pending draw offer.
+    if (room.drawVotes.size > 0) {
+      room.drawVotes.clear();
+      this.broadcastDrawVotes(room);
+    }
+
     // Win check centred on the placed stone.
     const winningLine = checkWin(room.board, x, y);
     if (winningLine) {
@@ -419,6 +426,45 @@ export class GameService {
     this.handleWin(room, winner, 'resign', null);
   }
 
+  // ── Draw vote (和局) ──────────────────────────────────────────────────────────
+  // Both current players must toggle the draw vote on for the game to end in a
+  // draw. Mirrors the DDZ two-peasant surrender vote: a per-player toggle that
+  // only fires the outcome once the backend has collected it from both sides.
+
+  handleDrawVote(socketId: string): void {
+    const room = this.roomManager.getRoomBySocketId(socketId);
+    if (!room || room.state !== 'playing') return;
+    const member = room.members.find((m) => m.socketId === socketId);
+    if (!member || member.role !== 'player' || !member.color) return;
+
+    // Toggle this player's draw vote.
+    if (room.drawVotes.has(member.uid)) {
+      room.drawVotes.delete(member.uid);
+    } else {
+      room.drawVotes.add(member.uid);
+    }
+
+    // Agreed only when BOTH current players have voted.
+    if (
+      room.blackUid &&
+      room.whiteUid &&
+      room.drawVotes.has(room.blackUid) &&
+      room.drawVotes.has(room.whiteUid)
+    ) {
+      this.handleWin(room, 'draw', 'draw', null);
+      return;
+    }
+
+    this.broadcastDrawVotes(room);
+  }
+
+  /** Tell both clients which players currently want a draw. */
+  private broadcastDrawVotes(room: Room): void {
+    this.emitToRoom(room, 'draw_vote_update', {
+      drawVoters: [...room.drawVotes],
+    });
+  }
+
   // ── Turn timer (30s, auto-place random on timeout) ──────────────────────────
 
   private startTurnTimer(room: Room): void {
@@ -455,6 +501,7 @@ export class GameService {
     winningLine: { x: number; y: number }[] | null,
   ): void {
     this.clearTurnTimer(room);
+    room.drawVotes.clear();
     room.winnerColor = winnerColor;
     room.winReason = winReason;
 
@@ -525,6 +572,7 @@ export class GameService {
       room.whiteUid = null;
       room.winnerColor = null;
       room.winReason = null;
+      room.drawVotes.clear();
       this.emitToRoom(room, 'return_to_lobby', { phase: 'lobby' });
       this.emitMembersUpdate(room);
       this.broadcastRoomList();

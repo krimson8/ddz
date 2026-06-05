@@ -18,7 +18,7 @@ export default function Home() {
   const { user, loading: authLoading, signOut } = useAuth();
   const { me } = useProfile();
   const socket = useSocket();
-  const { gameState, createRoom, joinRoom, leaveRoom, votePlay, placeStone, resign, reactEmoji } = useGame();
+  const { gameState, createRoom, joinRoom, leaveRoom, votePlay, placeStone, resign, voteDraw, reactEmoji } = useGame();
   const { setVolume, playEmoji } = useSoundEffects(gameState, user?.uid ?? '');
   const { phase, roomCode, members } = gameState;
 
@@ -109,6 +109,7 @@ export default function Home() {
           myUid={user.uid}
           onPlaceStone={placeStone}
           onResign={resign}
+          onDrawVote={voteDraw}
           onEmojiReact={reactEmoji}
           onEmojiReceived={playEmoji}
           onLeave={leaveRoom}

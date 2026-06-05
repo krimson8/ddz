@@ -87,6 +87,7 @@ export class RoomManager {
       turnTimer: null,
       winnerColor: null,
       winReason: null,
+      drawVotes: new Set<string>(),
       winCounts: {},
       resultPending: false,
       reconnect: null,

@@ -54,6 +54,7 @@ const initialState: GameState = {
   readyCount: 0,
   canVote: false,
   disconnectedPlayer: null,
+  drawVoters: [],
 };
 
 // ── Actions ──────────────────────────────────────────────────────────────────
@@ -110,6 +111,7 @@ type Action =
   | { type: "GAME_ABORTED" }
   | { type: "PLAYER_DISCONNECTED"; nickname: string; endTime: number; timeoutMs: number }
   | { type: "PLAYER_RECONNECTED"; playerUids: string[] }
+  | { type: "DRAW_VOTE_UPDATE"; drawVoters: string[] }
   | { type: "LEFT_ROOM" };
 
 function reducer(state: GameState, action: Action): GameState {
@@ -164,6 +166,7 @@ function reducer(state: GameState, action: Action): GameState {
         winnerUid: null,
         winningLine: null,
         disconnectedPlayer: null,
+        drawVoters: [],
       };
     }
     case "MOVE_MADE": {
@@ -205,7 +208,10 @@ function reducer(state: GameState, action: Action): GameState {
         winCounts: action.winCounts ?? state.winCounts,
         currentPlayerEndTime: null,
         disconnectedPlayer: null,
+        drawVoters: [],
       };
+    case "DRAW_VOTE_UPDATE":
+      return { ...state, drawVoters: action.drawVoters };
     case "PLAYER_DISCONNECTED":
       return {
         ...state,
@@ -237,6 +243,7 @@ export interface UseGameReturn {
   votePlay: () => void;
   placeStone: (x: number, y: number) => void;
   resign: () => void;
+  voteDraw: () => void;
   reactEmoji: (emoji: string) => void;
 }
 
@@ -446,6 +453,14 @@ export function useGame(): UseGameReturn {
       },
     );
 
+    socket.on(
+      "draw_vote_update",
+      (data: { drawVoters?: string[]; seq?: number }) => {
+        if (!checkSeq(data.seq)) return;
+        dispatch({ type: "DRAW_VOTE_UPDATE", drawVoters: data.drawVoters ?? [] });
+      },
+    );
+
     socket.on("left_room", () => {
       roomCodeRef.current = null;
       seqRef.current = 0;
@@ -465,6 +480,7 @@ export function useGame(): UseGameReturn {
       socket.off("game_aborted");
       socket.off("player_disconnected");
       socket.off("player_reconnected");
+      socket.off("draw_vote_update");
       socket.off("left_room");
     };
   }, [socket]);
@@ -501,6 +517,10 @@ export function useGame(): UseGameReturn {
     socket.emit("resign");
   }, [socket]);
 
+  const voteDraw = useCallback(() => {
+    socket.emit("vote_draw");
+  }, [socket]);
+
   const reactEmoji = useCallback(
     (emoji: string) => {
       socket.emit("react_emoji", { emoji });
@@ -516,6 +536,7 @@ export function useGame(): UseGameReturn {
     votePlay,
     placeStone,
     resign,
+    voteDraw,
     reactEmoji,
   };
 }

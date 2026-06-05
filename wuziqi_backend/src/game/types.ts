@@ -70,6 +70,13 @@ export interface Room {
   winnerColor: WinnerColor | null;
   winReason: WinReason | null;
 
+  /**
+   * uids of players who currently want a draw (和局). A draw is agreed only when
+   * BOTH current players' uids are present. Cleared on any stone placement and
+   * when the round ends/resets. Mirrors the DDZ surrender-vote mechanic.
+   */
+  drawVotes: Set<string>;
+
   /** uid → total wins in this room session (for the in-game result overlay). */
   winCounts: Record<string, number>;
   resultPending: boolean; // true during the game_over → return_to_lobby delay

@@ -81,6 +81,7 @@ interface GameBoardProps {
   myUid: string;
   onPlaceStone: (x: number, y: number) => void;
   onResign: () => void;
+  onDrawVote: () => void;
   onEmojiReact: (emoji: string) => void;
   onEmojiReceived?: (emoji: string) => void;
   onLeave: () => void;
@@ -91,6 +92,7 @@ export function GameBoard({
   myUid,
   onPlaceStone,
   onResign,
+  onDrawVote,
   onEmojiReact,
   onEmojiReceived,
   onLeave,
@@ -112,9 +114,12 @@ export function GameBoard({
     winCounts,
     phase,
     disconnectedPlayer,
+    drawVoters,
   } = gameState;
 
   const isSpectator = myColor === null;
+  const iVotedDraw = drawVoters.includes(myUid);
+  const opponentVotedDraw = drawVoters.some((uid) => uid !== myUid);
   const isMyTurn = !isSpectator && myColor === currentColor && phase === 'gameplay';
 
   const blackMember = members.find((m) => m.uid === blackUid);
@@ -147,22 +152,14 @@ export function GameBoard({
 
   return (
     <div className="relative min-h-screen bg-green-900 flex flex-col items-center select-none overflow-hidden">
-      {/* Leave / resign top bar */}
-      <div className="w-full flex items-center justify-between px-3 py-2">
+      {/* Leave top bar */}
+      <div className="w-full flex items-center justify-start px-3 py-2">
         <button
           onClick={onLeave}
           className="text-white/70 hover:text-white text-sm bg-black/40 rounded-full px-3 py-1.5"
         >
           ← 離開房間
         </button>
-        {!isSpectator && phase === 'gameplay' && (
-          <button
-            onClick={onResign}
-            className="text-white/80 hover:text-white text-sm bg-red-600/70 hover:bg-red-500 rounded-full px-3 py-1.5 font-bold"
-          >
-            認輸
-          </button>
-        )}
       </div>
 
       {/* Player chips */}
@@ -220,6 +217,28 @@ export function GameBoard({
         </p>
       )}
 
+      {/* Resign / draw-vote buttons */}
+      {!isSpectator && phase === 'gameplay' && (
+        <div className="flex items-center gap-2 mt-2">
+          <button
+            onClick={onResign}
+            className="text-white/80 hover:text-white text-sm bg-red-600/70 hover:bg-red-500 rounded-full px-4 py-1.5 font-bold"
+          >
+            認輸
+          </button>
+          <button
+            onClick={onDrawVote}
+            className={`text-sm rounded-full px-4 py-1.5 font-bold transition-colors ${
+              iVotedDraw
+                ? 'bg-yellow-400 text-green-900 hover:bg-yellow-300'
+                : 'text-white/80 hover:text-white bg-white/15 hover:bg-white/25'
+            }`}
+          >
+            和局{iVotedDraw ? '（已提議）' : opponentVotedDraw ? '（對手提議中）' : ''}
+          </button>
+        </div>
+      )}
+
       {/* Emoji bar */}
       <div className="flex items-center gap-2 mt-2 mb-4">
         <select
@@ -245,17 +264,17 @@ export function GameBoard({
         </button>
       </div>
 
-      {/* Floating reactions */}
-      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 pointer-events-none z-40 flex flex-col items-center gap-2">
+      {/* Floating reactions — all overlap in the same spot, fading in and out */}
+      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 pointer-events-none z-40">
         <AnimatePresence>
           {floatReactions.map((r) => (
             <motion.div
               key={r.key}
-              initial={{ opacity: 0, y: 20, scale: 0.85 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -30 }}
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.85 }}
               transition={{ duration: 0.3 }}
-              className="whitespace-nowrap bg-black/80 border border-yellow-400/60 text-white text-2xl font-bold px-4 py-2 rounded-xl shadow-xl"
+              className="absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/80 border border-yellow-400/60 text-white text-2xl font-bold px-4 py-2 rounded-xl shadow-xl"
             >
               <span className="text-white/60 text-sm mr-2">{r.nickname}</span>
               {r.text}
