@@ -6,6 +6,7 @@ import type { RoomPhase } from "@/hooks/useRoomList";
 import type { UnifiedRoomEntry } from "@/hooks/useUnifiedRoomList";
 import { GAME_LIST, GAME_META } from "@/lib/games";
 import type { Game } from "@/lib/socket";
+import { InstallButton } from "@/components/InstallButton";
 
 interface LobbyRoomListProps {
   rooms: UnifiedRoomEntry[];
@@ -81,7 +82,10 @@ export function LobbyRoomList({
       <div className="max-w-2xl mx-auto flex flex-col gap-6">
         {/* Header */}
         <div className="flex justify-between items-center pt-2">
-          <h1 className="text-2xl font-bold">🎮 遊戲大廳</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold">🎮 遊戲大廳</h1>
+            <InstallButton />
+          </div>
           <div className="flex items-center gap-3 text-sm">
             <Link
               href="/profile"

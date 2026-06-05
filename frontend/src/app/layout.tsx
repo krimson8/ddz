@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -14,8 +14,24 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "鬥地主",
-  description: "線上三人鬥地主牌局",
+  title: "鬥地主 & 五子棋",
+  description: "線上鬥地主與五子棋牌局",
+  // Whole-app PWA manifest (covers the unified lobby + both games).
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "棋牌",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    // iOS Safari uses apple-touch-icon for the home-screen icon (it ignores
+    // the manifest icons). 180x180 is the recommended size.
+    apple: "/icons/apple-icon-180.png",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#1a4731",
 };
 
 export default function RootLayout({
