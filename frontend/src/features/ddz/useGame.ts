@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import { useSocket } from "./useSocket";
+import { useSocket } from "@/hooks/useSocket";
 import type {
   Card,
   ClientMember,
@@ -9,7 +9,7 @@ import type {
   GamePhase,
   HistoryEntry,
   Play,
-} from "@/types/game";
+} from "@/features/ddz/types";
 
 // ── Initial State ────────────────────────────────────────────────────────────
 
@@ -262,7 +262,7 @@ export interface UseGameReturn {
 }
 
 export function useGame(): UseGameReturn {
-  const socket = useSocket();
+  const socket = useSocket("ddz");
   const [gameState, dispatch] = useReducer(reducer, initialState);
 
   // Keep a ref so event handlers always see the latest state (avoids stale closures).

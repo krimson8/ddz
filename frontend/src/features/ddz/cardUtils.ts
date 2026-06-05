@@ -1,5 +1,5 @@
-import type { Card, Play } from "@/types/game";
-import { HandType } from "@/types/game";
+import type { Card, Play } from "@/features/ddz/types";
+import { HandType } from "@/features/ddz/types";
 
 function isConsecutive(sorted: number[]): boolean {
   for (let i = 1; i < sorted.length; i++) {

@@ -7,7 +7,7 @@ import {
   AuthError,
 } from 'firebase/auth';
 import { getFirebaseAuth } from './firebase';
-import { destroySocket } from './socket';
+import { destroyAllSockets } from './socket';
 
 /**
  * Sign in with email + password. If the account doesn't exist yet, automatically
@@ -70,6 +70,6 @@ export async function getCurrentIdToken(): Promise<string | null> {
 }
 
 export async function signOutUser(): Promise<void> {
-  destroySocket();
+  destroyAllSockets();
   await signOut(getFirebaseAuth());
 }

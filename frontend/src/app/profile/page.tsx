@@ -5,8 +5,12 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
+import { useWuziqiStats } from "@/features/wuziqi/useStats";
 import { resizeAvatarToDataUrl } from "@/lib/avatar";
-import { GameHistory } from "@/components/GameHistory";
+import { GameHistory } from "@/features/ddz/components/GameHistory";
+import { WuziqiHistory } from "@/features/wuziqi/components/WuziqiHistory";
+import { GAME_LIST } from "@/lib/games";
+import type { Game } from "@/lib/socket";
 
 function Avatar({
   nickname,
@@ -48,11 +52,66 @@ function StatCell({ label, value, accent }: { label: string; value: number | str
   );
 }
 
+function DdzStats() {
+  const { stats, error } = useProfile();
+  const winRatePct = stats && stats.games > 0 ? Math.round(stats.winRate * 100) : 0;
+  return (
+    <>
+      {error && <p className="text-red-300 text-sm">{error}</p>}
+      {stats ? (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <StatCell label="總勝" value={stats.totalWins} accent="text-yellow-400" />
+            <StatCell label="場次" value={stats.games} />
+            <StatCell label="地主勝" value={stats.landlordWins} accent="text-red-300" />
+            <StatCell label="農民勝" value={stats.farmerWins} accent="text-green-300" />
+          </div>
+          <div className="bg-white/5 rounded-lg p-3 flex justify-between items-center">
+            <span className="text-white/60 text-sm">勝率</span>
+            <span className="text-xl font-bold text-yellow-400">{winRatePct}%</span>
+          </div>
+        </>
+      ) : (
+        <p className="text-white/40 text-sm text-center py-4">尚無比賽記錄</p>
+      )}
+    </>
+  );
+}
+
+function WuziqiStatsView() {
+  const { stats, error } = useWuziqiStats();
+  const winRatePct = stats && stats.games > 0 ? Math.round(stats.winRate * 100) : 0;
+  return (
+    <>
+      {error && <p className="text-red-300 text-sm">{error}</p>}
+      {stats ? (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <StatCell label="總勝" value={stats.wins} accent="text-yellow-400" />
+            <StatCell label="場次" value={stats.games} />
+            <StatCell label="黑棋勝" value={stats.blackWins} accent="text-white" />
+            <StatCell label="白棋勝" value={stats.whiteWins} accent="text-white/70" />
+          </div>
+          <div className="bg-white/5 rounded-lg p-3 flex justify-between items-center">
+            <span className="text-white/60 text-sm">勝率</span>
+            <span className="text-xl font-bold text-yellow-400">{winRatePct}%</span>
+          </div>
+        </>
+      ) : (
+        <p className="text-white/40 text-sm text-center py-4">尚無比賽記錄</p>
+      )}
+    </>
+  );
+}
+
 export default function ProfilePage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const { me, stats, loading, error, updateNickname, updateAvatar } = useProfile();
+  // Identity (nickname/avatar) is shared across both backends via the common
+  // `users` table, so we read/write it through the DDZ-backed useProfile.
+  const { me, loading, updateNickname, updateAvatar } = useProfile();
 
+  const [tab, setTab] = useState<Game>("ddz");
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -136,8 +195,6 @@ export default function ProfilePage() {
     );
   }
 
-  const winRatePct = stats && stats.games > 0 ? Math.round(stats.winRate * 100) : 0;
-
   return (
     <div className="min-h-screen bg-green-900 text-white p-4">
       <div className="max-w-2xl mx-auto flex flex-col gap-6">
@@ -147,7 +204,7 @@ export default function ProfilePage() {
           </Link>
         </div>
 
-        {/* Header */}
+        {/* Header (shared identity) */}
         <div className="bg-white/10 backdrop-blur rounded-2xl p-6 flex flex-col items-center gap-4">
           <div className="relative">
             <Avatar nickname={me.nickname} avatarUrl={me.avatarUrl} />
@@ -229,32 +286,31 @@ export default function ProfilePage() {
           <p className="text-white/50 text-sm">{me.email}</p>
         </div>
 
-        {/* Stats */}
-        <div className="bg-white/10 backdrop-blur rounded-2xl p-6 flex flex-col gap-4">
-          <h2 className="text-sm uppercase tracking-wider text-white/60">戰績</h2>
-
-          {error && <p className="text-red-300 text-sm">{error}</p>}
-
-          {stats ? (
-            <>
-              <div className="grid grid-cols-2 gap-2">
-                <StatCell label="總勝" value={stats.totalWins} accent="text-yellow-400" />
-                <StatCell label="場次" value={stats.games} />
-                <StatCell label="地主勝" value={stats.landlordWins} accent="text-red-300" />
-                <StatCell label="農民勝" value={stats.farmerWins} accent="text-green-300" />
-              </div>
-              <div className="bg-white/5 rounded-lg p-3 flex justify-between items-center">
-                <span className="text-white/60 text-sm">勝率</span>
-                <span className="text-xl font-bold text-yellow-400">{winRatePct}%</span>
-              </div>
-            </>
-          ) : (
-            <p className="text-white/40 text-sm text-center py-4">尚無比賽記錄</p>
-          )}
+        {/* Game tabs */}
+        <div className="flex gap-2">
+          {GAME_LIST.map((meta) => (
+            <button
+              key={meta.id}
+              onClick={() => setTab(meta.id)}
+              className={`flex-1 rounded-xl py-3 font-bold text-center transition-colors ${
+                tab === meta.id
+                  ? "bg-yellow-400 text-green-900"
+                  : "bg-white/10 text-white/70 hover:bg-white/20"
+              }`}
+            >
+              {meta.icon} {meta.title}
+            </button>
+          ))}
         </div>
 
-        {/* Game history */}
-        <GameHistory />
+        {/* Stats (per selected game) */}
+        <div className="bg-white/10 backdrop-blur rounded-2xl p-6 flex flex-col gap-4">
+          <h2 className="text-sm uppercase tracking-wider text-white/60">戰績</h2>
+          {tab === "ddz" ? <DdzStats /> : <WuziqiStatsView />}
+        </div>
+
+        {/* Game history (per selected game) */}
+        {tab === "ddz" ? <GameHistory /> : <WuziqiHistory />}
       </div>
     </div>
   );

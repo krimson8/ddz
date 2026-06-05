@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Card } from './Card';
-import type { Card as CardType, Play } from '@/types/game';
-import { validatePlay } from '@/lib/cardUtils';
+import type { Card as CardType, Play } from '@/features/ddz/types';
+import { validatePlay } from '@/features/ddz/cardUtils';
 
 interface CardHandProps {
   cards: CardType[];

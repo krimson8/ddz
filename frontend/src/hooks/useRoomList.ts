@@ -12,9 +12,12 @@ export interface RoomListMember {
   isPlayer: boolean;
 }
 
+/** Phases across both games (DDZ adds "bidding"; wuziqi has only waiting/playing). */
+export type RoomPhase = "waiting" | "bidding" | "playing";
+
 export interface RoomListEntry {
   code: string;
-  phase: "waiting" | "bidding" | "playing";
+  phase: RoomPhase;
   members: RoomListMember[];
   memberCount: number;
   playerCount: number;

@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import type { Card as CardType } from '@/types/game';
+import type { Card as CardType } from '@/features/ddz/types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

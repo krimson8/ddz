@@ -34,9 +34,19 @@ const ALLOWED_REACTIONS = new Set([
   '給我搽皮鞋',
 ]);
 
+// Accept a comma-separated CORS_ORIGIN so the unified DDZ frontend (:3000 dev /
+// DDZ domain prod) can open a lobby socket here alongside the legacy wuziqi
+// frontend (:3001). Mirrors the list logic in main.ts.
+const WS_CORS_ORIGINS = (
+  process.env.CORS_ORIGIN ?? 'http://localhost:3000,http://localhost:3001'
+)
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 @WebSocketGateway({
   cors: {
-    origin: process.env.CORS_ORIGIN ?? 'http://localhost:3001',
+    origin: WS_CORS_ORIGINS,
     credentials: true,
   },
 })

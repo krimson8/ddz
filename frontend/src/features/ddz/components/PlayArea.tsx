@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { Card } from './Card';
-import type { Play } from '@/types/game';
+import type { Play } from '@/features/ddz/types';
 
 const HAND_TYPE_LABELS: Record<string, string> = {
   single: '單張',

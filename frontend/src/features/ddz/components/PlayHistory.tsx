@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { Card } from './Card';
-import type { ClientMember, HistoryEntry } from '@/types/game';
+import type { ClientMember, HistoryEntry } from '@/features/ddz/types';
 
 interface PlayHistoryProps {
   history: HistoryEntry[];

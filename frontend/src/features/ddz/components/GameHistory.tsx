@@ -8,7 +8,7 @@ import {
   useGameHistory,
   type HistoryPlayer,
   type HistoryRow,
-} from "@/hooks/useGameHistory";
+} from "@/features/ddz/useGameHistory";
 
 function MiniAvatar({ player, size = 28 }: { player: HistoryPlayer; size?: number }) {
   if (player.avatarUrl) {

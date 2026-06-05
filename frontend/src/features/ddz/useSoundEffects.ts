@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import type { GameState } from '@/types/game';
+import type { GameState } from '@/features/ddz/types';
 
 const SOUNDS: Record<string, string> = {
   cardPlay: '/sounds/card-play.wav',

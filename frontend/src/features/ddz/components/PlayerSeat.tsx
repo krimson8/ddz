@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { Card } from './Card';
-import type { Card as CardType } from '@/types/game';
+import type { Card as CardType } from '@/features/ddz/types';
 
 const AVATAR_COLORS = [
   'bg-blue-500',

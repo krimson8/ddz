@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { PlayerSeat } from './PlayerSeat';
 import { useSocket } from '@/hooks/useSocket';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
-import type { ClientMember } from '@/types/game';
+import type { ClientMember } from '@/features/ddz/types';
 
 const NEON_COLORS = [
   '#ff0080', '#ff4400', '#ffcc00', '#00ff88', '#00ccff', '#aa00ff', '#ff00cc',
@@ -79,7 +79,7 @@ export function RoomLobby({
   const [clicked, setClicked] = useState(false);
   const rainbowColor = useRainbowColor();
   const socket = useSocket();
-  const { entries: leaderboard, loading: leaderboardLoading } = useLeaderboard(socket);
+  const { entries: leaderboard, loading: leaderboardLoading } = useLeaderboard(socket, "ddz");
 
   function handleVote() {
     if (hasVoted) return;

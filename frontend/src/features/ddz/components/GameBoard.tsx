@@ -10,7 +10,7 @@ import { BiddingPanel } from './BiddingPanel';
 import { CoinflipPanel } from './CoinflipPanel';
 import { PlayHistory } from './PlayHistory';
 import { useSocket } from '@/hooks/useSocket';
-import type { Card, ClientMember, GameState } from '@/types/game';
+import type { Card, ClientMember, GameState } from '@/features/ddz/types';
 
 interface SeatReaction {
   key: number;
@@ -114,7 +114,7 @@ export function GameBoard({
   const latestPlayerOrder = useRef(playerOrder);
   latestPlayerOrder.current = playerOrder;
 
-  const socket = useSocket();
+  const socket = useSocket("ddz");
 
   const latestOnEmojiReceived = useRef(onEmojiReceived);
   latestOnEmojiReceived.current = onEmojiReceived;

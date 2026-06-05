@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import type { RoomListEntry } from "@/hooks/useRoomList";
+import type { RoomPhase } from "@/hooks/useRoomList";
+import type { UnifiedRoomEntry } from "@/hooks/useUnifiedRoomList";
+import { GAME_LIST, GAME_META } from "@/lib/games";
+import type { Game } from "@/lib/socket";
 
 interface LobbyRoomListProps {
-  rooms: RoomListEntry[];
-  onCreateRoom: () => void;
-  onJoinRoom: (code: string) => void;
+  rooms: UnifiedRoomEntry[];
+  onCreateRoom: (game: Game) => void;
+  onJoinRoom: (game: Game, code: string) => void;
   myNickname: string;
-  /** If user is already in some room, the create button is disabled. */
+  /** If user is already in some room, the create buttons are disabled. */
   alreadyInRoom: boolean;
   onSignOut: () => void;
 }
@@ -45,7 +48,7 @@ function Avatar({
   );
 }
 
-function PhaseBadge({ phase }: { phase: RoomListEntry["phase"] }) {
+function PhaseBadge({ phase }: { phase: RoomPhase }) {
   const label = phase === "waiting" ? "等待中" : phase === "bidding" ? "叫地主" : "進行中";
   const cls =
     phase === "waiting"
@@ -54,6 +57,15 @@ function PhaseBadge({ phase }: { phase: RoomListEntry["phase"] }) {
         ? "bg-yellow-500/30 text-yellow-200"
         : "bg-red-500/30 text-red-200";
   return <span className={`text-xs px-2 py-0.5 rounded-full ${cls}`}>{label}</span>;
+}
+
+function GameBadge({ game }: { game: Game }) {
+  const meta = GAME_META[game];
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${meta.badgeClass}`}>
+      {meta.icon} {meta.title}
+    </span>
+  );
 }
 
 export function LobbyRoomList({
@@ -69,7 +81,7 @@ export function LobbyRoomList({
       <div className="max-w-2xl mx-auto flex flex-col gap-6">
         {/* Header */}
         <div className="flex justify-between items-center pt-2">
-          <h1 className="text-2xl font-bold">🀄 鬥地主大廳</h1>
+          <h1 className="text-2xl font-bold">🎮 遊戲大廳</h1>
           <div className="flex items-center gap-3 text-sm">
             <Link
               href="/profile"
@@ -86,19 +98,25 @@ export function LobbyRoomList({
           </div>
         </div>
 
-        {/* Create button */}
+        {/* Create buttons — one per game, title centered */}
         <div className="flex flex-col gap-2">
-          <button
-            disabled={alreadyInRoom}
-            onClick={onCreateRoom}
-            className="rounded-xl py-3 px-6 bg-yellow-400 hover:bg-yellow-300 text-green-900 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            ＋ 建立房間
-          </button>
+          <h2 className="text-sm uppercase tracking-wider text-white/60">
+            建立房間
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {GAME_LIST.map((meta) => (
+              <button
+                key={meta.id}
+                disabled={alreadyInRoom}
+                onClick={() => onCreateRoom(meta.id)}
+                className="rounded-xl py-5 px-6 bg-yellow-400 hover:bg-yellow-300 text-green-900 font-black text-lg text-center disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {meta.icon} {meta.title}
+              </button>
+            ))}
+          </div>
           {alreadyInRoom && (
-            <p className="text-xs text-white/60 text-center">
-              你已在房間中
-            </p>
+            <p className="text-xs text-white/60 text-center">你已在房間中</p>
           )}
         </div>
 
@@ -117,7 +135,7 @@ export function LobbyRoomList({
           <AnimatePresence initial={false}>
             {rooms.map((room) => (
               <motion.div
-                key={room.code}
+                key={`${room.game}:${room.code}`}
                 layout
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -125,14 +143,15 @@ export function LobbyRoomList({
                 className="bg-white/10 backdrop-blur rounded-xl p-4 flex flex-col gap-3"
               >
                 <div className="flex justify-between items-start gap-3">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <GameBadge game={room.game} />
                     <span className="text-lg font-bold tracking-widest">
                       {room.code}
                     </span>
                     <PhaseBadge phase={room.phase} />
                   </div>
                   <button
-                    onClick={() => onJoinRoom(room.code)}
+                    onClick={() => onJoinRoom(room.game, room.code)}
                     disabled={alreadyInRoom && room.myMembership === "none"}
                     className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${
                       room.myMembership !== "none"
