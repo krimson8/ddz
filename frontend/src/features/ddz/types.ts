@@ -39,7 +39,15 @@ export interface ClientMember {
 
 export type RoomState = "waiting" | "playing";
 
-export type GamePhase = "lobby" | "dealing" | "bidding" | "coinflip" | "gameplay" | "result";
+export type GamePhase = "lobby" | "dealing" | "bidding" | "roledraw" | "gameplay" | "result";
+
+/** One of the three face-down 抽地主 cards. `role` is null while still face-down. */
+export interface RoleSlot {
+  /** Player index (0-2) who claimed this slot, or null if still face-down. */
+  pickedBy: number | null;
+  /** Revealed role once taken; null while face-down. */
+  role: "landlord" | "peasant" | null;
+}
 
 export interface HistoryEntry {
   playerIndex: number;
@@ -71,10 +79,17 @@ export interface GameState {
   bidSubmitted: boolean;
   /** Milliseconds for the current bid window (from server bid_open) */
   bidTimeoutMs: number;
-  /** How many players have cast their 黑白 (white/black) tiebreak vote */
-  coinVotedCount: number;
-  /** Whether the local player has already cast their 黑白 vote */
-  coinSubmitted: boolean;
+  /** The three 抽地主 (role-card draw) slots, used only when nobody volunteered. */
+  roleSlots: RoleSlot[];
+  /** Whether the local player has already claimed a role card this draw. */
+  roleSubmitted: boolean;
+  /**
+   * True once the result is locked and the game is about to start. Picks no
+   * longer count, but the leftover card may still be flipped for fun.
+   */
+  roleLocked: boolean;
+  /** Full role deck, revealed on lock so the leftover card can be flipped for fun. */
+  roleDeck: ("landlord" | "peasant")[] | null;
   lastPlay: Play | null;
   /** Socket ID of the player who made the last play */
   lastPlayedBy: string | null;

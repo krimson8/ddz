@@ -81,12 +81,21 @@ export interface Room {
   bidTimer: NodeJS.Timeout | null; // 8s simultaneous bid window
   bidVotedIndices: number[]; // player indices who have already cast their bid
   /**
-   * 黑白 (white/black) tiebreak vote, used only when nobody volunteered for
-   * landlord. Index 0-2 → the colour that player chose, or null if not yet cast.
+   * 抽地主 (role-card draw), used only when nobody volunteered for landlord.
+   * Three face-down cards — one 'landlord', two 'peasant' — are shuffled into
+   * `roleDeck`. `rolePicks[slot]` is the player index (0-2) who claimed that
+   * slot, or null while it is still face-down. A genuine random draw replaces
+   * the old 黑白 vote (which could loop forever when everyone picked the same).
    */
-  coinVotes: (('white' | 'black') | null)[];
-  coinVotedIndices: number[]; // player indices who have cast their 黑白 vote
-  coinflipActive: boolean; // true while a 黑白 vote round is open (drives reconnect phase)
+  roleDeck: ('landlord' | 'peasant')[]; // 3 shuffled roles, indexed by slot
+  rolePicks: (number | null)[]; // slot index → player index who took it, or null
+  roleDrawActive: boolean; // true from draw open until the game is dealt (drives reconnect phase)
+  /**
+   * True once the result is known (2 cards drawn → landlord determined) and the
+   * 3s start delay is running. Picks no longer count, but the draw screen is
+   * still shown and the leftover card may be flipped for fun.
+   */
+  roleDrawLocked: boolean;
   turnTimer: NodeJS.Timeout | null; // per-turn 30s auto-pass timer
   /** uid → total wins in this room session (kept for in-game GameResult overlay) */
   winCounts: Record<string, number>;

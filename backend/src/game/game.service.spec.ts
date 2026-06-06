@@ -195,66 +195,111 @@ describe('GameService — start-flow idempotency', () => {
     expect(totalCards(room)).toBe(54);
   });
 
-  // ── 黑白 tiebreak ──────────────────────────────────────────────────────────────
+  // ── 抽地主 (role-card draw) ──────────────────────────────────────────────────
 
-  function startNoVolunteerCoinflip(): Room {
+  function startNoVolunteerRoleDraw(): Room {
     const room = seedRoom(3);
     svc.handleVotePlay('s-a');
     svc.handleVotePlay('s-b');
     svc.handleVotePlay('s-c');
     advanceToBidding(room);
-    // Everyone passes → nobody volunteers → 黑白 vote opens instead of random.
+    // Everyone passes → nobody volunteers → 抽地主 opens instead of random.
     svc.handleBid('s-a', 0);
     svc.handleBid('s-b', 0);
     svc.handleBid('s-c', 0);
     return room;
   }
 
-  it('opens the 黑白 vote (no landlord yet) when nobody volunteers', () => {
-    const room = startNoVolunteerCoinflip();
+  it('opens the 抽地主 draw (no landlord yet) when nobody volunteers', () => {
+    const room = startNoVolunteerRoleDraw();
     expect(room.landlordIndex).toBe(-1);
-    expect(room.coinflipActive).toBe(true);
-    expect(emitted.some((e) => e.event === 'coinflip_open')).toBe(true);
+    expect(room.roleDrawActive).toBe(true);
+    expect(room.roleDeck).toHaveLength(3);
+    expect(room.roleDeck.filter((r) => r === 'landlord')).toHaveLength(1);
+    expect(emitted.some((e) => e.event === 'role_draw_open')).toBe(true);
   });
 
-  it('makes the lone (1-vs-2) voter the landlord', () => {
-    const room = startNoVolunteerCoinflip();
-    // a = white, b,c = black → a is the minority → a (index 0) is landlord.
-    svc.handleCoinVote('s-a', 'white');
-    svc.handleCoinVote('s-b', 'black');
-    svc.handleCoinVote('s-c', 'black');
+  it('locks instantly when 地主 is the very first pick and deals after a 3s reveal', () => {
+    const room = startNoVolunteerRoleDraw();
+    const landlordSlot = room.roleDeck.findIndex((r) => r === 'landlord');
+
+    // a draws 地主 as the FIRST pick → outcome known, locks immediately even
+    // though only one card is down. The other two are 農民 anyway.
+    svc.handleRolePick('s-a', landlordSlot);
+
+    expect(room.roleDrawLocked).toBe(true);
+    expect(room.roleDrawActive).toBe(true); // screen stays up until dealt
+    expect(room.rolePicks.filter((p) => p !== null)).toHaveLength(1); // only 1 drawn
+    expect(room.landlordIndex).toBe(-1);
+    expect(emitted.some((e) => e.event === 'role_draw_locked')).toBe(true);
+
+    jest.advanceTimersByTime(3_000);
 
     expect(room.landlordIndex).toBe(0);
-    expect(room.coinflipActive).toBe(false);
     const landlord = room.members.find((m) => m.uid === room.playerUids[0])!;
     expect(landlord.hand).toHaveLength(20); // 17 + 3 landlord cards
     expect(totalCards(room)).toBe(54);
   });
 
-  it('restarts the 黑白 vote when all three pick the same colour', () => {
-    const room = startNoVolunteerCoinflip();
-    svc.handleCoinVote('s-a', 'white');
-    svc.handleCoinVote('s-b', 'white');
-    svc.handleCoinVote('s-c', 'white');
+  it('determines the landlord by elimination when both 農民 are drawn first', () => {
+    const room = startNoVolunteerRoleDraw();
+    const landlordSlot = room.roleDeck.findIndex((r) => r === 'landlord');
+    const peasantSlots = [0, 1, 2].filter((s) => s !== landlordSlot);
 
-    // No minority → still no landlord, vote re-opened, tallies cleared.
-    expect(room.landlordIndex).toBe(-1);
-    expect(room.coinflipActive).toBe(true);
-    expect(room.coinVotedIndices).toEqual([]);
+    // a & b take both 農民 → the leftover 地主 slot belongs to c (index 2).
+    svc.handleRolePick('s-a', peasantSlots[0]);
+    svc.handleRolePick('s-b', peasantSlots[1]);
 
-    // A fresh decisive round resolves it.
-    svc.handleCoinVote('s-a', 'black');
-    svc.handleCoinVote('s-b', 'white');
-    svc.handleCoinVote('s-c', 'white');
-    expect(room.landlordIndex).toBe(0);
+    expect(room.roleDrawLocked).toBe(true);
+    expect(room.rolePicks[landlordSlot]).toBeNull(); // 地主 card never tapped
+
+    jest.advanceTimersByTime(3_000);
+
+    expect(room.landlordIndex).toBe(2); // c, by elimination
   });
 
-  it('ignores a duplicate 黑白 vote (locked once cast)', () => {
-    const room = startNoVolunteerCoinflip();
-    svc.handleCoinVote('s-a', 'white');
-    svc.handleCoinVote('s-a', 'black'); // duplicate — must be ignored
-    expect(room.coinVotedIndices).toEqual([0]);
-    expect(room.coinVotes[0]).toBe('white');
-    expect(room.landlordIndex).toBe(-1); // still waiting on b & c
+  it('ignores picks after the draw is locked (leftover flip is for-fun only)', () => {
+    const room = startNoVolunteerRoleDraw();
+    const landlordSlot = room.roleDeck.findIndex((r) => r === 'landlord');
+    const peasantSlots = [0, 1, 2].filter((s) => s !== landlordSlot);
+
+    svc.handleRolePick('s-a', peasantSlots[0]);
+    svc.handleRolePick('s-b', peasantSlots[1]); // locks here
+    svc.handleRolePick('s-c', landlordSlot); // late tap on leftover → ignored
+
+    expect(room.rolePicks[landlordSlot]).toBeNull();
+
+    jest.advanceTimersByTime(3_000);
+    expect(room.landlordIndex).toBe(2); // still c by elimination
+  });
+
+  it('reveals each picked card to the room as it is taken', () => {
+    const room = startNoVolunteerRoleDraw();
+    svc.handleRolePick('s-a', 0);
+    const ev = emitted.find((e) => e.event === 'role_picked');
+    expect(ev).toBeTruthy();
+    expect(ev!.payload).toMatchObject({
+      slotIndex: 0,
+      playerIndex: 0,
+      role: room.roleDeck[0],
+      pickedCount: 1,
+    });
+  });
+
+  it('rejects a pick of an already-taken slot', () => {
+    const room = startNoVolunteerRoleDraw();
+    svc.handleRolePick('s-a', 0);
+    svc.handleRolePick('s-b', 0); // slot 0 is taken → ignored
+    expect(room.rolePicks[0]).toBe(0); // still a's
+    expect(room.rolePicks[1]).toBeNull();
+    expect(room.rolePicks[2]).toBeNull();
+  });
+
+  it('prevents a player from claiming a second card', () => {
+    const room = startNoVolunteerRoleDraw();
+    svc.handleRolePick('s-a', 0);
+    svc.handleRolePick('s-a', 1); // a already picked → ignored
+    expect(room.rolePicks[1]).toBeNull();
+    expect(room.rolePicks.filter((p) => p === 0)).toHaveLength(1);
   });
 });

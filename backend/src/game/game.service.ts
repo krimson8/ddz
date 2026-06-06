@@ -707,9 +707,10 @@ export class GameService {
     room.bidPassCount = 0;
     room.bidYesVoters = [];
     room.bidVotedIndices = [];
-    room.coinVotes = [null, null, null];
-    room.coinVotedIndices = [];
-    room.coinflipActive = false;
+    room.roleDeck = [];
+    room.rolePicks = [null, null, null];
+    room.roleDrawActive = false;
+    room.roleDrawLocked = false;
     room.landlordIndex = -1;
     room.landlordCards = [];
     room.lastPlay = null;
@@ -771,6 +772,9 @@ export class GameService {
   private determineLandlord(room: Room): void {
     const landlordIndex = room.currentBidder;
     room.landlordIndex = landlordIndex;
+    // The role draw (if any) is fully over once the game is dealt.
+    room.roleDrawActive = false;
+    room.roleDrawLocked = false;
 
     const landlordMember = room.members.find(
       (m) => m.uid === room.playerUids[landlordIndex],
@@ -809,10 +813,10 @@ export class GameService {
     // set, the round has moved on — bail.
     if (room.state !== 'playing' || room.landlordIndex !== -1) return;
     if (room.bidTimer) { clearTimeout(room.bidTimer); room.bidTimer = null; }
-    // Nobody volunteered → fall back to the 黑白 (white/black) tiebreak vote
-    // instead of picking a landlord at random.
+    // Nobody volunteered → fall back to the 抽地主 (role-card draw) instead of
+    // picking a landlord at random.
     if (room.bidYesVoters.length === 0) {
-      this.startCoinflip(room);
+      this.startRoleDraw(room);
       return;
     }
     const chosen = room.bidYesVoters[Math.floor(Math.random() * room.bidYesVoters.length)];
@@ -820,85 +824,123 @@ export class GameService {
     this.determineLandlord(room);
   }
 
-  // ── 黑白 tiebreak ──────────────────────────────────────────────────────────────
+  // ── 抽地主 (role-card draw) ──────────────────────────────────────────────────
 
   /**
-   * Open a 黑白 (white/black) vote: each of the 3 players picks a colour. There
-   * is no countdown — the round only resolves once exactly 3 votes are in.
-   * Any seated player who is disconnected is auto-assigned a random colour so a
-   * dropped player can never stall the vote forever.
+   * Open a 抽地主 draw: three face-down cards (one 地主 + two 農民) are shuffled.
+   * Each seated player taps one card to claim it; the slot flips face-up for
+   * everyone. There is no countdown — the round resolves once all 3 slots are
+   * taken, and whoever drew 地主 becomes the landlord. Any seated player who is
+   * disconnected is auto-assigned a random free slot so a dropped socket can
+   * never stall the draw.
    */
-  private startCoinflip(room: Room): void {
+  private startRoleDraw(room: Room): void {
     if (room.state !== 'playing' || room.landlordIndex !== -1) return;
 
-    room.coinVotes = [null, null, null];
-    room.coinVotedIndices = [];
-    room.coinflipActive = true;
+    room.roleDeck = this.shuffleRoles();
+    room.rolePicks = [null, null, null];
+    room.roleDrawActive = true;
+    room.roleDrawLocked = false;
 
-    this.emitToRoom(room, 'coinflip_open', { phase: 'coinflip' });
+    this.emitToRoom(room, 'role_draw_open', { phase: 'roledraw' });
 
     for (let i = 0; i < 3; i++) {
       const m = room.members.find((mem) => mem.uid === room.playerUids[i]);
       if (m && (m.disconnected || !m.socketId)) {
-        // Auto-vote on behalf of a disconnected player.
-        this.recordCoinVote(room, i, Math.random() < 0.5 ? 'white' : 'black');
+        // Auto-pick a free slot on behalf of a disconnected player.
+        const free = room.rolePicks.findIndex((p) => p === null);
+        if (free !== -1) this.recordRolePick(room, i, free);
       }
     }
   }
 
-  handleCoinVote(socketId: string, color: 'white' | 'black'): void {
+  private shuffleRoles(): ('landlord' | 'peasant')[] {
+    const roles: ('landlord' | 'peasant')[] = ['landlord', 'peasant', 'peasant'];
+    for (let i = roles.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [roles[i], roles[j]] = [roles[j], roles[i]];
+    }
+    return roles;
+  }
+
+  handleRolePick(socketId: string, slotIndex: number): void {
     const room = this.roomManager.getRoomBySocketId(socketId);
     if (!room || room.state !== 'playing' || room.landlordIndex !== -1) {
-      this.server?.to(socketId).emit('room_error', { message: '現在不是投票階段' });
+      this.server?.to(socketId).emit('room_error', { message: '現在不是抽地主階段' });
       return;
     }
+    // The draw is locked once the result is known. Late taps (flipping the
+    // leftover card "for fun") are silently ignored, not errored.
+    if (!room.roleDrawActive || room.roleDrawLocked) return;
     const member = room.members.find((m) => m.socketId === socketId);
     if (!member) return;
     const playerIndex = room.playerUids.indexOf(member.uid);
     if (playerIndex === -1) return; // spectator
 
-    this.recordCoinVote(room, playerIndex, color);
+    this.recordRolePick(room, playerIndex, slotIndex);
   }
 
-  private recordCoinVote(
-    room: Room,
-    playerIndex: number,
-    color: 'white' | 'black',
-  ): void {
-    // A vote is locked once cast — ignore duplicates / changes.
-    if (room.coinVotedIndices.includes(playerIndex)) return;
-    room.coinVotedIndices.push(playerIndex);
-    room.coinVotes[playerIndex] = color;
+  private recordRolePick(room: Room, playerIndex: number, slotIndex: number): void {
+    if (slotIndex < 0 || slotIndex > 2) return;
+    // The slot must be free, and a player may only claim one card.
+    if (room.rolePicks[slotIndex] !== null) return;
+    if (room.rolePicks.includes(playerIndex)) return;
 
-    this.emitToRoom(room, 'coin_made', {
+    room.rolePicks[slotIndex] = playerIndex;
+    const role = room.roleDeck[slotIndex];
+
+    // Reveal the flipped card (and who took it) to everyone immediately.
+    this.emitToRoom(room, 'role_picked', {
+      slotIndex,
       playerIndex,
-      votedCount: room.coinVotedIndices.length,
+      role,
+      pickedCount: room.rolePicks.filter((p) => p !== null).length,
     });
 
-    if (room.coinVotedIndices.length >= 3) {
-      this.resolveCoinflip(room);
+    // Resolve as soon as the outcome is known:
+    //  • the 地主 card is drawn → that player is the landlord, even on the very
+    //    first pick (the other two are both 農民 anyway), or
+    //  • both 農民 are drawn → the leftover 地主 belongs to the last player by
+    //    elimination (i.e. 2 cards down).
+    // The remaining card(s) stay flippable for fun on the client only.
+    const pickedCount = room.rolePicks.filter((p) => p !== null).length;
+    if (role === 'landlord' || pickedCount >= 2) {
+      this.resolveRoleDraw(room);
     }
   }
 
-  private resolveCoinflip(room: Room): void {
-    if (room.state !== 'playing' || room.landlordIndex !== -1) return;
+  private resolveRoleDraw(room: Room): void {
+    if (room.state !== 'playing' || room.landlordIndex !== -1 || room.roleDrawLocked) return;
 
-    const votes = room.coinVotes;
-    const whites = votes.filter((c) => c === 'white').length;
-    const blacks = votes.filter((c) => c === 'black').length;
+    // Lock the draw so no further picks count. Players may still flip the
+    // leftover card for fun, but it no longer changes anything. The draw stays
+    // "active" (screen shown) until the game is actually dealt.
+    room.roleDrawLocked = true;
 
-    // All three matched → no minority, restart the vote (loop until decided).
-    if (whites === 0 || blacks === 0) {
-      this.startCoinflip(room);
-      return;
+    const landlordSlot = room.roleDeck.findIndex((r) => r === 'landlord');
+    // The landlord is whoever took the 地主 slot; if it's the still-unpicked
+    // leftover, it belongs to the one player who hasn't drawn yet.
+    let chosen = room.rolePicks[landlordSlot];
+    if (chosen === null) {
+      chosen = [0, 1, 2].find((pi) => !room.rolePicks.includes(pi)) ?? null;
     }
-
-    // The lone colour (1 vs 2) decides the landlord.
-    const minority: 'white' | 'black' = whites === 1 ? 'white' : 'black';
-    const chosen = votes.findIndex((c) => c === minority);
-    room.coinflipActive = false;
+    if (chosen === null) return; // defensive
     room.currentBidder = chosen;
-    this.determineLandlord(room);
+
+    // Tell the room the result is locked and the game starts shortly. The full
+    // deck is included so the leftover face-down card can still be revealed
+    // (for fun) on the client. No countdown is shown — clients just wait for
+    // the subsequent landlord_decided event.
+    this.emitToRoom(room, 'role_draw_locked', {
+      landlordIndex: chosen,
+      roleDeck: room.roleDeck,
+    });
+
+    // Brief pause on the revealed cards before dealing starts.
+    setTimeout(() => {
+      if (room.state !== 'playing' || room.landlordIndex !== -1) return;
+      this.determineLandlord(room);
+    }, 3_000);
   }
 
   private startTurnTimer(room: Room, playerIndex: number): void {
@@ -1081,8 +1123,8 @@ export class GameService {
     const phase = room.state === 'playing'
       ? (room.landlordIndex >= 0
           ? 'gameplay'
-          : room.coinflipActive
-            ? 'coinflip'
+          : room.roleDrawActive
+            ? 'roledraw'
             : 'bidding')
       : 'lobby';
 
@@ -1107,12 +1149,27 @@ export class GameService {
         reconnect: true,
       });
       const pi = room.playerUids.indexOf(member.uid);
-      if (room.landlordIndex === -1 && room.coinflipActive) {
-        this.emitToSocket(member.socketId, 'coinflip_open', {
-          phase: 'coinflip',
-          votedCount: room.coinVotedIndices.length,
-          submitted: room.coinVotedIndices.includes(pi),
+      if (room.landlordIndex === -1 && room.roleDrawActive) {
+        // Replay the current draw: which slots are revealed (and as what), plus
+        // whether this player has already claimed a card.
+        const revealed = room.rolePicks.map((p, slot) =>
+          p === null
+            ? null
+            : { slotIndex: slot, playerIndex: p, role: room.roleDeck[slot] },
+        );
+        this.emitToSocket(member.socketId, 'role_draw_open', {
+          phase: 'roledraw',
+          revealed,
+          submitted: room.rolePicks.includes(pi),
         });
+        // If the result is already locked (3s start delay running), replay the
+        // lock so the reconnecting client shows "starting" and the full deck.
+        if (room.roleDrawLocked) {
+          this.emitToSocket(member.socketId, 'role_draw_locked', {
+            landlordIndex: room.currentBidder,
+            roleDeck: room.roleDeck,
+          });
+        }
       } else if (room.landlordIndex === -1) {
         this.emitToSocket(member.socketId, 'bid_turn', {
           playerIndex: room.currentTurn,

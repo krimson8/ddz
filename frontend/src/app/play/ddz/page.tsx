@@ -24,7 +24,8 @@ function DdzPlayInner() {
     leaveRoom,
     votePlay,
     bid,
-    coinVote,
+    pickRole,
+    revealRoleForFun,
     playCards,
     pass,
     surrender,
@@ -129,7 +130,8 @@ function DdzPlayInner() {
           onPlayCards={playCards}
           onPass={pass}
           onBid={bid}
-          onCoinVote={coinVote}
+          onPickRole={pickRole}
+          onRevealRoleForFun={revealRoleForFun}
           onSurrender={surrender}
           onEmojiReact={reactEmoji}
           onEmojiReceived={playEmoji}

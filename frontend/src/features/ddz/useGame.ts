@@ -9,6 +9,7 @@ import type {
   GamePhase,
   HistoryEntry,
   Play,
+  RoleSlot,
 } from "@/features/ddz/types";
 
 // ── Initial State ────────────────────────────────────────────────────────────
@@ -28,8 +29,14 @@ const initialState: GameState = {
   bidVotedCount: 0,
   bidTimeoutMs: 8000,
   bidSubmitted: false,
-  coinVotedCount: 0,
-  coinSubmitted: false,
+  roleSlots: [
+    { pickedBy: null, role: null },
+    { pickedBy: null, role: null },
+    { pickedBy: null, role: null },
+  ],
+  roleSubmitted: false,
+  roleLocked: false,
+  roleDeck: null,
   lastPlay: null,
   winner: null,
   winnerIds: [],
@@ -67,9 +74,15 @@ type Action =
   | { type: "BID_STATUS"; submitted: boolean }
   | { type: "BID_TURN"; playerIndex: number; currentBid: number; submitted?: boolean }
   | { type: "BID_MADE"; value: number; votedCount: number }
-  | { type: "COINFLIP_OPEN"; votedCount?: number; submitted?: boolean }
-  | { type: "COIN_MADE"; votedCount: number }
-  | { type: "COIN_SUBMIT" }
+  | {
+      type: "ROLE_DRAW_OPEN";
+      revealed?: ({ slotIndex: number; playerIndex: number; role: "landlord" | "peasant" } | null)[];
+      submitted?: boolean;
+    }
+  | { type: "ROLE_PICKED"; slotIndex: number; playerIndex: number; role: "landlord" | "peasant" }
+  | { type: "ROLE_SUBMIT" }
+  | { type: "ROLE_DRAW_LOCKED"; roleDeck: ("landlord" | "peasant")[] }
+  | { type: "ROLE_REVEAL_FOR_FUN"; slotIndex: number }
   | {
       type: "LANDLORD_DECIDED";
       landlordIndex: number;
@@ -174,17 +187,49 @@ function reducer(state: GameState, action: Action): GameState {
         currentBid: action.value > 0 ? action.value : state.currentBid,
         bidVotedCount: action.votedCount,
       };
-    case "COINFLIP_OPEN":
+    case "ROLE_DRAW_OPEN": {
+      // Rebuild the three slots, applying any already-revealed picks (reconnect).
+      const slots: RoleSlot[] = [
+        { pickedBy: null, role: null },
+        { pickedBy: null, role: null },
+        { pickedBy: null, role: null },
+      ];
+      for (const r of action.revealed ?? []) {
+        if (r) slots[r.slotIndex] = { pickedBy: r.playerIndex, role: r.role };
+      }
       return {
         ...state,
-        phase: "coinflip",
-        coinVotedCount: action.votedCount ?? 0,
-        coinSubmitted: action.submitted ?? false,
+        phase: "roledraw",
+        roleSlots: slots,
+        roleSubmitted: action.submitted ?? false,
+        roleLocked: false,
+        roleDeck: null,
       };
-    case "COIN_MADE":
-      return { ...state, coinVotedCount: action.votedCount };
-    case "COIN_SUBMIT":
-      return { ...state, coinSubmitted: true };
+    }
+    case "ROLE_PICKED": {
+      const slots = state.roleSlots.map((s, i) =>
+        i === action.slotIndex
+          ? { pickedBy: action.playerIndex, role: action.role }
+          : s,
+      );
+      return { ...state, roleSlots: slots };
+    }
+    case "ROLE_SUBMIT":
+      return { ...state, roleSubmitted: true };
+    case "ROLE_DRAW_LOCKED":
+      return { ...state, roleLocked: true, roleDeck: action.roleDeck };
+    case "ROLE_REVEAL_FOR_FUN": {
+      // Locally flip the leftover card for fun (no backend effect). Uses the
+      // full deck sent on lock; ownership stays null since nobody claimed it.
+      if (!state.roleDeck) return state;
+      if (state.roleSlots[action.slotIndex].role !== null) return state;
+      const slots = state.roleSlots.map((s, i) =>
+        i === action.slotIndex
+          ? { pickedBy: null, role: state.roleDeck![action.slotIndex] }
+          : s,
+      );
+      return { ...state, roleSlots: slots };
+    }
     case "LANDLORD_DECIDED":
       return {
         ...state,
@@ -254,7 +299,8 @@ export interface UseGameReturn {
   leaveRoom: () => void;
   votePlay: () => void;
   bid: (amount: 0 | 1) => void;
-  coinVote: (color: "white" | "black") => void;
+  pickRole: (slotIndex: number) => void;
+  revealRoleForFun: (slotIndex: number) => void;
   playCards: (cards: Card[]) => void;
   pass: () => void;
   surrender: () => void;
@@ -383,15 +429,40 @@ export function useGame(): UseGameReturn {
       dispatch({ type: "BID_MADE", value: data.value, votedCount: data.votedCount ?? 0 });
     });
 
-    socket.on("coinflip_open", (data: { votedCount?: number; submitted?: boolean; seq?: number } = {}) => {
-      if (!checkSeq(data.seq)) return;
-      dispatch({ type: "COINFLIP_OPEN", votedCount: data.votedCount, submitted: data.submitted });
-    });
+    socket.on(
+      "role_draw_open",
+      (
+        data: {
+          revealed?: ({ slotIndex: number; playerIndex: number; role: "landlord" | "peasant" } | null)[];
+          submitted?: boolean;
+          seq?: number;
+        } = {},
+      ) => {
+        if (!checkSeq(data.seq)) return;
+        dispatch({ type: "ROLE_DRAW_OPEN", revealed: data.revealed, submitted: data.submitted });
+      },
+    );
 
-    socket.on("coin_made", (data: { playerIndex: number; votedCount?: number; seq?: number }) => {
-      if (!checkSeq(data.seq)) return;
-      dispatch({ type: "COIN_MADE", votedCount: data.votedCount ?? 0 });
-    });
+    socket.on(
+      "role_picked",
+      (data: { slotIndex: number; playerIndex: number; role: "landlord" | "peasant"; seq?: number }) => {
+        if (!checkSeq(data.seq)) return;
+        dispatch({
+          type: "ROLE_PICKED",
+          slotIndex: data.slotIndex,
+          playerIndex: data.playerIndex,
+          role: data.role,
+        });
+      },
+    );
+
+    socket.on(
+      "role_draw_locked",
+      (data: { landlordIndex: number; roleDeck: ("landlord" | "peasant")[]; seq?: number }) => {
+        if (!checkSeq(data.seq)) return;
+        dispatch({ type: "ROLE_DRAW_LOCKED", roleDeck: data.roleDeck });
+      },
+    );
 
     socket.on(
       "landlord_decided",
@@ -502,8 +573,9 @@ export function useGame(): UseGameReturn {
       socket.off("bid_status");
       socket.off("bid_turn");
       socket.off("bid_made");
-      socket.off("coinflip_open");
-      socket.off("coin_made");
+      socket.off("role_draw_open");
+      socket.off("role_picked");
+      socket.off("role_draw_locked");
       socket.off("landlord_decided");
       socket.off("hand_updated");
       socket.off("game_state");
@@ -542,13 +614,20 @@ export function useGame(): UseGameReturn {
     [socket],
   );
 
-  const coinVote = useCallback(
-    (color: "white" | "black") => {
-      // Lock the local choice immediately — the vote can't be changed once cast.
-      dispatch({ type: "COIN_SUBMIT" });
-      socket.emit("coin_vote", { color });
+  const pickRole = useCallback(
+    (slotIndex: number) => {
+      // Lock the local UI immediately — a player may only claim one card.
+      dispatch({ type: "ROLE_SUBMIT" });
+      socket.emit("role_pick", { slotIndex });
     },
     [socket],
+  );
+
+  // After the draw is locked, the leftover card can be flipped for fun — this
+  // is purely local (the backend already sent the full deck and ignores picks).
+  const revealRoleForFun = useCallback(
+    (slotIndex: number) => { dispatch({ type: "ROLE_REVEAL_FOR_FUN", slotIndex }); },
+    [],
   );
 
   const playCards = useCallback(
@@ -565,5 +644,5 @@ export function useGame(): UseGameReturn {
     [socket],
   );
 
-  return { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, coinVote, playCards, pass, surrender, reactEmoji };
+  return { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, pickRole, revealRoleForFun, playCards, pass, surrender, reactEmoji };
 }

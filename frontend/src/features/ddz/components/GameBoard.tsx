@@ -7,7 +7,7 @@ import { Card as CardComponent } from './Card';
 import { PlayerSeat } from './PlayerSeat';
 import { PlayArea } from './PlayArea';
 import { BiddingPanel } from './BiddingPanel';
-import { CoinflipPanel } from './CoinflipPanel';
+import { RoleDrawPanel } from './RoleDrawPanel';
 import { PlayHistory } from './PlayHistory';
 import { useSocket } from '@/hooks/useSocket';
 import type { Card, ClientMember, GameState } from '@/features/ddz/types';
@@ -43,7 +43,8 @@ interface GameBoardProps {
   onPlayCards: (cards: Card[]) => void;
   onPass: () => void;
   onBid: (value: 0 | 1) => void;
-  onCoinVote: (color: 'white' | 'black') => void;
+  onPickRole: (slotIndex: number) => void;
+  onRevealRoleForFun: (slotIndex: number) => void;
   onSurrender: () => void;
   onEmojiReact: (emoji: string) => void;
   onEmojiReceived?: (emoji: string) => void;
@@ -55,7 +56,8 @@ export function GameBoard({
   onPlayCards,
   onPass,
   onBid,
-  onCoinVote,
+  onPickRole,
+  onRevealRoleForFun,
   onSurrender,
   onEmojiReact,
   onEmojiReceived,
@@ -71,6 +73,9 @@ export function GameBoard({
     playerHands,
     landlordIndex,
     phase,
+    roleSlots,
+    roleSubmitted,
+    roleLocked,
     playHistory,
     winner,
     winReason,
@@ -216,11 +221,15 @@ export function GameBoard({
               votedCount={gameState.bidVotedCount}
               timeoutMs={gameState.bidTimeoutMs}
             />
-          ) : phase === 'coinflip' && !isSpectator ? (
-            <CoinflipPanel
-              hasVoted={gameState.coinSubmitted}
-              onVote={onCoinVote}
-              votedCount={gameState.coinVotedCount}
+          ) : phase === 'roledraw' && !isSpectator ? (
+            <RoleDrawPanel
+              slots={roleSlots}
+              hasPicked={roleSubmitted}
+              locked={roleLocked}
+              myPlayerIndex={myPlayerIndex}
+              playerNames={players.map((p) => p?.nickname)}
+              onPick={onPickRole}
+              onRevealForFun={onRevealRoleForFun}
             />
           ) : (
             <PlayArea lastPlay={lastPlay} playerName={lastPlayedByName} />

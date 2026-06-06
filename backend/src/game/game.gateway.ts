@@ -274,10 +274,10 @@ export class GameGateway
     this.gameService.handleBid(socket.id, rawValue as 0 | 1);
   }
 
-  // ── coin_vote (黑白 tiebreak) ──────────────────────────────────────────────────
+  // ── role_pick (抽地主 role-card draw) ──────────────────────────────────────────
 
-  @SubscribeMessage('coin_vote')
-  handleCoinVote(
+  @SubscribeMessage('role_pick')
+  handleRolePick(
     @ConnectedSocket() socket: Socket,
     @MessageBody() payload: unknown,
   ): void {
@@ -287,13 +287,13 @@ export class GameGateway
     }
 
     const p = asRecord(payload);
-    const rawColor = p?.color;
-    if (rawColor !== 'white' && rawColor !== 'black') {
-      socket.emit('room_error', { message: '無效的投票值' });
+    const slot = p?.slotIndex;
+    if (typeof slot !== 'number' || !Number.isInteger(slot) || slot < 0 || slot > 2) {
+      socket.emit('room_error', { message: '無效的牌位' });
       return;
     }
 
-    this.gameService.handleCoinVote(socket.id, rawColor as 'white' | 'black');
+    this.gameService.handleRolePick(socket.id, slot);
   }
 
   // ── play_cards ───────────────────────────────────────────────────────────────
