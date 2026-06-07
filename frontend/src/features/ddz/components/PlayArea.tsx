@@ -41,16 +41,16 @@ export function PlayArea({ lastPlay, playerName }: PlayAreaProps) {
             className="flex flex-col items-center gap-2"
           >
             {playerName && (
-              <span className="text-white/70 text-xs font-medium bg-black/30 px-2 py-0.5 rounded-full">
+              <span className="text-white/70 text-sm font-medium bg-black/30 px-3 py-1 rounded-full">
                 {playerName}
               </span>
             )}
-            <span className="text-yellow-300 text-sm font-bold">
+            <span className="text-yellow-300 text-base sm:text-lg font-bold">
               {HAND_TYPE_LABELS[lastPlay.type] ?? lastPlay.type}
             </span>
-            <div className="flex gap-1 flex-wrap justify-center">
+            <div className="flex gap-1.5 flex-wrap justify-center max-w-full">
               {lastPlay.cards.map((card, i) => (
-                <Card key={i} {...card} layoutId={`played-${card.suit}-${card.rank}-${i}`} />
+                <Card key={i} {...card} large layoutId={`played-${card.suit}-${card.rank}-${i}`} />
               ))}
             </div>
           </motion.div>

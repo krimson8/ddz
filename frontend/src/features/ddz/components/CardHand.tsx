@@ -16,9 +16,11 @@ interface CardHandProps {
   onSelectionChange?: (cards: CardType[]) => void;
   /** Epoch ms when the current turn expires (from server). Only relevant when interactive. */
   turnEndTime?: number | null;
+  /** Whether to render the 出牌/不出 action row (hidden for spectator hands). */
+  showActions?: boolean;
 }
 
-export function CardHand({ cards, onPlay, onPass, interactive = true, playerIndex = 0, lastPlay, onSelectionChange, turnEndTime }: CardHandProps) {
+export function CardHand({ cards, onPlay, onPass, interactive = true, playerIndex = 0, lastPlay, onSelectionChange, turnEndTime, showActions = true }: CardHandProps) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -124,32 +126,31 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, playerInde
         </AnimatePresence>
       </div>
 
-      {/* Action buttons + turn timer */}
-      {interactive && (
-        <div className="flex items-center gap-3">
-          {timeLeft !== null && (
-            <div
-              className={`text-sm font-bold min-w-[32px] text-center tabular-nums ${
-                timeLeft <= 5 ? 'text-red-400 animate-pulse' : 'text-white/70'
-              }`}
-            >
-              {timeLeft}s
-            </div>
-          )}
-          <button
-            onClick={handlePlay}
-            disabled={!canPlay}
-            className="px-6 py-2 rounded-xl font-bold text-sm bg-yellow-400 hover:bg-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed text-green-900 transition-colors min-h-[44px] min-w-[80px]"
-          >
-            出牌
-          </button>
-          <button
-            onClick={handlePass}
-            className="px-6 py-2 rounded-xl font-bold text-sm bg-white/20 hover:bg-white/30 text-white transition-colors min-h-[44px] min-w-[80px]"
-          >
-            不出
-          </button>
+      {/* Action buttons + turn timer — always rendered; disabled when it isn't your turn */}
+      {showActions && (
+      <div className="flex items-center gap-3">
+        <div
+          className={`text-sm font-bold min-w-[32px] text-center tabular-nums ${
+            timeLeft !== null && timeLeft <= 5 ? 'text-red-400 animate-pulse' : 'text-white/70'
+          }`}
+        >
+          {timeLeft !== null ? `${timeLeft}s` : ''}
         </div>
+        <button
+          onClick={handlePlay}
+          disabled={!interactive || !canPlay}
+          className="px-6 py-2 rounded-xl font-bold text-sm bg-yellow-400 hover:bg-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed text-green-900 transition-colors min-h-[44px] min-w-[80px]"
+        >
+          出牌
+        </button>
+        <button
+          onClick={handlePass}
+          disabled={!interactive}
+          className="px-6 py-2 rounded-xl font-bold text-sm bg-white/20 hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors min-h-[44px] min-w-[80px]"
+        >
+          不出
+        </button>
+      </div>
       )}
     </div>
   );

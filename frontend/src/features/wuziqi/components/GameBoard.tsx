@@ -4,8 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Board } from './Board';
 import { GameResult } from './GameResult';
+import { EmojiChatBox, type EmojiHistoryEntry } from '@/components/EmojiChatBox';
 import { useSocket } from '@/hooks/useSocket';
 import type { GameState, StoneColor } from '@/features/wuziqi/types';
+
+const EMOJI_HISTORY_LIMIT = 5;
 
 /** Pure render of remaining grace seconds — backend owns the truth (endTime). */
 function CountdownNumber({ endTime }: { endTime: number }) {
@@ -127,6 +130,7 @@ export function GameBoard({
 
   const [selectedReaction, setSelectedReaction] = useState('🖕');
   const [floatReactions, setFloatReactions] = useState<{ key: number; text: string; nickname: string }[]>([]);
+  const [emojiHistory, setEmojiHistory] = useState<EmojiHistoryEntry[]>([]);
   const reactionKeyRef = useRef(0);
 
   const socket = useSocket("wuziqi");
@@ -138,6 +142,10 @@ export function GameBoard({
       latestOnEmojiReceived.current?.(data.emoji);
       const key = ++reactionKeyRef.current;
       setFloatReactions((prev) => [...prev, { key, text: data.emoji, nickname: data.senderNickname }]);
+      setEmojiHistory((prev) => [
+        ...prev.slice(-(EMOJI_HISTORY_LIMIT - 1)),
+        { key, nickname: data.senderNickname, emoji: data.emoji },
+      ]);
       setTimeout(() => {
         setFloatReactions((prev) => prev.filter((r) => r.key !== key));
       }, 3000);
@@ -239,30 +247,15 @@ export function GameBoard({
         </div>
       )}
 
-      {/* Emoji bar */}
-      <div className="flex items-center gap-2 mt-2 mb-4">
-        <select
-          value={selectedReaction}
-          onChange={(e) => setSelectedReaction(e.target.value)}
-          className="bg-black/60 text-white text-base rounded-lg px-2 py-2 border border-white/20 cursor-pointer focus:outline-none max-w-[140px]"
-        >
-          {REACTION_GROUPS.map((group) => (
-            <optgroup key={group.label} label={group.label}>
-              {group.items.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-        <button
-          onClick={() => onEmojiReact(selectedReaction)}
-          className="px-3 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 active:scale-90 transition-all text-green-900 font-bold text-base"
-        >
-          送出
-        </button>
-      </div>
+      {/* Emoji chatbox — fixed to the bottom-right, houses history + picker + send */}
+      <EmojiChatBox
+        className="fixed bottom-3 right-3 z-30"
+        history={emojiHistory}
+        groups={REACTION_GROUPS}
+        selected={selectedReaction}
+        onSelect={setSelectedReaction}
+        onSend={() => onEmojiReact(selectedReaction)}
+      />
 
       {/* Floating reactions — all overlap in the same spot, fading in and out */}
       <div className="fixed bottom-24 left-1/2 -translate-x-1/2 pointer-events-none z-40">

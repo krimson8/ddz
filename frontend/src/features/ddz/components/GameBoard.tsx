@@ -9,6 +9,7 @@ import { PlayArea } from './PlayArea';
 import { BiddingPanel } from './BiddingPanel';
 import { RoleDrawPanel } from './RoleDrawPanel';
 import { PlayHistory } from './PlayHistory';
+import { EmojiChatBox, type EmojiHistoryEntry } from '@/components/EmojiChatBox';
 import { useSocket } from '@/hooks/useSocket';
 import type { Card, ClientMember, GameState } from '@/features/ddz/types';
 
@@ -16,6 +17,8 @@ interface SeatReaction {
   key: number;
   text: string;
 }
+
+const EMOJI_HISTORY_LIMIT = 5;
 
 /** Pure render of remaining grace seconds — backend owns the truth (endTime). */
 function DisconnectCountdown({ endTime }: { endTime: number }) {
@@ -93,6 +96,7 @@ export function GameBoard({
 
 
   const [selectedReaction, setSelectedReaction] = useState('🖕');
+  const [emojiHistory, setEmojiHistory] = useState<EmojiHistoryEntry[]>([]);
   const [seatReactions, setSeatReactions] = useState<Record<number, SeatReaction[]>>({});
   const reactionTimers = useRef<Record<number, ReturnType<typeof setTimeout>[]>>({});
   const reactionKeyRef = useRef(0);
@@ -125,8 +129,13 @@ export function GameBoard({
   latestOnEmojiReceived.current = onEmojiReceived;
 
   useEffect(() => {
-    const handler = (data: { senderId: string; emoji: string }) => {
+    const handler = (data: { senderId: string; senderNickname?: string; emoji: string }) => {
       latestOnEmojiReceived.current?.(data.emoji);
+      const histKey = ++reactionKeyRef.current;
+      setEmojiHistory((prev) => [
+        ...prev.slice(-(EMOJI_HISTORY_LIMIT - 1)),
+        { key: histKey, nickname: data.senderNickname ?? '玩家', emoji: data.emoji },
+      ]);
       const globalIdx = latestPlayerOrder.current.indexOf(data.senderId);
       if (globalIdx === -1) return;
       const key = ++reactionKeyRef.current;
@@ -183,7 +192,8 @@ export function GameBoard({
   return (
     <div className="relative min-h-screen bg-green-900 flex flex-col select-none overflow-hidden h-screen">
       {/* ── Top opponents ───────────────────────────────── */}
-      <div className="flex justify-around px-4 pt-4">
+      {/* pr-16 on mobile keeps the top-right seat/landlord cards clear of the fixed volume button */}
+      <div className="flex justify-around px-4 pr-16 sm:pr-4 pt-4">
         {orderedPlayers.slice(1).map((member) => {
           if (!member) return null;
           const globalIdx = players.indexOf(member);
@@ -213,7 +223,16 @@ export function GameBoard({
 
       {/* ── Centre: play area (top 60%) + history strip (bottom 40%) ── */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        <div className="flex-[2] flex items-center justify-center px-4 min-h-0">
+        <div className="relative flex-[2] flex items-center justify-center px-4 min-h-0">
+          {/* Emoji chatbox — bottom-right of the play area, overlays the central cards */}
+          <EmojiChatBox
+            className="absolute bottom-2 right-2 z-30"
+            history={emojiHistory}
+            groups={REACTION_GROUPS}
+            selected={selectedReaction}
+            onSelect={setSelectedReaction}
+            onSend={handleEmoji}
+          />
           {phase === 'bidding' && !isSpectator ? (
             <BiddingPanel
               hasVoted={gameState.bidSubmitted}
@@ -287,6 +306,7 @@ export function GameBoard({
                 lastPlay={null}
                 onSelectionChange={() => {}}
                 turnEndTime={null}
+                showActions={false}
               />
             )}
           </div>
@@ -328,9 +348,8 @@ export function GameBoard({
                 )}
               </div>
 
-              {/* Emoji reaction dropdown + send */}
-              <div className="relative flex items-center gap-2 flex-shrink-0 -mt-3">
-                {/* Floating local player reactions */}
+              {/* Floating local player reactions (emoji picker now lives in the chatbox) */}
+              <div className="relative flex-shrink-0">
                 <div className="absolute bottom-full right-0 mb-2 pointer-events-none" style={{ width: 0, height: 0 }}>
                   <AnimatePresence>
                     {(seatReactions[myPlayerIndex] ?? []).map((r) => (
@@ -348,25 +367,6 @@ export function GameBoard({
                     ))}
                   </AnimatePresence>
                 </div>
-                <select
-                  value={selectedReaction}
-                  onChange={(e) => setSelectedReaction(e.target.value)}
-                  className="bg-black/60 text-white text-base rounded-lg px-2 py-2 border border-white/20 cursor-pointer focus:outline-none max-w-[140px]"
-                >
-                  {REACTION_GROUPS.map((group) => (
-                    <optgroup key={group.label} label={group.label}>
-                      {group.items.map((item) => (
-                        <option key={item} value={item}>{item}</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-                <button
-                  onClick={handleEmoji}
-                  className="px-3 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 active:scale-90 transition-all text-green-900 font-bold text-base min-h-[40px]"
-                >
-                  送出
-                </button>
               </div>
             </div>
 
