@@ -10,15 +10,7 @@ import { BiddingPanel } from './BiddingPanel';
 import { RoleDrawPanel } from './RoleDrawPanel';
 import { PlayHistory } from './PlayHistory';
 import { EmojiChatBox, type EmojiHistoryEntry } from '@/components/EmojiChatBox';
-import { useSocket } from '@/hooks/useSocket';
 import type { Card, ClientMember, GameState } from '@/features/ddz/types';
-
-interface SeatReaction {
-  key: number;
-  text: string;
-}
-
-const EMOJI_HISTORY_LIMIT = 5;
 
 /** Pure render of remaining grace seconds — backend owns the truth (endTime). */
 function DisconnectCountdown({ endTime }: { endTime: number }) {
@@ -49,8 +41,12 @@ interface GameBoardProps {
   onPickRole: (slotIndex: number) => void;
   onRevealRoleForFun: (slotIndex: number) => void;
   onSurrender: () => void;
-  onEmojiReact: (emoji: string) => void;
-  onEmojiReceived?: (emoji: string) => void;
+  /** Send an emoji reaction (owned by the page-level emoji chat hook). */
+  onReactEmoji: (emoji: string) => void;
+  /** Recent emoji history shared across the lobby and game (page-owned). */
+  emojiHistory: EmojiHistoryEntry[];
+  selectedReaction: string;
+  onSelectReaction: (value: string) => void;
 }
 
 export function GameBoard({
@@ -62,8 +58,10 @@ export function GameBoard({
   onPickRole,
   onRevealRoleForFun,
   onSurrender,
-  onEmojiReact,
-  onEmojiReceived,
+  onReactEmoji,
+  emojiHistory,
+  selectedReaction,
+  onSelectReaction,
 }: GameBoardProps) {
   const {
     members,
@@ -95,11 +93,6 @@ export function GameBoard({
   const isSpectator = myPlayerIndex === -1;
 
 
-  const [selectedReaction, setSelectedReaction] = useState('🖕');
-  const [emojiHistory, setEmojiHistory] = useState<EmojiHistoryEntry[]>([]);
-  const [seatReactions, setSeatReactions] = useState<Record<number, SeatReaction[]>>({});
-  const reactionTimers = useRef<Record<number, ReturnType<typeof setTimeout>[]>>({});
-  const reactionKeyRef = useRef(0);
   const [selectedCards, setSelectedCards] = useState<Card[]>([]);
 
   const amLandlord = !isSpectator && myPlayerIndex !== -1 && myPlayerIndex === landlordIndex;
@@ -119,47 +112,8 @@ export function GameBoard({
     }
   }, [isSpectator, landlordIndex]);
 
-  // Keep latest values accessible inside the socket effect without re-subscribing
-  const latestPlayerOrder = useRef(playerOrder);
-  latestPlayerOrder.current = playerOrder;
-
-  const socket = useSocket("ddz");
-
-  const latestOnEmojiReceived = useRef(onEmojiReceived);
-  latestOnEmojiReceived.current = onEmojiReceived;
-
-  useEffect(() => {
-    const handler = (data: { senderId: string; senderNickname?: string; emoji: string }) => {
-      latestOnEmojiReceived.current?.(data.emoji);
-      const histKey = ++reactionKeyRef.current;
-      setEmojiHistory((prev) => [
-        ...prev.slice(-(EMOJI_HISTORY_LIMIT - 1)),
-        { key: histKey, nickname: data.senderNickname ?? '玩家', emoji: data.emoji },
-      ]);
-      const globalIdx = latestPlayerOrder.current.indexOf(data.senderId);
-      if (globalIdx === -1) return;
-      const key = ++reactionKeyRef.current;
-      // Store by globalIdx so reactions follow the player regardless of seat arrangement
-      setSeatReactions((prev) => ({
-        ...prev,
-        [globalIdx]: [...(prev[globalIdx] ?? []), { key, text: data.emoji }],
-      }));
-      if (!reactionTimers.current[globalIdx]) reactionTimers.current[globalIdx] = [];
-      const tid = setTimeout(() => {
-        setSeatReactions((prev) => ({
-          ...prev,
-          [globalIdx]: (prev[globalIdx] ?? []).filter((r) => r.key !== key),
-        }));
-      }, 3000);
-      reactionTimers.current[globalIdx].push(tid);
-    };
-    socket.on('emoji_reaction', handler);
-    return () => { socket.off('emoji_reaction', handler); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket]);
-
   function handleEmoji() {
-    onEmojiReact(selectedReaction);
+    onReactEmoji(selectedReaction);
   }
 
   // Players seated: [0] = bottom, [1] = top-left, [2] = top-right (clockwise).
@@ -212,7 +166,6 @@ export function GameBoard({
                 cardCount={gameState.playerCardCounts[globalIdx]}
                 isActiveTurn={currentPlayer === member.id}
                 colorIndex={globalIdx}
-                reactions={seatReactions[globalIdx] ?? []}
                 surrendered={surrendered.includes(globalIdx)}
                 compact
               />
@@ -224,35 +177,44 @@ export function GameBoard({
       {/* ── Centre: play area (top 60%) + history strip (bottom 40%) ── */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <div className="relative flex-[2] flex items-center justify-center px-4 min-h-0">
-          {/* Emoji chatbox — bottom-right of the play area, overlays the central cards */}
+          {phase === 'bidding' && !isSpectator ? (
+            /* Interactive panel — elevated above the chatbox so it can't be covered. */
+            <div className="relative z-10 flex items-center justify-center w-full">
+              <BiddingPanel
+                hasVoted={gameState.bidSubmitted}
+                onVoteYes={() => onBid(1)}
+                votedCount={gameState.bidVotedCount}
+                timeoutMs={gameState.bidTimeoutMs}
+              />
+            </div>
+          ) : phase === 'roledraw' && !isSpectator ? (
+            /* Interactive panel — elevated above the chatbox so it can't be covered. */
+            <div className="relative z-10 flex items-center justify-center w-full">
+              <RoleDrawPanel
+                slots={roleSlots}
+                hasPicked={roleSubmitted}
+                locked={roleLocked}
+                myPlayerIndex={myPlayerIndex}
+                playerNames={players.map((p) => p?.nickname)}
+                onPick={onPickRole}
+                onRevealForFun={onRevealRoleForFun}
+              />
+            </div>
+          ) : (
+            /* Passive played cards — below the chatbox so its controls stay clickable. */
+            <PlayArea lastPlay={lastPlay} playerName={lastPlayedByName} />
+          )}
+          {/* Emoji chatbox — bottom-right of the play area. Below the interactive
+              bidding / role-draw panels (z-10) so it never blocks their buttons,
+              but above the passive played cards so its own controls stay usable. */}
           <EmojiChatBox
-            className="absolute bottom-2 right-2 z-30"
+            className="absolute bottom-2 right-2 z-[5]"
             history={emojiHistory}
             groups={REACTION_GROUPS}
             selected={selectedReaction}
-            onSelect={setSelectedReaction}
+            onSelect={onSelectReaction}
             onSend={handleEmoji}
           />
-          {phase === 'bidding' && !isSpectator ? (
-            <BiddingPanel
-              hasVoted={gameState.bidSubmitted}
-              onVoteYes={() => onBid(1)}
-              votedCount={gameState.bidVotedCount}
-              timeoutMs={gameState.bidTimeoutMs}
-            />
-          ) : phase === 'roledraw' && !isSpectator ? (
-            <RoleDrawPanel
-              slots={roleSlots}
-              hasPicked={roleSubmitted}
-              locked={roleLocked}
-              myPlayerIndex={myPlayerIndex}
-              playerNames={players.map((p) => p?.nickname)}
-              onPick={onPickRole}
-              onRevealForFun={onRevealRoleForFun}
-            />
-          ) : (
-            <PlayArea lastPlay={lastPlay} playerName={lastPlayedByName} />
-          )}
         </div>
         <div className="flex-[1] flex items-end min-h-0">
           <PlayHistory
@@ -290,7 +252,6 @@ export function GameBoard({
                 cardCount={gameState.playerCardCounts[spectatorViewIndex]}
                 isActiveTurn={currentPlayer === orderedPlayers[0]?.id}
                 colorIndex={spectatorViewIndex}
-                reactions={seatReactions[spectatorViewIndex] ?? []}
                 surrendered={surrendered.includes(spectatorViewIndex)}
                 inGame
               />
@@ -312,8 +273,8 @@ export function GameBoard({
           </div>
         ) : (
           <>
-            {/* Row 1: player seat (left) + emoji selector (right) */}
-            <div className="flex items-center justify-between gap-2 mb-1 px-2">
+            {/* Row 1: player seat + surrender button */}
+            <div className="flex items-center gap-2 mb-1 px-2">
               <div className="flex items-end gap-2">
                 {orderedPlayers[0] && (
                   <PlayerSeat
@@ -346,27 +307,6 @@ export function GameBoard({
                       : (iSurrendered ? '✓ 已投降輸一半' : '投降輸一半')}
                   </button>
                 )}
-              </div>
-
-              {/* Floating local player reactions (emoji picker now lives in the chatbox) */}
-              <div className="relative flex-shrink-0">
-                <div className="absolute bottom-full right-0 mb-2 pointer-events-none" style={{ width: 0, height: 0 }}>
-                  <AnimatePresence>
-                    {(seatReactions[myPlayerIndex] ?? []).map((r) => (
-                      <motion.div
-                        key={r.key}
-                        initial={{ opacity: 0, y: 12, scale: 0.85 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ duration: 0.3, ease: 'easeOut' }}
-                        className="absolute bottom-0 right-0 whitespace-nowrap bg-black/80 border border-yellow-400/60 text-white text-4xl font-bold px-5 py-3 rounded-xl shadow-xl"
-                        style={{ zIndex: r.key }}
-                      >
-                        {r.text}
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
               </div>
             </div>
 

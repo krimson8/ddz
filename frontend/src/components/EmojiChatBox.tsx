@@ -1,6 +1,7 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { useEffect } from 'react';
+import { AnimatePresence, motion, useDragControls, useMotionValue } from 'framer-motion';
 
 export interface EmojiHistoryEntry {
   key: number;
@@ -22,12 +23,44 @@ interface EmojiChatBoxProps {
   onSend: () => void;
   /** Extra classes for positioning the panel (the caller decides where it floats). */
   className?: string;
+  /**
+   * localStorage key for remembering the dragged offset. Shared across games so
+   * the box reappears where the user last left it. Set to null to disable.
+   */
+  storageKey?: string | null;
+}
+
+const DEFAULT_STORAGE_KEY = 'emoji_chatbox_offset';
+
+/** Read a persisted {x, y} drag offset, clamped so the box can't sit fully off-screen. */
+function loadOffset(key: string): { x: number; y: number } {
+  if (typeof window === 'undefined') return { x: 0, y: 0 };
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return { x: 0, y: 0 };
+    const parsed = JSON.parse(raw) as { x?: number; y?: number };
+    const x = typeof parsed.x === 'number' ? parsed.x : 0;
+    const y = typeof parsed.y === 'number' ? parsed.y : 0;
+    // Keep at least a sliver on screen in every direction.
+    const maxX = window.innerWidth - 48;
+    const maxY = window.innerHeight - 48;
+    return {
+      x: Math.max(-maxX, Math.min(maxX, x)),
+      y: Math.max(-maxY, Math.min(maxY, y)),
+    };
+  } catch {
+    return { x: 0, y: 0 };
+  }
 }
 
 /**
  * 30%-opaque emoji chatbox: shows the recent emoji history (nickname + emoji)
  * and houses the emoji picker + send button. Used by both DDZ and wuziqi so
  * players and spectators share one widget.
+ *
+ * Draggable by the top grip bar only — the select/button stay fully clickable.
+ * The dragged offset is layered on top of the caller's anchor (className) and
+ * persisted to localStorage so it survives reloads and game switches.
  */
 export function EmojiChatBox({
   history,
@@ -36,14 +69,53 @@ export function EmojiChatBox({
   onSelect,
   onSend,
   className = '',
+  storageKey = DEFAULT_STORAGE_KEY,
 }: EmojiChatBoxProps) {
+  const dragControls = useDragControls();
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+
+  // Hydrate the saved offset once on mount (avoids SSR window access).
+  useEffect(() => {
+    if (!storageKey) return;
+    const { x: sx, y: sy } = loadOffset(storageKey);
+    x.set(sx);
+    y.set(sy);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const persist = () => {
+    if (!storageKey) return;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ x: x.get(), y: y.get() }));
+    } catch {
+      /* ignore */
+    }
+  };
+
   return (
-    <div
+    <motion.div
+      drag
+      dragControls={dragControls}
+      dragListener={false}
+      dragMomentum={false}
+      dragElastic={0}
+      onDragEnd={persist}
+      style={{ x, y }}
       className={[
         'flex flex-col gap-1.5 rounded-xl border border-white/15 bg-black/30 backdrop-blur-sm p-2 w-44 sm:w-52',
         className,
       ].join(' ')}
     >
+      {/* Drag handle — only this initiates a drag, so the controls below stay reliable */}
+      <div
+        onPointerDown={(e) => dragControls.start(e)}
+        className="flex items-center justify-center -mt-1 -mx-1 mb-0.5 py-1 cursor-grab active:cursor-grabbing touch-none text-white/40 hover:text-white/70 select-none"
+        title="拖曳移動"
+      >
+        <span className="text-xs tracking-[0.3em] leading-none">⋯⋯</span>
+      </div>
+
       {/* History — last few, no scroll */}
       <div className="flex flex-col gap-0.5 min-h-[60px] justify-end">
         {history.length === 0 ? (
@@ -95,6 +167,6 @@ export function EmojiChatBox({
           送出
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 }

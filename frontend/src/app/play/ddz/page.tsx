@@ -5,11 +5,18 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useSocket } from '@/hooks/useSocket';
+import { useEmojiChat } from '@/hooks/useEmojiChat';
 import { useGame } from '@/features/ddz/useGame';
 import { useSoundEffects } from '@/features/ddz/useSoundEffects';
 import { RoomLobby } from '@/features/ddz/components/RoomLobby';
 import { GameBoard } from '@/features/ddz/components/GameBoard';
+import { EmojiChatBox } from '@/components/EmojiChatBox';
 import { VolumeControl } from '@/components/VolumeControl';
+
+const REACTION_GROUPS = [
+  { label: '表情', items: ['🖕', '🤏', '🤌'] },
+  { label: '語錄', items: ['EZ', 'GG', '你會玩的嗎', '玩不了啦', '小兒科', '小癟三', '不用看了', '在我者離', '窩妖驗牌', '牌沒有問題', '給我搽皮鞋'] },
+];
 
 function DdzPlayInner() {
   const router = useRouter();
@@ -29,10 +36,16 @@ function DdzPlayInner() {
     playCards,
     pass,
     surrender,
-    reactEmoji,
   } = useGame();
   const { setVolume, playEmoji } = useSoundEffects(gameState, user?.uid ?? '');
   const { phase, roomCode, members, readyCount } = gameState;
+
+  // Emoji chat lives at the page level so the subscription + history persist
+  // across the waiting lobby → game transition (the channel is room-scoped, not
+  // phase-scoped).
+  const { history: emojiHistory, selectedReaction, setSelectedReaction, reactEmoji } = useEmojiChat('ddz', {
+    onEmojiReceived: playEmoji,
+  });
 
   const [error, setError] = useState('');
 
@@ -119,6 +132,15 @@ function DdzPlayInner() {
           ) : (
             <p className="text-white/70">連線中…</p>
           )}
+          {/* Emoji chat is available while waiting too */}
+          <EmojiChatBox
+            className="fixed bottom-3 right-3 z-50"
+            history={emojiHistory}
+            groups={REACTION_GROUPS}
+            selected={selectedReaction}
+            onSelect={setSelectedReaction}
+            onSend={() => reactEmoji(selectedReaction)}
+          />
         </div>
       )}
 
@@ -133,8 +155,10 @@ function DdzPlayInner() {
           onPickRole={pickRole}
           onRevealRoleForFun={revealRoleForFun}
           onSurrender={surrender}
-          onEmojiReact={reactEmoji}
-          onEmojiReceived={playEmoji}
+          onReactEmoji={reactEmoji}
+          emojiHistory={emojiHistory}
+          selectedReaction={selectedReaction}
+          onSelectReaction={setSelectedReaction}
         />
       )}
     </>

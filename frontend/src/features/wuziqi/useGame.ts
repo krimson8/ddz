@@ -244,7 +244,6 @@ export interface UseGameReturn {
   placeStone: (x: number, y: number) => void;
   resign: () => void;
   voteDraw: () => void;
-  reactEmoji: (emoji: string) => void;
 }
 
 export function useGame(): UseGameReturn {
@@ -521,13 +520,6 @@ export function useGame(): UseGameReturn {
     socket.emit("vote_draw");
   }, [socket]);
 
-  const reactEmoji = useCallback(
-    (emoji: string) => {
-      socket.emit("react_emoji", { emoji });
-    },
-    [socket],
-  );
-
   return {
     gameState,
     createRoom,
@@ -537,6 +529,5 @@ export function useGame(): UseGameReturn {
     placeStone,
     resign,
     voteDraw,
-    reactEmoji,
   };
 }

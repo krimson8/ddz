@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Card } from './Card';
 import type { Card as CardType } from '@/features/ddz/types';
 
@@ -23,8 +23,6 @@ interface PlayerSeatProps {
   isActiveTurn?: boolean;
   /** Index 0-4 for avatar colour */
   colorIndex?: number;
-  /** Stacked emoji/text reactions to display (each has its own lifetime) */
-  reactions?: { key: number; text: string }[];
   /** Compact row layout: avatar left, labels right (for opponent seats) */
   compact?: boolean;
   /** When true, overlay a blinking white pulse on the avatar to signal surrender */
@@ -44,7 +42,6 @@ export function PlayerSeat({
   cardCount,
   isActiveTurn = false,
   colorIndex = 0,
-  reactions = [],
   compact = false,
   surrendered = false,
   fixedSize = false,
@@ -143,23 +140,6 @@ export function PlayerSeat({
             ))}
           </motion.div>
         )}
-
-        {/* Reactions — anchor below the avatar row, fade in from above, exit downward */}
-        <AnimatePresence>
-          {reactions.map((r) => (
-            <motion.div
-              key={r.key}
-              initial={{ opacity: 0, y: -12, scale: 0.85 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 100 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="absolute top-full left-1/2 -translate-x-1/2 mt-2 whitespace-nowrap bg-black/70 border border-yellow-400/50 text-white text-center text-4xl font-bold px-4 py-2 rounded-xl shadow-lg pointer-events-none"
-              style={{ zIndex: r.key }}
-            >
-              {r.text}
-            </motion.div>
-          ))}
-        </AnimatePresence>
       </motion.div>
     );
   }
@@ -219,22 +199,6 @@ export function PlayerSeat({
             </motion.div>
           )}
         </div>
-
-        <AnimatePresence>
-          {reactions.map((r) => (
-            <motion.div
-              key={r.key}
-              initial={{ opacity: 0, y: 12, scale: 0.85 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -100 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap bg-black/70 border border-yellow-400/50 text-white text-center text-4xl font-bold px-4 py-2 rounded-xl shadow-lg pointer-events-none"
-              style={{ zIndex: r.key }}
-            >
-              {r.text}
-            </motion.div>
-          ))}
-        </AnimatePresence>
       </motion.div>
     );
   }
@@ -292,22 +256,6 @@ export function PlayerSeat({
           ))}
         </motion.div>
       )}
-
-      <AnimatePresence>
-        {reactions.map((r) => (
-          <motion.div
-            key={r.key}
-            initial={{ opacity: 0, y: 12, scale: 0.85 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -100 }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
-            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap bg-black/70 border border-yellow-400/50 text-white text-center text-4xl font-bold px-4 py-2 rounded-xl shadow-lg pointer-events-none"
-            style={{ zIndex: r.key }}
-          >
-            {r.text}
-          </motion.div>
-        ))}
-      </AnimatePresence>
     </motion.div>
   );
 }

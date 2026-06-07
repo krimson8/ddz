@@ -304,7 +304,6 @@ export interface UseGameReturn {
   playCards: (cards: Card[]) => void;
   pass: () => void;
   surrender: () => void;
-  reactEmoji: (emoji: string) => void;
 }
 
 export function useGame(): UseGameReturn {
@@ -639,10 +638,5 @@ export function useGame(): UseGameReturn {
 
   const surrender = useCallback(() => { socket.emit("surrender"); }, [socket]);
 
-  const reactEmoji = useCallback(
-    (emoji: string) => { socket.emit("react_emoji", { emoji }); },
-    [socket],
-  );
-
-  return { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, pickRole, revealRoleForFun, playCards, pass, surrender, reactEmoji };
+  return { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, pickRole, revealRoleForFun, playCards, pass, surrender };
 }

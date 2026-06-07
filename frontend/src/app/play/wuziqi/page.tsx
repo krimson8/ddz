@@ -5,11 +5,21 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useSocket } from '@/hooks/useSocket';
+import { useEmojiChat } from '@/hooks/useEmojiChat';
 import { useGame } from '@/features/wuziqi/useGame';
 import { useSoundEffects } from '@/features/wuziqi/useSoundEffects';
 import { RoomLobby } from '@/features/wuziqi/components/RoomLobby';
 import { GameBoard } from '@/features/wuziqi/components/GameBoard';
+import { EmojiChatBox } from '@/components/EmojiChatBox';
 import { VolumeControl } from '@/components/VolumeControl';
+
+const REACTION_GROUPS = [
+  { label: '表情', items: ['🖕', '🤏', '🤌'] },
+  {
+    label: '語錄',
+    items: ['我操', 'EZ', 'GG', '你會玩的嗎', '玩不了啦', '小兒科', '小癟三', '不用看了', '在我者離', '窩妖驗牌', '牌沒有問題', '給我搽皮鞋'],
+  },
+];
 
 function WuziqiPlayInner() {
   const router = useRouter();
@@ -26,10 +36,14 @@ function WuziqiPlayInner() {
     placeStone,
     resign,
     voteDraw,
-    reactEmoji,
   } = useGame();
   const { setVolume, playEmoji } = useSoundEffects(gameState, user?.uid ?? '');
   const { phase, roomCode, members } = gameState;
+
+  // Emoji chat lifted to the page so it persists across the lobby → game transition.
+  const { history: emojiHistory, selectedReaction, setSelectedReaction, reactEmoji } = useEmojiChat('wuziqi', {
+    onEmojiReceived: playEmoji,
+  });
 
   const [error, setError] = useState('');
 
@@ -118,6 +132,15 @@ function WuziqiPlayInner() {
           ) : (
             <p className="text-white/70">連線中…</p>
           )}
+          {/* Emoji chat is available while waiting too */}
+          <EmojiChatBox
+            className="fixed bottom-3 right-3 z-50"
+            history={emojiHistory}
+            groups={REACTION_GROUPS}
+            selected={selectedReaction}
+            onSelect={setSelectedReaction}
+            onSend={() => reactEmoji(selectedReaction)}
+          />
         </div>
       )}
 
@@ -129,8 +152,10 @@ function WuziqiPlayInner() {
           onPlaceStone={placeStone}
           onResign={resign}
           onDrawVote={voteDraw}
-          onEmojiReact={reactEmoji}
-          onEmojiReceived={playEmoji}
+          onReactEmoji={reactEmoji}
+          emojiHistory={emojiHistory}
+          selectedReaction={selectedReaction}
+          onSelectReaction={setSelectedReaction}
           onLeave={backToLobby}
         />
       )}

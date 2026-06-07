@@ -1,14 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Board } from './Board';
 import { GameResult } from './GameResult';
 import { EmojiChatBox, type EmojiHistoryEntry } from '@/components/EmojiChatBox';
-import { useSocket } from '@/hooks/useSocket';
 import type { GameState, StoneColor } from '@/features/wuziqi/types';
-
-const EMOJI_HISTORY_LIMIT = 5;
 
 /** Pure render of remaining grace seconds — backend owns the truth (endTime). */
 function CountdownNumber({ endTime }: { endTime: number }) {
@@ -85,8 +82,12 @@ interface GameBoardProps {
   onPlaceStone: (x: number, y: number) => void;
   onResign: () => void;
   onDrawVote: () => void;
-  onEmojiReact: (emoji: string) => void;
-  onEmojiReceived?: (emoji: string) => void;
+  /** Send an emoji reaction (owned by the page-level emoji chat hook). */
+  onReactEmoji: (emoji: string) => void;
+  /** Recent emoji history shared across the lobby and game (page-owned). */
+  emojiHistory: EmojiHistoryEntry[];
+  selectedReaction: string;
+  onSelectReaction: (value: string) => void;
   onLeave: () => void;
 }
 
@@ -96,8 +97,10 @@ export function GameBoard({
   onPlaceStone,
   onResign,
   onDrawVote,
-  onEmojiReact,
-  onEmojiReceived,
+  onReactEmoji,
+  emojiHistory,
+  selectedReaction,
+  onSelectReaction,
   onLeave,
 }: GameBoardProps) {
   const {
@@ -127,34 +130,6 @@ export function GameBoard({
 
   const blackMember = members.find((m) => m.uid === blackUid);
   const whiteMember = members.find((m) => m.uid === whiteUid);
-
-  const [selectedReaction, setSelectedReaction] = useState('🖕');
-  const [floatReactions, setFloatReactions] = useState<{ key: number; text: string; nickname: string }[]>([]);
-  const [emojiHistory, setEmojiHistory] = useState<EmojiHistoryEntry[]>([]);
-  const reactionKeyRef = useRef(0);
-
-  const socket = useSocket("wuziqi");
-  const latestOnEmojiReceived = useRef(onEmojiReceived);
-  latestOnEmojiReceived.current = onEmojiReceived;
-
-  useEffect(() => {
-    const handler = (data: { senderUid: string; senderNickname: string; emoji: string }) => {
-      latestOnEmojiReceived.current?.(data.emoji);
-      const key = ++reactionKeyRef.current;
-      setFloatReactions((prev) => [...prev, { key, text: data.emoji, nickname: data.senderNickname }]);
-      setEmojiHistory((prev) => [
-        ...prev.slice(-(EMOJI_HISTORY_LIMIT - 1)),
-        { key, nickname: data.senderNickname, emoji: data.emoji },
-      ]);
-      setTimeout(() => {
-        setFloatReactions((prev) => prev.filter((r) => r.key !== key));
-      }, 3000);
-    };
-    socket.on('emoji_reaction', handler);
-    return () => {
-      socket.off('emoji_reaction', handler);
-    };
-  }, [socket]);
 
   const spectatorCount = members.filter((m) => m.role === 'spectator').length;
 
@@ -227,7 +202,7 @@ export function GameBoard({
 
       {/* Resign / draw-vote buttons */}
       {!isSpectator && phase === 'gameplay' && (
-        <div className="flex items-center gap-2 mt-2">
+        <div className="relative z-10 flex items-center gap-2 mt-2">
           <button
             onClick={onResign}
             className="text-white/80 hover:text-white text-sm bg-red-600/70 hover:bg-red-500 rounded-full px-4 py-1.5 font-bold"
@@ -247,34 +222,16 @@ export function GameBoard({
         </div>
       )}
 
-      {/* Emoji chatbox — fixed to the bottom-right, houses history + picker + send */}
+      {/* Emoji chatbox — fixed to the bottom-right, houses history + picker + send.
+          Lowest stacking so it never covers the action buttons where they overlap. */}
       <EmojiChatBox
-        className="fixed bottom-3 right-3 z-30"
+        className="fixed bottom-3 right-3 z-0"
         history={emojiHistory}
         groups={REACTION_GROUPS}
         selected={selectedReaction}
-        onSelect={setSelectedReaction}
-        onSend={() => onEmojiReact(selectedReaction)}
+        onSelect={onSelectReaction}
+        onSend={() => onReactEmoji(selectedReaction)}
       />
-
-      {/* Floating reactions — all overlap in the same spot, fading in and out */}
-      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 pointer-events-none z-40">
-        <AnimatePresence>
-          {floatReactions.map((r) => (
-            <motion.div
-              key={r.key}
-              initial={{ opacity: 0, scale: 0.85 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.85 }}
-              transition={{ duration: 0.3 }}
-              className="absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/80 border border-yellow-400/60 text-white text-2xl font-bold px-4 py-2 rounded-xl shadow-xl"
-            >
-              <span className="text-white/60 text-sm mr-2">{r.nickname}</span>
-              {r.text}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
 
       {/* Disconnect overlay */}
       <AnimatePresence>
