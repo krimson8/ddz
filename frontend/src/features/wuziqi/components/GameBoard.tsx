@@ -202,7 +202,7 @@ export function GameBoard({
 
       {/* Resign / draw-vote buttons */}
       {!isSpectator && phase === 'gameplay' && (
-        <div className="relative z-10 flex items-center gap-2 mt-2">
+        <div className="flex items-center gap-2 mt-2">
           <button
             onClick={onResign}
             className="text-white/80 hover:text-white text-sm bg-red-600/70 hover:bg-red-500 rounded-full px-4 py-1.5 font-bold"
@@ -222,10 +222,10 @@ export function GameBoard({
         </div>
       )}
 
-      {/* Emoji chatbox — fixed to the bottom-right, houses history + picker + send.
-          Lowest stacking so it never covers the action buttons where they overlap. */}
+      {/* Draggable emoji chatbox — fixed + highest z so the player can move it
+          anywhere on screen and it always sits above the board. */}
       <EmojiChatBox
-        className="fixed bottom-3 right-3 z-0"
+        className="fixed bottom-3 right-3 z-50"
         history={emojiHistory}
         groups={REACTION_GROUPS}
         selected={selectedReaction}
@@ -240,7 +240,7 @@ export function GameBoard({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/70 flex items-center justify-center z-40"
+            className="absolute inset-0 bg-black/70 flex items-center justify-center z-[60]"
           >
             <motion.div
               initial={{ scale: 0.85, opacity: 0 }}

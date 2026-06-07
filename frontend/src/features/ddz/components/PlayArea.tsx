@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Card } from './Card';
+import { loadCardScale, onCardScaleChange } from '@/features/ddz/cardScale';
 import type { Play } from '@/features/ddz/types';
 
 const HAND_TYPE_LABELS: Record<string, string> = {
@@ -27,6 +29,13 @@ interface PlayAreaProps {
 }
 
 export function PlayArea({ lastPlay, playerName }: PlayAreaProps) {
+  // User-adjustable size of the centre played cards (set from the settings menu).
+  const [cardScale, setCardScale] = useState(1);
+  useEffect(() => {
+    setCardScale(loadCardScale());
+    return onCardScaleChange(setCardScale);
+  }, []);
+
   return (
     <div className="flex flex-col items-center gap-2 justify-center">
       {/* Last played cards */}
@@ -48,7 +57,10 @@ export function PlayArea({ lastPlay, playerName }: PlayAreaProps) {
             <span className="text-yellow-300 text-base sm:text-lg font-bold">
               {HAND_TYPE_LABELS[lastPlay.type] ?? lastPlay.type}
             </span>
-            <div className="flex gap-1.5 flex-wrap justify-center max-w-full">
+            <div
+              className="flex gap-1.5 flex-wrap justify-center max-w-full transition-transform"
+              style={{ transform: `scale(${cardScale})`, transformOrigin: 'center top' }}
+            >
               {lastPlay.cards.map((card, i) => (
                 <Card key={i} {...card} large layoutId={`played-${card.suit}-${card.rank}-${i}`} />
               ))}

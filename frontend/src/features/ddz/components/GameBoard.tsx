@@ -47,6 +47,8 @@ interface GameBoardProps {
   emojiHistory: EmojiHistoryEntry[];
   selectedReaction: string;
   onSelectReaction: (value: string) => void;
+  /** Leave the room and return to the lobby (shown to spectators). */
+  onLeave: () => void;
 }
 
 export function GameBoard({
@@ -62,6 +64,7 @@ export function GameBoard({
   emojiHistory,
   selectedReaction,
   onSelectReaction,
+  onLeave,
 }: GameBoardProps) {
   const {
     members,
@@ -145,6 +148,16 @@ export function GameBoard({
 
   return (
     <div className="relative min-h-screen bg-green-900 flex flex-col select-none overflow-hidden h-screen">
+      {/* Spectators can leave the room at any time */}
+      {isSpectator && (
+        <button
+          onClick={onLeave}
+          className="fixed top-3 left-3 z-50 text-white/70 hover:text-white text-sm flex items-center gap-1 transition-colors bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5"
+        >
+          ← 離開房間
+        </button>
+      )}
+
       {/* ── Top opponents ───────────────────────────────── */}
       {/* pr-16 on mobile keeps the top-right seat/landlord cards clear of the fixed volume button */}
       <div className="flex justify-around px-4 pr-16 sm:pr-4 pt-4">
@@ -178,37 +191,29 @@ export function GameBoard({
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <div className="relative flex-[2] flex items-center justify-center px-4 min-h-0">
           {phase === 'bidding' && !isSpectator ? (
-            /* Interactive panel — elevated above the chatbox so it can't be covered. */
-            <div className="relative z-10 flex items-center justify-center w-full">
-              <BiddingPanel
-                hasVoted={gameState.bidSubmitted}
-                onVoteYes={() => onBid(1)}
-                votedCount={gameState.bidVotedCount}
-                timeoutMs={gameState.bidTimeoutMs}
-              />
-            </div>
+            <BiddingPanel
+              hasVoted={gameState.bidSubmitted}
+              onVoteYes={() => onBid(1)}
+              votedCount={gameState.bidVotedCount}
+              timeoutMs={gameState.bidTimeoutMs}
+            />
           ) : phase === 'roledraw' && !isSpectator ? (
-            /* Interactive panel — elevated above the chatbox so it can't be covered. */
-            <div className="relative z-10 flex items-center justify-center w-full">
-              <RoleDrawPanel
-                slots={roleSlots}
-                hasPicked={roleSubmitted}
-                locked={roleLocked}
-                myPlayerIndex={myPlayerIndex}
-                playerNames={players.map((p) => p?.nickname)}
-                onPick={onPickRole}
-                onRevealForFun={onRevealRoleForFun}
-              />
-            </div>
+            <RoleDrawPanel
+              slots={roleSlots}
+              hasPicked={roleSubmitted}
+              locked={roleLocked}
+              myPlayerIndex={myPlayerIndex}
+              playerNames={players.map((p) => p?.nickname)}
+              onPick={onPickRole}
+              onRevealForFun={onRevealRoleForFun}
+            />
           ) : (
-            /* Passive played cards — below the chatbox so its controls stay clickable. */
             <PlayArea lastPlay={lastPlay} playerName={lastPlayedByName} />
           )}
-          {/* Emoji chatbox — bottom-right of the play area. Below the interactive
-              bidding / role-draw panels (z-10) so it never blocks their buttons,
-              but above the passive played cards so its own controls stay usable. */}
+          {/* Draggable emoji chatbox — fixed + highest z so the player can move it
+              anywhere on screen and it always sits above the board. */}
           <EmojiChatBox
-            className="absolute bottom-2 right-2 z-[5]"
+            className="fixed bottom-3 right-3 z-50"
             history={emojiHistory}
             groups={REACTION_GROUPS}
             selected={selectedReaction}
@@ -350,7 +355,7 @@ export function GameBoard({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/70 flex items-center justify-center z-40"
+            className="absolute inset-0 bg-black/70 flex items-center justify-center z-[60]"
           >
             <motion.div
               initial={{ scale: 0.85, opacity: 0 }}
@@ -375,7 +380,7 @@ export function GameBoard({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -40 }}
             transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-            className="absolute top-0 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4 pt-3 pb-4 bg-gradient-to-b from-black/80 to-transparent pointer-events-none"
+            className="absolute top-0 left-0 right-0 z-[60] flex flex-col items-center gap-2 px-4 pt-3 pb-4 bg-gradient-to-b from-black/80 to-transparent pointer-events-none"
           >
             {/* Announcement row */}
             <div className="flex items-center gap-3">

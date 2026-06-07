@@ -6,12 +6,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useSocket } from '@/hooks/useSocket';
 import { useEmojiChat } from '@/hooks/useEmojiChat';
+import { useVolume } from '@/hooks/useVolume';
 import { useGame } from '@/features/wuziqi/useGame';
 import { useSoundEffects } from '@/features/wuziqi/useSoundEffects';
 import { RoomLobby } from '@/features/wuziqi/components/RoomLobby';
 import { GameBoard } from '@/features/wuziqi/components/GameBoard';
 import { EmojiChatBox } from '@/components/EmojiChatBox';
-import { VolumeControl } from '@/components/VolumeControl';
+import { SettingsMenu } from '@/components/SettingsMenu';
 
 const REACTION_GROUPS = [
   { label: '表情', items: ['🖕', '🤏', '🤌'] },
@@ -37,7 +38,8 @@ function WuziqiPlayInner() {
     resign,
     voteDraw,
   } = useGame();
-  const { setVolume, playEmoji } = useSoundEffects(gameState, user?.uid ?? '');
+  const { setVolume: applyVolume, playEmoji } = useSoundEffects(gameState, user?.uid ?? '');
+  const { volume, setVolume } = useVolume(applyVolume, 'wuziqi_volume');
   const { phase, roomCode, members } = gameState;
 
   // Emoji chat lifted to the page so it persists across the lobby → game transition.
@@ -102,7 +104,7 @@ function WuziqiPlayInner() {
 
   return (
     <>
-      <VolumeControl onVolumeChange={setVolume} />
+      <SettingsMenu volume={volume} onVolumeChange={setVolume} />
 
       {error && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm">

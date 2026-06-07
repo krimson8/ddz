@@ -6,12 +6,19 @@ import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useSocket } from '@/hooks/useSocket';
 import { useEmojiChat } from '@/hooks/useEmojiChat';
+import { useVolume } from '@/hooks/useVolume';
 import { useGame } from '@/features/ddz/useGame';
 import { useSoundEffects } from '@/features/ddz/useSoundEffects';
+import {
+  loadCardScale,
+  setCardScale,
+  CARD_SCALE_MIN,
+  CARD_SCALE_MAX,
+} from '@/features/ddz/cardScale';
 import { RoomLobby } from '@/features/ddz/components/RoomLobby';
 import { GameBoard } from '@/features/ddz/components/GameBoard';
 import { EmojiChatBox } from '@/components/EmojiChatBox';
-import { VolumeControl } from '@/components/VolumeControl';
+import { SettingsMenu, type SliderSetting } from '@/components/SettingsMenu';
 
 const REACTION_GROUPS = [
   { label: '表情', items: ['🖕', '🤏', '🤌'] },
@@ -37,7 +44,8 @@ function DdzPlayInner() {
     pass,
     surrender,
   } = useGame();
-  const { setVolume, playEmoji } = useSoundEffects(gameState, user?.uid ?? '');
+  const { setVolume: applyVolume, playEmoji } = useSoundEffects(gameState, user?.uid ?? '');
+  const { volume, setVolume } = useVolume(applyVolume, 'ddz_volume');
   const { phase, roomCode, members, readyCount } = gameState;
 
   // Emoji chat lives at the page level so the subscription + history persist
@@ -46,6 +54,31 @@ function DdzPlayInner() {
   const { history: emojiHistory, selectedReaction, setSelectedReaction, reactEmoji } = useEmojiChat('ddz', {
     onEmojiReceived: playEmoji,
   });
+
+  // Played-card size — only adjustable during an actual game (not the lobby).
+  const [cardScale, setCardScaleState] = useState(1);
+  useEffect(() => {
+    setCardScaleState(loadCardScale());
+  }, []);
+  const handleCardScale = (v: number) => {
+    setCardScaleState(v);
+    setCardScale(v); // persist + broadcast to PlayArea
+  };
+  const extraSettings: SliderSetting[] =
+    phase !== 'lobby'
+      ? [
+          {
+            id: 'card-scale',
+            label: '出牌卡片大小',
+            value: cardScale,
+            min: CARD_SCALE_MIN,
+            max: CARD_SCALE_MAX,
+            step: 0.05,
+            onChange: handleCardScale,
+            format: (v) => `${Math.round(v * 100)}%`,
+          },
+        ]
+      : [];
 
   const [error, setError] = useState('');
 
@@ -102,7 +135,7 @@ function DdzPlayInner() {
 
   return (
     <>
-      <VolumeControl onVolumeChange={setVolume} />
+      <SettingsMenu volume={volume} onVolumeChange={setVolume} extraSettings={extraSettings} />
 
       {error && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
@@ -159,6 +192,7 @@ function DdzPlayInner() {
           emojiHistory={emojiHistory}
           selectedReaction={selectedReaction}
           onSelectReaction={setSelectedReaction}
+          onLeave={backToLobby}
         />
       )}
     </>

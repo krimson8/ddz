@@ -478,7 +478,12 @@ export class GameService {
 
   // ── Disconnect / leave ──────────────────────────────────────────────────────
 
-  /** Explicit leave_room from the client — immediate splice, aborts the round. */
+  /**
+   * Explicit leave_room from the client — immediate splice (no reconnect grace).
+   * The round is aborted only if the leaver was an active player mid-game; a
+   * spectator leaving just updates the member list and the game continues.
+   * See removeSocketFromRoom for the conditional reset.
+   */
   handleLeaveRoom(socketId: string): void {
     this.removeSocketFromRoom(socketId);
   }

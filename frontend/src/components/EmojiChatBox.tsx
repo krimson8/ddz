@@ -15,7 +15,7 @@ export interface ReactionGroup {
 }
 
 interface EmojiChatBoxProps {
-  /** Last few emojis sent by everyone (oldest → newest). Caller caps the length. */
+  /** Recent emojis (oldest → newest). Only the latest is shown; caller may cap length. */
   history: EmojiHistoryEntry[];
   groups: ReactionGroup[];
   selected: string;
@@ -54,12 +54,13 @@ function loadOffset(key: string): { x: number; y: number } {
 }
 
 /**
- * 30%-opaque emoji chatbox: shows the recent emoji history (nickname + emoji)
- * and houses the emoji picker + send button. Used by both DDZ and wuziqi so
- * players and spectators share one widget.
+ * Compact 2-row emoji chatbox:
+ *   Row 1: drag grip · emoji picker · 送出
+ *   Row 2: the single latest emoji message (cross-fades in place on change)
  *
- * Draggable by the top grip bar only — the select/button stay fully clickable.
- * The dragged offset is layered on top of the caller's anchor (className) and
+ * Used by both DDZ and wuziqi so players and spectators share one widget.
+ * Draggable by the grip only — the select/button stay fully clickable. The
+ * dragged offset layers on top of the caller's anchor (className) and is
  * persisted to localStorage so it survives reloads and game switches.
  */
 export function EmojiChatBox({
@@ -93,6 +94,8 @@ export function EmojiChatBox({
     }
   };
 
+  const latest = history.length > 0 ? history[history.length - 1] : null;
+
   return (
     <motion.div
       drag
@@ -103,48 +106,19 @@ export function EmojiChatBox({
       onDragEnd={persist}
       style={{ x, y }}
       className={[
-        'flex flex-col gap-1.5 rounded-xl border border-white/15 bg-black/30 backdrop-blur-sm p-2 w-44 sm:w-52',
+        'flex flex-col gap-1 rounded-xl border border-white/15 bg-black/30 backdrop-blur-sm px-2 py-1.5 w-56 sm:w-64',
         className,
       ].join(' ')}
     >
-      {/* Drag handle — only this initiates a drag, so the controls below stay reliable */}
-      <div
-        onPointerDown={(e) => dragControls.start(e)}
-        className="flex items-center justify-center -mt-1 -mx-1 mb-0.5 py-1 cursor-grab active:cursor-grabbing touch-none text-white/40 hover:text-white/70 select-none"
-        title="拖曳移動"
-      >
-        <span className="text-xs tracking-[0.3em] leading-none">⋯⋯</span>
-      </div>
-
-      {/* History — last few, no scroll */}
-      <div className="flex flex-col gap-0.5 min-h-[60px] justify-end">
-        {history.length === 0 ? (
-          <span className="text-white/30 text-[11px] italic text-center py-2">
-            還沒有人發言…
-          </span>
-        ) : (
-          <AnimatePresence initial={false}>
-            {history.map((entry) => (
-              <motion.div
-                key={entry.key}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="flex items-baseline gap-1.5 text-white/90 leading-tight"
-              >
-                <span className="text-white/50 text-[11px] max-w-[80px] truncate flex-shrink-0">
-                  {entry.nickname}
-                </span>
-                <span className="text-sm font-bold truncate">{entry.emoji}</span>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        )}
-      </div>
-
-      {/* Send controls */}
+      {/* Row 1: drag grip · picker · send (single line) */}
       <div className="flex items-center gap-1.5">
+        <div
+          onPointerDown={(e) => dragControls.start(e)}
+          className="flex-shrink-0 px-1 self-stretch flex items-center cursor-grab active:cursor-grabbing touch-none text-white/40 hover:text-white/70 select-none"
+          title="拖曳移動"
+        >
+          <span className="text-xs tracking-[0.15em] leading-none">⋮⋮</span>
+        </div>
         <select
           value={selected}
           onChange={(e) => onSelect(e.target.value)}
@@ -166,6 +140,38 @@ export function EmojiChatBox({
         >
           送出
         </button>
+      </div>
+
+      {/* Row 2: single latest message — cross-fades in place, no stacking */}
+      <div className="relative h-5 px-1">
+        <AnimatePresence mode="wait" initial={false}>
+          {latest ? (
+            <motion.div
+              key={latest.key}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="absolute inset-0 flex items-baseline gap-1.5 text-white/90 leading-tight"
+            >
+              <span className="text-white/50 text-[11px] max-w-[90px] truncate flex-shrink-0">
+                {latest.nickname}
+              </span>
+              <span className="text-sm font-bold truncate">{latest.emoji}</span>
+            </motion.div>
+          ) : (
+            <motion.span
+              key="empty"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="absolute inset-0 flex items-center text-white/30 text-[11px] italic"
+            >
+              還沒有人發言…
+            </motion.span>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );
