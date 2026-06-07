@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { resetEmojiChatBox } from '@/components/EmojiChatBox';
 
 /** A single extra slider setting appended below the built-in volume control. */
 export interface SliderSetting {
@@ -110,6 +111,16 @@ export function SettingsMenu({ volume, onVolumeChange, extraSettings = [] }: Set
           {extraSettings.map((s) => (
             <SliderRow key={s.id} setting={s} />
           ))}
+
+          <div className="border-t border-white/10 pt-2">
+            <button
+              type="button"
+              onClick={() => resetEmojiChatBox()}
+              className="w-full text-white/80 hover:text-white text-xs font-medium bg-white/10 hover:bg-white/20 rounded-lg px-2 py-2 transition-colors"
+            >
+              重置聊天框位置
+            </button>
+          </div>
         </div>
       )}
     </div>

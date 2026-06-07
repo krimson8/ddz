@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useDragControls, useMotionValue } from 'framer-motion';
 
 export interface EmojiHistoryEntry {
@@ -31,6 +31,14 @@ interface EmojiChatBoxProps {
 }
 
 const DEFAULT_STORAGE_KEY = 'emoji_chatbox_offset';
+const RESET_EVENT = 'emoji_chatbox_reset';
+const BUBBLE_LIFETIME_MS = 3000;
+
+/** Ask any mounted chatbox to recentre itself on screen (fired from the settings menu). */
+export function resetEmojiChatBox(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(RESET_EVENT));
+}
 
 /** Read a persisted {x, y} drag offset, clamped so the box can't sit fully off-screen. */
 function loadOffset(key: string): { x: number; y: number } {
@@ -53,15 +61,22 @@ function loadOffset(key: string): { x: number; y: number } {
   }
 }
 
+interface Bubble {
+  key: number;
+  nickname: string;
+  emoji: string;
+}
+
 /**
- * Compact 2-row emoji chatbox:
+ * Compact 2-row emoji chatbox with floating reaction bubbles:
+ *   Bubbles: pop above the box on each new emoji, overlapping in one spot.
  *   Row 1: drag grip · emoji picker · 送出
  *   Row 2: the single latest emoji message (cross-fades in place on change)
  *
  * Used by both DDZ and wuziqi so players and spectators share one widget.
  * Draggable by the grip only — the select/button stay fully clickable. The
- * dragged offset layers on top of the caller's anchor (className) and is
- * persisted to localStorage so it survives reloads and game switches.
+ * dragged offset layers on top of the caller's anchor (className), is persisted
+ * to localStorage, and can be recentred via resetEmojiChatBox().
  */
 export function EmojiChatBox({
   history,
@@ -73,6 +88,7 @@ export function EmojiChatBox({
   storageKey = DEFAULT_STORAGE_KEY,
 }: EmojiChatBoxProps) {
   const dragControls = useDragControls();
+  const rootRef = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
 
@@ -85,6 +101,26 @@ export function EmojiChatBox({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
+  // Recentre on screen when asked (settings menu). Computes the delta from the
+  // box's current rect so it works regardless of the caller's anchor.
+  useEffect(() => {
+    const handler = () => {
+      const el = rootRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const currentCenterX = rect.left + rect.width / 2;
+      const currentCenterY = rect.top + rect.height / 2;
+      const targetCenterX = window.innerWidth / 2;
+      const targetCenterY = window.innerHeight / 2;
+      x.set(x.get() + (targetCenterX - currentCenterX));
+      y.set(y.get() + (targetCenterY - currentCenterY));
+      persist();
+    };
+    window.addEventListener(RESET_EVENT, handler);
+    return () => window.removeEventListener(RESET_EVENT, handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const persist = () => {
     if (!storageKey) return;
     try {
@@ -96,8 +132,25 @@ export function EmojiChatBox({
 
   const latest = history.length > 0 ? history[history.length - 1] : null;
 
+  // Floating bubbles — each new history entry pops a bubble above the box that
+  // overlaps any still-fading ones, then auto-expires.
+  const [bubbles, setBubbles] = useState<Bubble[]>([]);
+  const lastSeenKeyRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!latest) return;
+    if (lastSeenKeyRef.current === latest.key) return; // already shown
+    lastSeenKeyRef.current = latest.key;
+    const bubble: Bubble = { key: latest.key, nickname: latest.nickname, emoji: latest.emoji };
+    setBubbles((prev) => [...prev, bubble]);
+    const t = setTimeout(() => {
+      setBubbles((prev) => prev.filter((b) => b.key !== bubble.key));
+    }, BUBBLE_LIFETIME_MS);
+    return () => clearTimeout(t);
+  }, [latest]);
+
   return (
     <motion.div
+      ref={rootRef}
       drag
       dragControls={dragControls}
       dragListener={false}
@@ -110,6 +163,26 @@ export function EmojiChatBox({
         className,
       ].join(' ')}
     >
+      {/* Floating bubbles — anchored above the box, overlapping in one spot */}
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none" style={{ width: 0, height: 0 }}>
+        <AnimatePresence>
+          {bubbles.map((b) => (
+            <motion.div
+              key={b.key}
+              initial={{ opacity: 0, y: 12, scale: 0.85 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.9 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className="absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/80 border border-yellow-400/60 text-white text-2xl font-bold px-4 py-2 rounded-xl shadow-xl"
+              style={{ zIndex: b.key }}
+            >
+              <span className="text-white/60 text-sm mr-2 align-middle">{b.nickname}</span>
+              {b.emoji}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
       {/* Row 1: drag grip · picker · send (single line) */}
       <div className="flex items-center gap-1.5">
         <div
