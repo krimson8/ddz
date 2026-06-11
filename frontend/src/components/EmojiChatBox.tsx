@@ -142,10 +142,12 @@ export function EmojiChatBox({
     lastSeenKeyRef.current = latest.key;
     const bubble: Bubble = { key: latest.key, nickname: latest.nickname, emoji: latest.emoji };
     setBubbles((prev) => [...prev, bubble]);
-    const t = setTimeout(() => {
+    // Each bubble owns its own expiry timer. We deliberately don't clear it on
+    // cleanup: when a new `latest` arrives the effect re-runs, and clearing here
+    // would cancel the *previous* bubble's removal so it would linger forever.
+    setTimeout(() => {
       setBubbles((prev) => prev.filter((b) => b.key !== bubble.key));
     }, BUBBLE_LIFETIME_MS);
-    return () => clearTimeout(t);
   }, [latest]);
 
   return (
@@ -159,7 +161,7 @@ export function EmojiChatBox({
       onDragEnd={persist}
       style={{ x, y }}
       className={[
-        'flex flex-col gap-1 rounded-xl border border-white/15 bg-black/30 backdrop-blur-sm px-2 py-1.5 w-56 sm:w-64',
+        'relative flex flex-col gap-1 rounded-xl border border-white/15 bg-black/30 backdrop-blur-sm px-2 py-1.5 w-56 sm:w-64',
         className,
       ].join(' ')}
     >

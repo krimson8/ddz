@@ -140,13 +140,20 @@ export function useSoundEffects(gameState: GameState, mySocketId: string) {
     const prev = prevStateRef.current;
     const curr = gameState;
 
+    // Whether it's the local player's turn to *play* (not bid/draw). Gating on the
+    // gameplay phase is what makes the "your turn" cue reliable: currentPlayer also
+    // moves around during bidding/roledraw, and without this gate those transitions
+    // could consume the edge (so the real turn fires nothing) or fire it early.
+    const isMyPlayTurn = (s: GameState) =>
+      s.phase === 'gameplay' && s.currentPlayer !== null && s.currentPlayer === mySocketId;
+
     // Game start: transition into dealing phase (enough players voted)
     if (prev.phase !== 'dealing' && curr.phase === 'dealing') {
       play('gameStart');
     }
 
     // Local player's turn ended (played or passed) — stop the yourTurn alert
-    if (prev.currentPlayer === mySocketId && curr.currentPlayer !== mySocketId) {
+    if (isMyPlayTurn(prev) && !isMyPlayTurn(curr)) {
       stopYourTurn();
     }
 
@@ -166,7 +173,7 @@ export function useSoundEffects(gameState: GameState, mySocketId: string) {
     }
 
     // Your turn — play alert and keep a ref so we can stop it
-    if (curr.currentPlayer !== prev.currentPlayer && curr.currentPlayer === mySocketId) {
+    if (!isMyPlayTurn(prev) && isMyPlayTurn(curr)) {
       yourTurnAudioRef.current = play('yourTurn') ?? null;
     }
 
