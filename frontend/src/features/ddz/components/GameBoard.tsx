@@ -148,6 +148,19 @@ export function GameBoard({
 
   return (
     <div className="relative min-h-screen bg-green-900 flex flex-col select-none overflow-hidden h-screen">
+      {/* Draggable emoji chatbox — fixed + highest z so the player can move it
+          anywhere on screen and it always sits above the board. Mounted at the
+          board root (not inside the centre play area) so reflows there — e.g. a
+          card being played — never shift framer-motion's measured drag origin. */}
+      <EmojiChatBox
+        className="fixed bottom-3 right-3 z-50"
+        history={emojiHistory}
+        groups={REACTION_GROUPS}
+        selected={selectedReaction}
+        onSelect={onSelectReaction}
+        onSend={handleEmoji}
+      />
+
       {/* Spectators can leave the room at any time */}
       {isSpectator && (
         <button
@@ -210,16 +223,6 @@ export function GameBoard({
           ) : (
             <PlayArea lastPlay={lastPlay} playerName={lastPlayedByName} />
           )}
-          {/* Draggable emoji chatbox — fixed + highest z so the player can move it
-              anywhere on screen and it always sits above the board. */}
-          <EmojiChatBox
-            className="fixed bottom-3 right-3 z-50"
-            history={emojiHistory}
-            groups={REACTION_GROUPS}
-            selected={selectedReaction}
-            onSelect={onSelectReaction}
-            onSend={handleEmoji}
-          />
         </div>
         <div className="flex-[1] flex items-end min-h-0">
           <PlayHistory

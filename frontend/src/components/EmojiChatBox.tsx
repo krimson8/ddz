@@ -161,7 +161,10 @@ export function EmojiChatBox({
       onDragEnd={persist}
       style={{ x, y }}
       className={[
-        'relative flex flex-col gap-1 rounded-xl border border-white/15 bg-black/30 backdrop-blur-sm px-2 py-1.5 w-56 sm:w-64',
+        // NOTE: no `position` class here — the caller's `className` owns positioning
+        // (e.g. `fixed`). Forcing `relative` would override `fixed` and drop the box
+        // back into normal flow. The bubble anchor below establishes its own context.
+        'flex flex-col gap-1 rounded-xl border border-white/15 bg-black/30 backdrop-blur-sm px-2 py-1.5 w-56 sm:w-64',
         className,
       ].join(' ')}
     >
@@ -171,11 +174,14 @@ export function EmojiChatBox({
           {bubbles.map((b) => (
             <motion.div
               key={b.key}
-              initial={{ opacity: 0, y: 12, scale: 0.85 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.9 }}
+              // x: '-50%' centers the bubble on the anchor. It lives inside the
+              // motion transform on purpose — a Tailwind -translate-x-1/2 here would
+              // be overwritten by the transform framer-motion writes for y/scale.
+              initial={{ opacity: 0, x: '-50%', y: 12, scale: 0.85 }}
+              animate={{ opacity: 1, x: '-50%', y: 0, scale: 1 }}
+              exit={{ opacity: 0, x: '-50%', y: -20, scale: 0.9 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/80 border border-yellow-400/60 text-white text-2xl font-bold px-4 py-2 rounded-xl shadow-xl"
+              className="absolute bottom-0 left-0 whitespace-nowrap bg-black/80 border border-yellow-400/60 text-white text-2xl font-bold px-4 py-2 rounded-xl shadow-xl"
               style={{ zIndex: b.key }}
             >
               <span className="text-white/60 text-sm mr-2 align-middle">{b.nickname}</span>
