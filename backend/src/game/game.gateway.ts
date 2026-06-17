@@ -185,13 +185,7 @@ export class GameGateway
 
     socket.emit('room_created', { roomCode: result.roomCode });
 
-    const joined = this.gameService.buildRoomJoinedPayload(
-      user.uid,
-      result.roomCode,
-    );
-    if (joined) {
-      socket.emit('room_joined', { ...joined, nickname: result.nickname });
-    }
+    this.gameService.emitFullStateToSocket(socket.id, result.roomCode);
   }
 
   // ── join_room ────────────────────────────────────────────────────────────────
@@ -219,13 +213,11 @@ export class GameGateway
     void socket.join(result.roomCode);
     void socket.leave(LOBBY_ROOM);
 
-    const joined = this.gameService.buildRoomJoinedPayload(
-      user.uid,
-      result.roomCode,
-    );
-    if (joined) {
-      socket.emit('room_joined', { ...joined, nickname: result.nickname });
-    }
+    // emitFullStateToSocket sends room_joined WITH the correct phase, then (if a
+    // game is in progress) the game_start/game_state snapshot. This is what lets
+    // a spectator or rejoining player render straight into the game board instead
+    // of being stuck in the room lobby.
+    this.gameService.emitFullStateToSocket(socket.id, result.roomCode);
   }
 
   // ── list_rooms ───────────────────────────────────────────────────────────────

@@ -235,32 +235,6 @@ export class GameService {
     return { roomCode: upperCode, nickname: user.nickname };
   }
 
-  /**
-   * Builds the room_joined payload for the gateway to unicast to the new socket.
-   * Should be called AFTER the gateway has done socket.join(roomCode).
-   */
-  buildRoomJoinedPayload(uid: string, roomCode: string) {
-    const room = this.roomManager.getRoom(roomCode);
-    if (!room) return null;
-
-    const members = this.serializeMembers(room);
-    const readyCount = members.filter((m) => m.wantToPlay).length;
-    const canVote = room.state === 'waiting';
-
-    return {
-      roomCode,
-      members,
-      state: room.state,
-      playerIds: room.playerUids, // backward-compat name; values are now uids
-      playerUids: room.playerUids,
-      myUid: uid,
-      seq: room.eventSeq,
-      winCounts: room.winCounts,
-      readyCount,
-      canVote,
-    };
-  }
-
   // ── Voting ──────────────────────────────────────────────────────────────────
 
   /**

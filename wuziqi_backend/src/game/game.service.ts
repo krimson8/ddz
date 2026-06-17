@@ -172,27 +172,6 @@ export class GameService {
     return { roomCode: upperCode, nickname: user.nickname };
   }
 
-  buildRoomJoinedPayload(uid: string, roomCode: string) {
-    const room = this.roomManager.getRoom(roomCode);
-    if (!room) return null;
-
-    const members = this.serializeMembers(room);
-    const readyCount = members.filter((m) => m.wantToPlay).length;
-    const canVote = room.state === 'waiting';
-
-    return {
-      roomCode,
-      members,
-      state: room.state,
-      playerUids: this.playerUids(room),
-      myUid: uid,
-      seq: room.eventSeq,
-      winCounts: room.winCounts,
-      readyCount,
-      canVote,
-    };
-  }
-
   // ── Voting ──────────────────────────────────────────────────────────────────
 
   /**
