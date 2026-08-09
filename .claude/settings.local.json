@@ -19,7 +19,9 @@
       "PowerShell(Set-Location c:\\Programming\\ddz\\frontend; npx *)",
       "PowerShell(Set-Location c:\\Programming\\ddz\\wuziqi_backend; npm run *)",
       "Bash(npx drizzle-kit *)",
-      "Bash(npx jest *)"
+      "Bash(npx jest *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }
