@@ -132,6 +132,23 @@ export function EmojiChatBox({
 
   const latest = history.length > 0 ? history[history.length - 1] : null;
 
+  // Flat list of every selectable emoji (across groups) so the wheel can step
+  // through them in order regardless of which optgroup they live in.
+  const flatItems = groups.flatMap((group) => group.items);
+
+  // Wheel over the picker cycles to the prev/next emoji without opening the
+  // dropdown. Down/right = next, up/left = previous; clamped at the ends.
+  const handleWheel = (e: React.WheelEvent<HTMLSelectElement>) => {
+    if (flatItems.length === 0) return;
+    e.preventDefault();
+    const idx = flatItems.indexOf(selected);
+    const dir = e.deltaY > 0 ? 1 : -1;
+    // If the current value isn't in the list, start from the appropriate end.
+    const base = idx === -1 ? (dir > 0 ? -1 : flatItems.length) : idx;
+    const next = Math.max(0, Math.min(flatItems.length - 1, base + dir));
+    if (flatItems[next] !== selected) onSelect(flatItems[next]);
+  };
+
   // Floating bubbles — each new history entry pops a bubble above the box that
   // overlaps any still-fading ones, then auto-expires.
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
@@ -203,6 +220,7 @@ export function EmojiChatBox({
         <select
           value={selected}
           onChange={(e) => onSelect(e.target.value)}
+          onWheel={handleWheel}
           className="flex-1 min-w-0 bg-black/50 text-white text-sm rounded-lg px-1.5 py-1.5 border border-white/20 cursor-pointer focus:outline-none"
         >
           {groups.map((group) => (
