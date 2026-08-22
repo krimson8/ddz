@@ -465,13 +465,13 @@ function tierOf(type, rank, count) {
     case 'trio_single':
     case 'trio_pair':       return high ? 3 : 2;
     case 'pair_sequence':   return count / 2 > 3 ? 3 : 2;
-    case 'sequence':        return count >= 12 ? 4 : count >= 8 ? 3 : 2;
+    case 'sequence':        return count >= 12 ? 5 : count >= 8 ? 3 : 2;   // 一條龍 stands alone
     case 'trio_sequence':   return count / 3 > 3 ? 4 : 3;
     case 'trio_seq_singles':return count / 4 > 3 ? 4 : 3;
     case 'trio_seq_pairs':  return count / 5 > 3 ? 4 : 3;
     case 'quad_singles':
     case 'quad_pairs':      return 3;
-    case 'bomb':            return high ? 6 : 5;         // AAAA / 2222
+    case 'bomb':            return 6;                    // every bomb, not just AAAA+
     case 'rocket':          return 7;
     default:                return 1;
   }
@@ -488,6 +488,10 @@ const TIERS = {
   7: { name: '神', note: 'Jokers collide. God-rays, gold storm.',      dur: 4300, color: '#fde047' },
   comeback: { name: '反殺', note: 'Cross-party answer to a strong play.', dur: 3200, color: '#22d3ee' },
 };
+
+/* How much to slow each level down. Folded into the speed multiplier, so the
+   CSS keyframes and every JS-computed delay stretch together. */
+const STRETCH = { 1: 2, 2: 2, 3: 2, 4: 2, 5: 2, 6: 1.5, 7: 1.5, comeback: 1.5 };
 
 /**
  * Comeback: a specific strong play answered by a stronger one ACROSS the table.
@@ -590,21 +594,23 @@ const audioCache = {};
 const MUSIC_LEVELS = new Set(['6', '7', 'comeback']);
 let musicEl = null, musicWeight = -1;
 
-function weightOf(level, rank) {
-  if (level === 'comeback') return 100;
-  if (level === 6) return 200 + rank;      // AAAA = 214, 2222 = 215
-  if (level === 7) return 300;
+function weightOf(level) {
+  if (level === 6) return 100;             // 炸彈
+  if (level === 'comeback') return 200;    // 反殺
+  if (level === 7) return 300;             // 火箭
   return 0;
 }
 
-function play(level, rank = 0) {
+function play(level) {
   if (!soundOn || !level) return;
   const src = AUDIO['tier-' + level];
   if (!src) return;
 
   if (MUSIC_LEVELS.has(String(level))) {
-    const w = weightOf(level, rank);
-    if (musicEl && !musicEl.paused && !musicEl.ended && w <= musicWeight) return;
+    // >= wins, so the same level landing again restarts the track; only a
+    // weaker level is turned away while something bigger is still running.
+    const w = weightOf(level);
+    if (musicEl && !musicEl.paused && !musicEl.ended && w < musicWeight) return;
     stopMusic();
     musicEl = new Audio(src);
     musicWeight = w;
@@ -664,7 +670,8 @@ for (const t of [0, 1, 2, 3, 4, 5, 6, 7, 'comeback']) {
 function fire(p) {
   last = p;
   const tier = p.tier;
-  const sp = slowMo ? 4 : 1;
+  const stretch = STRETCH[tier] ?? 1;
+  const sp = (slowMo ? 4 : 1) * stretch;
   const ms = (n) => (n * sp) + 'ms';
 
   stage.style.setProperty('--speed', sp);
@@ -695,9 +702,9 @@ function fire(p) {
 
   const t0 = slam ? 300 : 0;           // banner starts after the card lands
   setTimeout(() => { if (fx.isConnected) build(p, tier, sp, ms, add); }, t0 * sp);
-  play(tier, p.rank);
+  play(tier);
 
-  const total = TIERS[tier].dur + t0;
+  const total = Math.round((TIERS[tier].dur + t0) * stretch);
   readout.innerHTML = `<b>${p.zh}</b> · tier ${tier} ${TIERS[tier].name} · ${total}ms` +
     (slowMo ? ' <span style="opacity:.6">(×4 slow)</span>' : '');
   updateMusicReadout();
@@ -707,7 +714,7 @@ function build(p, tier, sp, ms, add) {
   // A comeback borrows the legendary layer set, minus the two effects that are
   // the rocket's signature (the colliding jokers and the gold rain).
   const n = tier === 'comeback' ? 7 : tier;
-  const accent = TIERS[n].color;
+  const accent = TIERS[tier].color;
   const big = n >= 6;
 
   /* Phase offsets. Tiers 5+ charge up before the hit, so everything after the
@@ -717,7 +724,7 @@ function build(p, tier, sp, ms, add) {
 
   if (n >= 5) {
     add('charge', '', `--dur:${ms(chargeMs)}`);
-    add('curtain', '', `--dur:${ms(TIERS[n].dur)}`);
+    add('curtain', '', `--dur:${ms(TIERS[tier].dur)}`);
   }
   if (tier === 7) {
     add('jk l', '王', `--d:${ms(H + 120)}`);
@@ -740,16 +747,16 @@ function build(p, tier, sp, ms, add) {
 
     if (n >= 4) {
       const h = n >= 6 ? '13%' : '9%';
-      add('bar top', '', `height:${h};animation:bar ${ms(TIERS[n].dur)} cubic-bezier(.2,.9,.25,1) both`);
-      add('bar bottom', '', `height:${h};animation:bar ${ms(TIERS[n].dur)} cubic-bezier(.2,.9,.25,1) both`);
+      add('bar top', '', `height:${h};animation:bar ${ms(TIERS[tier].dur)} cubic-bezier(.2,.9,.25,1) both`);
+      add('bar bottom', '', `height:${h};animation:bar ${ms(TIERS[tier].dur)} cubic-bezier(.2,.9,.25,1) both`);
     }
-    if (n >= 5) add('wash', '', `--dur:${ms(TIERS[n].dur - H)}`);
+    if (n >= 5) add('wash', '', `--dur:${ms(TIERS[tier].dur - H)}`);
 
     /* Sparks */
     if (n >= 3) {
-      const n = n === 3 ? 16 : n === 4 ? 26 : n === 5 ? 40 : n === 6 ? 60 : 84;
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2 + (i % 3) * .28;
+      const count = n === 3 ? 16 : n === 4 ? 26 : n === 5 ? 40 : n === 6 ? 60 : 84;
+      for (let i = 0; i < count; i++) {
+        const a = (i / count) * Math.PI * 2 + (i % 3) * .28;
         const d = 130 + ((i * 137) % (n >= 6 ? 420 : 230));
         const s = 4 + ((i * 53) % (n >= 6 ? 12 : 8));
         add('spark', '', `width:${s}px;height:${s}px;margin:${-s/2}px 0 0 ${-s/2}px;` +
@@ -759,19 +766,19 @@ function build(p, tier, sp, ms, add) {
       }
     }
 
-    /* Cracks — n 5 and up */
+    /* Cracks — tier 5 and up */
     if (n >= 5) {
-      const n = n === 5 ? 5 : n === 6 ? 9 : 13;
-      for (let i = 0; i < n; i++) {
-        const ang = (i / n) * 360 + ((i * 47) % 23) - 11;
+      const cracks = n === 5 ? 5 : n === 6 ? 9 : 13;
+      for (let i = 0; i < cracks; i++) {
+        const ang = (i / cracks) * 360 + ((i * 47) % 23) - 11;
         add('crack', '', `--a:${ang.toFixed(1)}deg;animation-delay:${ms((i % 3) * 40)}`);
       }
     }
 
     /* Embers drifting up */
     if (n >= 5) {
-      const n = n === 5 ? 14 : n === 6 ? 26 : 34;
-      for (let i = 0; i < n; i++) {
+      const embers = n === 5 ? 14 : n === 6 ? 26 : 34;
+      for (let i = 0; i < embers; i++) {
         const s = 3 + ((i * 31) % 6);
         add('ember', '', `--x:${((i * 137) % 100)}%;--s:${s}px;` +
           `--dx:${(((i * 53) % 60) - 30)}px;--d:${ms(1300 + ((i * 91) % 900))};` +
@@ -790,7 +797,7 @@ function build(p, tier, sp, ms, add) {
     }
 
     /* The word */
-    const dur = TIERS[n].dur - H;
+    const dur = TIERS[tier].dur - H;
     const ghosts = n >= 4
       ? `<span class="ghost r">${p.word}</span><span class="ghost c">${p.word}</span>` : '';
     let inner;

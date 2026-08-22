@@ -44,13 +44,14 @@ export function baseTier(type: string, rank: number, count: number): HitTier {
     case 'trio_single':
     case 'trio_pair':        return high ? 3 : 2;
     case 'pair_sequence':    return count / 2 > 3 ? 3 : 2;
-    case 'sequence':         return count >= 12 ? 4 : count >= 8 ? 3 : 2;
+    // The full 3→A run (一條龍) is a once-a-year hand, so it sits alone at 5.
+    case 'sequence':         return count >= 12 ? 5 : count >= 8 ? 3 : 2;
     case 'trio_sequence':    return count / 3 > 3 ? 4 : 3;
     case 'trio_seq_singles': return count / 4 > 3 ? 4 : 3;
     case 'trio_seq_pairs':   return count / 5 > 3 ? 4 : 3;
     case 'quad_singles':
     case 'quad_pairs':       return 3;
-    case 'bomb':             return high ? 6 : 5;         // AAAA / 2222
+    case 'bomb':             return 6;                    // every bomb, not just AAAA+
     case 'rocket':           return 7;
     default:                 return 1;
   }
@@ -135,17 +136,17 @@ export function hitLevel(input: ComebackInput): HitLevel {
 }
 
 /**
- * Priority for the long-music channel. Higher wins.
+ * Priority for the long-music channel: 火箭 > 反殺 > 炸彈.
  *
- * Only comeback, tier 6 and tier 7 own music. A track plays to its end unless
- * something that outranks it lands — which is what makes "a bigger bomb
- * restarts it" and "a rocket answers a bomb" fall out for free, rather than
- * needing to be special-cased.
+ * A track is replaced when the incoming one ranks at least as high, so the same
+ * level landing again restarts it — a second comeback should hit as hard as the
+ * first. A weaker level while something bigger is running is ignored and the
+ * running track plays out.
  */
-export function musicWeight(level: HitLevel, rank: number): number {
-  if (level === 'comeback') return 100;
-  if (level === 6) return 200 + rank;   // AAAA = 214, 2222 = 215
-  if (level === 7) return 300;
+export function musicWeight(level: HitLevel): number {
+  if (level === 6) return 100;          // 炸彈
+  if (level === 'comeback') return 200; // 反殺
+  if (level === 7) return 300;          // 火箭
   return 0;                              // no music
 }
 

@@ -28,13 +28,6 @@ function isRed(suit: string): boolean {
 
 export type CardSize = 'mini' | 'normal' | 'large';
 
-/**
- * Rendered width of a normal card at each breakpoint. Kept in sync by hand with
- * SIZE_CLASS below — CardHand needs the number to work out how far apart to
- * space a fanned hand, and it cannot read it back out of a Tailwind class.
- */
-export const NORMAL_CARD_WIDTH = { base: 60, sm: 72 } as const;
-
 const SIZE_CLASS: Record<CardSize, string> = {
   mini: 'w-[28px] h-[40px]',
   normal: 'w-[60px] h-[87px] sm:w-[72px] sm:h-[104px]',

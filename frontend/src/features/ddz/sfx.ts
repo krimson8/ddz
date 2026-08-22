@@ -115,7 +115,8 @@ class SfxBus {
     this.volume = clamped;
     this.loaded = true;
     for (const [key, pool] of this.pools) {
-      for (const a of pool) a.volume = clamped * SOUNDS[key].gain;
+      const duck = this.ducked && SfxBus.DUCKED.includes(key);
+      for (const a of pool) a.volume = duck ? 0 : clamped * SOUNDS[key].gain;
     }
     for (const a of this.oneShots.values()) a.volume = clamped;
     if (this.music) this.music.volume = clamped;
@@ -186,7 +187,8 @@ class SfxBus {
     const base = opts.rate ?? 1;
     const vary = opts.vary ?? 0;
     audio.playbackRate = vary ? base + (Math.random() * 2 - 1) * vary : base;
-    audio.volume = Math.min(1, this.volume * SOUNDS[key].gain * (opts.gain ?? 1));
+    const duck = this.ducked && SfxBus.DUCKED.includes(key);
+    audio.volume = duck ? 0 : Math.min(1, this.volume * SOUNDS[key].gain * (opts.gain ?? 1));
     audio.loop = false;
     audio.currentTime = 0;
     audio.play().catch(() => {}); // autoplay block or missing file — stay silent
@@ -256,15 +258,17 @@ class SfxBus {
   private musicWeight = -1;
 
   /**
-   * Start a track, unless one with an equal or higher weight is already
-   * running. Returns true if the track actually took the channel.
+   * Start a track. Replaces whatever is running when the incoming weight is at
+   * least as high, so the same level landing again restarts it; a weaker level
+   * is ignored and the running track plays out. Returns true if it took the
+   * channel.
    */
   playMusic(src: string, weight: number): boolean {
     if (typeof window === 'undefined') return false;
     this.init();
     if (this.volume === 0) return false;
-    if (this.music && !this.music.ended && !this.music.paused && weight <= this.musicWeight) {
-      return false;                      // current track outranks it — let it finish
+    if (this.music && !this.music.ended && !this.music.paused && weight < this.musicWeight) {
+      return false;                      // something bigger is playing — let it finish
     }
     this.stopMusic();
     const audio = new Audio(src);
@@ -273,9 +277,14 @@ class SfxBus {
     this.music = audio;
     this.musicWeight = weight;
     audio.addEventListener('ended', () => {
-      if (this.music === audio) { this.music = null; this.musicWeight = -1; }
+      if (this.music === audio) {
+        this.music = null;
+        this.musicWeight = -1;
+        this.setDuck(false);
+      }
     }, { once: true });
     audio.play().catch(() => {});
+    this.setDuck(true);
     return true;
   }
 
@@ -286,6 +295,33 @@ class SfxBus {
     }
     this.music = null;
     this.musicWeight = -1;
+    this.setDuck(false);
+  }
+
+  /**
+   * Cues silenced while a tier track is playing.
+   *
+   * your-turn.mp3 is a 30-second alert, so a bomb landing on your turn used to
+   * put two long pieces of audio on top of each other. Ducking rather than
+   * skipping means a cue already in flight goes quiet immediately and comes
+   * back at full volume the moment the track ends.
+   */
+  private static readonly DUCKED: SfxKey[] = ['yourTurn'];
+  private ducked = false;
+
+  private setDuck(on: boolean): void {
+    if (this.ducked === on) return;
+    this.ducked = on;
+    for (const key of SfxBus.DUCKED) {
+      const pool = this.pools.get(key);
+      if (!pool) continue;
+      for (const a of pool) a.volume = on ? 0 : this.volume * SOUNDS[key].gain;
+    }
+  }
+
+  /** True while a tier track is holding the channel. */
+  isDucked(): boolean {
+    return this.ducked;
   }
 
   isMusicPlaying(): boolean {

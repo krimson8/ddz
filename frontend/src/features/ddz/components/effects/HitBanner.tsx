@@ -23,13 +23,23 @@ const ACCENT: Record<string, string> = {
   comeback: '#22d3ee',
 };
 
-/** Visible length of the banner, ms. Music tracks outlive this deliberately. */
+/** Base length of the banner, ms, before STRETCH. Music outlives this. */
 export const BANNER_MS: Record<string, number> = {
   1: 620, 2: 800, 3: 980, 4: 1300, 5: 1900, 6: 2900, 7: 4300, comeback: 3200,
 };
 
-/** Wind-up before the impact, ms. Only the heavy tiers charge up. */
+/** Wind-up before the impact, ms, before STRETCH. Only heavy tiers charge up. */
 const CHARGE_MS: Record<string, number> = { 5: 340, 6: 700, 7: 1150, comeback: 620 };
+
+/**
+ * How much to slow each level down. Applied to every duration at once — the CSS
+ * keyframes read it through --sp, and the JS-computed durations and delays
+ * multiply by it — so a level stretches as a whole instead of drifting out of
+ * sync with itself.
+ */
+const STRETCH: Record<string, number> = {
+  1: 2, 2: 2, 3: 2, 4: 2, 5: 2, 6: 1.5, 7: 1.5, comeback: 1.5,
+};
 
 const num = (level: HitLevel) => (level === 'comeback' ? 7 : level);
 
@@ -49,12 +59,14 @@ export function HitBanner({ event, onDone }: { event: HitEvent | null; onDone: (
     const lvl = event.level;
     const key = String(lvl);
     const n = num(lvl);
+    const stretch = STRETCH[key] ?? 1;
     return {
       key,
       n,
+      stretch,
       accent: ACCENT[key] ?? '#fde047',
-      total: BANNER_MS[key] ?? 1000,
-      charge: CHARGE_MS[key] ?? 0,
+      total: Math.round((BANNER_MS[key] ?? 1000) * stretch),
+      charge: Math.round((CHARGE_MS[key] ?? 0) * stretch),
       // Tier 6, 7 and comeback are centrepieces: the word lands glyph by glyph.
       split: n >= 6,
       jokers: lvl === 7,
@@ -78,7 +90,7 @@ export function HitBanner({ event, onDone }: { event: HitEvent | null; onDone: (
     host.innerHTML = '';
     host.dataset.tier = plan.key;
     host.style.setProperty('--hb', plan.accent);
-    host.style.setProperty('--sp', '1');
+    host.style.setProperty('--sp', String(plan.stretch));
 
     const add = (cls: string, html = '', style = '') => {
       const el = document.createElement('div');
@@ -89,16 +101,18 @@ export function HitBanner({ event, onDone }: { event: HitEvent | null; onDone: (
       return el;
     };
 
-    const { n, accent, total, charge } = plan;
+    const { n, accent, total, charge, stretch } = plan;
     const body = total - charge;
+    /** Scale a hand-tuned offset by this level's stretch. */
+    const slow = (base: number) => Math.round(base * stretch);
 
     if (charge) {
       add('hb-charge', '', `--dur:${charge}ms`);
       add('hb-curtain', '', `--dur:${total}ms`);
     }
     if (plan.jokers) {
-      add('hb-jk l', '王', `--d:${charge + 120}ms`);
-      add('hb-jk r', '王', `--d:${charge + 120}ms`);
+      add('hb-jk l', '王', `--d:${charge + slow(120)}ms`);
+      add('hb-jk r', '王', `--d:${charge + slow(120)}ms`);
     }
 
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -109,9 +123,9 @@ export function HitBanner({ event, onDone }: { event: HitEvent | null; onDone: (
       if (n >= 2) add('hb-beam', '<i></i><u></u>');
       if (n >= 3) add('hb-rays');
       if (plan.godray) add('hb-godray');
-      if (n >= 4) { add('hb-ring'); add('hb-ring', '', 'animation-delay:90ms'); }
-      if (n >= 5) add('hb-ring fat', '', 'animation-delay:180ms');
-      if (n >= 6) add('hb-ring fat', '', 'animation-delay:300ms');
+      if (n >= 4) { add('hb-ring'); add('hb-ring', '', `animation-delay:${slow(90)}ms`); }
+      if (n >= 5) add('hb-ring fat', '', `animation-delay:${slow(180)}ms`);
+      if (n >= 6) add('hb-ring fat', '', `animation-delay:${slow(300)}ms`);
 
       if (n >= 4) {
         const h = n >= 6 ? '13%' : '9%';
@@ -130,7 +144,7 @@ export function HitBanner({ event, onDone }: { event: HitEvent | null; onDone: (
           add('hb-spark', '', `width:${s}px;height:${s}px;margin:${-s / 2}px 0 0 ${-s / 2}px;` +
             `background:${i % 3 ? '#fff' : accent};box-shadow:0 0 ${s * 2}px ${accent};` +
             `--dx:${(Math.cos(a) * d).toFixed(1)}px;--dy:${(Math.sin(a) * d * 0.7 + 70).toFixed(1)}px;` +
-            `animation-delay:${(i % 5) * 24}ms`);
+            `animation-delay:${slow((i % 5) * 24)}ms`);
         }
       }
 
@@ -138,14 +152,14 @@ export function HitBanner({ event, onDone }: { event: HitEvent | null; onDone: (
         const cracks = n === 5 ? 5 : n === 6 ? 9 : 13;
         for (let i = 0; i < cracks; i++) {
           const ang = (i / cracks) * 360 + ((i * 47) % 23) - 11;
-          add('hb-crack', '', `--a:${ang.toFixed(1)}deg;animation-delay:${(i % 3) * 40}ms`);
+          add('hb-crack', '', `--a:${ang.toFixed(1)}deg;animation-delay:${slow((i % 3) * 40)}ms`);
         }
         const embers = n === 5 ? 14 : n === 6 ? 26 : 34;
         for (let i = 0; i < embers; i++) {
           const s = 3 + ((i * 31) % 6);
           add('hb-ember', '', `--x:${(i * 137) % 100}%;--s:${s}px;` +
-            `--dx:${((i * 53) % 60) - 30}px;--d:${1300 + ((i * 91) % 900)}ms;` +
-            `animation-delay:${(i % 7) * 90}ms`);
+            `--dx:${((i * 53) % 60) - 30}px;--d:${slow(1300 + ((i * 91) % 900))}ms;` +
+            `animation-delay:${slow((i % 7) * 90)}ms`);
         }
       }
 
@@ -153,8 +167,8 @@ export function HitBanner({ event, onDone }: { event: HitEvent | null; onDone: (
         for (let i = 0; i < 60; i++) {
           const s = 3 + ((i * 29) % 5);
           add('hb-gold', '', `--x:${(i * 167) % 100}%;--s:${s}px;` +
-            `--r:${((i * 211) % 900) + 360}deg;--d:${1500 + ((i * 83) % 1100)}ms;` +
-            `animation-delay:${(i % 9) * 110}ms`);
+            `--r:${((i * 211) % 900) + 360}deg;--d:${slow(1500 + ((i * 83) % 1100))}ms;` +
+            `animation-delay:${slow((i % 9) * 110)}ms`);
         }
       }
 
@@ -165,7 +179,7 @@ export function HitBanner({ event, onDone }: { event: HitEvent | null; onDone: (
       if (plan.split) {
         const per = Math.round(body * 0.86);
         inner = [...event.word].map((ch, i) =>
-          `<span class="g" style="--gd:${per}ms;animation-delay:${i * 110}ms">` +
+          `<span class="g" style="--gd:${per}ms;animation-delay:${slow(i * 110)}ms">` +
           `<span class="hb-stroke" aria-hidden="true">${ch}</span>` +
           `<span class="hb-fill">${ch}</span></span>`).join('');
       } else {
@@ -174,7 +188,7 @@ export function HitBanner({ event, onDone }: { event: HitEvent | null; onDone: (
       }
       add('hb-banner',
         `<span class="hb-word${plan.split ? ' split' : ''}">${ghosts}${inner}</span>` +
-        `<span class="hb-sub" style="--sd:${body}ms;animation-delay:${plan.split ? 260 : 0}ms">${event.sub}</span>`);
+        `<span class="hb-sub" style="--sd:${body}ms;animation-delay:${slow(plan.split ? 260 : 0)}ms">${event.sub}</span>`);
     }, charge));
 
     timers.push(setTimeout(() => {

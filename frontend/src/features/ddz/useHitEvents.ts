@@ -48,7 +48,7 @@ export function useHitEvents(gameState: GameState) {
 
     const track = musicTrack(level);
     if (track) {
-      sfx.playMusic(track, musicWeight(level, latest.play.rank));
+      sfx.playMusic(track, musicWeight(level));
     } else {
       sfx.play(`tier${level}` as SfxKey);
     }
