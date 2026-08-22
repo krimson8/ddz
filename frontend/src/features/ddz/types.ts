@@ -56,6 +56,23 @@ export interface HistoryEntry {
   surrender?: boolean;
 }
 
+/**
+ * Snapshot of a finished round, kept alive after the server drops the room back
+ * to the lobby so the end-of-round screen can stay up until the player is done
+ * with it. Cleared by DISMISS_RESULT or when the next round starts.
+ */
+export interface RoundResult {
+  winner: "landlord" | "peasants";
+  winReason: "normal" | "surrender";
+  winnerIds: string[];
+  winningCards: Card[];
+  winCounts: Record<string, number>;
+  /** Players in seat order, captured before the room reset wipes them. */
+  players: ClientMember[];
+  playerOrder: string[];
+  landlordIndex: number | null;
+}
+
 export interface GameState {
   phase: GamePhase;
   roomCode: string | null;
@@ -113,4 +130,6 @@ export interface GameState {
   canVote: boolean;
   /** Set when a player disconnects mid-game; cleared on reconnect or abort. `endTime` is server epoch ms when the grace window expires. */
   disconnectedPlayer: { nickname: string; endTime: number; timeoutMs: number } | null;
+  /** Last finished round, held until the player dismisses the result screen. */
+  lastResult: RoundResult | null;
 }

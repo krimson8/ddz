@@ -97,6 +97,152 @@ body {
     100% { transform: translate3d(var(--dx, 0), 108vh, 0) rotate(var(--spin, 720deg)); opacity: 0; }
   }
 
+  /* ══ Hit banners ═══════════════════════════════════════════════════════
+     Fighting-game banners for strong plays. Layers switch on cumulatively as
+     the tier climbs; the tier itself is computed in hitTier.ts from the play,
+     so this file only ever reads --hb (accent) and --sp (speed). */
+
+  .hb { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 72; }
+
+  .hb-flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 46%, #fff 0%, rgba(255,255,255,0) 62%); animation: hb-flash calc(420ms * var(--sp,1)) ease-out both; }
+  @keyframes hb-flash { 0%{opacity:0} 6%{opacity:.92} 100%{opacity:0} }
+
+  .hb-whiteout { position: absolute; inset: 0; background: #fff; animation: hb-whiteout calc(620ms * var(--sp,1)) cubic-bezier(.1,.8,.3,1) both; }
+  @keyframes hb-whiteout { 0%{opacity:0} 4%{opacity:1} 24%{opacity:.6} 100%{opacity:0} }
+
+  .hb-rays {
+    position: absolute; left: 50%; top: 46%;
+    width: 130vmax; height: 130vmax; margin: -65vmax 0 0 -65vmax;
+    background: repeating-conic-gradient(from 0deg, var(--hb) 0deg .7deg, transparent .7deg 4deg);
+    -webkit-mask: radial-gradient(circle, transparent 12%, #000 34%, transparent 62%);
+    mask: radial-gradient(circle, transparent 12%, #000 34%, transparent 62%);
+    animation: hb-rays calc(700ms * var(--sp,1)) cubic-bezier(.1,.8,.3,1) both;
+  }
+  @keyframes hb-rays { 0%{opacity:0;transform:scale(.25) rotate(0)} 12%{opacity:.55} 100%{opacity:0;transform:scale(1.05) rotate(9deg)} }
+
+  .hb-godray {
+    position: absolute; left: 50%; top: 46%;
+    width: 150vmax; height: 150vmax; margin: -75vmax 0 0 -75vmax;
+    background: repeating-conic-gradient(from 0deg, var(--hb) 0deg 2.2deg, transparent 2.2deg 11deg);
+    -webkit-mask: radial-gradient(circle, transparent 6%, #000 26%, transparent 58%);
+    mask: radial-gradient(circle, transparent 6%, #000 26%, transparent 58%);
+    animation: hb-godray calc(2600ms * var(--sp,1)) linear both;
+  }
+  @keyframes hb-godray { 0%{opacity:0;transform:scale(.4) rotate(0)} 10%{opacity:.5} 72%{opacity:.42} 100%{opacity:0;transform:scale(1.1) rotate(46deg)} }
+
+  .hb-charge {
+    position: absolute; left: 50%; top: 46%;
+    width: 120vmax; height: 120vmax; margin: -60vmax 0 0 -60vmax;
+    background: repeating-conic-gradient(from 0deg, var(--hb) 0deg 1.1deg, transparent 1.1deg 6deg);
+    -webkit-mask: radial-gradient(circle, transparent 4%, #000 20%, transparent 46%);
+    mask: radial-gradient(circle, transparent 4%, #000 20%, transparent 46%);
+    animation: hb-charge var(--dur) cubic-bezier(.6,0,.9,.4) both;
+  }
+  @keyframes hb-charge { 0%{opacity:0;transform:scale(1.5) rotate(0)} 25%{opacity:.75} 100%{opacity:.95;transform:scale(.06) rotate(-140deg)} }
+
+  .hb-beam { position: absolute; left: 0; top: 46%; width: 100%; height: 26%; margin-top: -13%; transform-origin: 50% 50%; animation: hb-beam calc(620ms * var(--sp,1)) cubic-bezier(.16,.9,.3,1) both; }
+  .hb-beam i {
+    position: absolute; inset: 0; display: block;
+    background: linear-gradient(90deg, transparent 0%, var(--hb) 14%, #fff 48%, var(--hb) 82%, transparent 100%);
+    clip-path: polygon(0% 46%,6% 30%,11% 52%,17% 34%,24% 55%,31% 36%,38% 58%,45% 33%,52% 56%,59% 31%,66% 57%,73% 35%,80% 54%,87% 32%,94% 50%,100% 40%,100% 60%,94% 70%,87% 55%,80% 72%,73% 58%,66% 76%,59% 54%,52% 74%,45% 56%,38% 78%,31% 57%,24% 75%,17% 58%,11% 72%,6% 55%,0% 62%);
+    filter: drop-shadow(0 0 12px var(--hb));
+  }
+  .hb-beam u { position: absolute; left: 0; right: 0; top: 50%; height: 3px; margin-top: -1.5px; background: linear-gradient(90deg,transparent,#fff 30%,#fff 70%,transparent); filter: blur(1px) drop-shadow(0 0 14px var(--hb)); }
+  @keyframes hb-beam { 0%{opacity:0;transform:scaleX(0) scaleY(.3)} 18%{opacity:1;transform:scaleX(1) scaleY(1.15)} 34%{transform:scaleX(1) scaleY(.9)} 100%{opacity:0;transform:scaleX(1) scaleY(.7)} }
+
+  .hb-ring { position: absolute; left: 50%; top: 46%; width: 130px; height: 130px; margin: -65px 0 0 -65px; border-radius: 50%; border: 3px solid var(--hb); animation: hb-ring calc(760ms * var(--sp,1)) cubic-bezier(.1,.75,.3,1) both; }
+  .hb-ring.fat { border-width: 8px; }
+  @keyframes hb-ring { 0%{opacity:.95;transform:scale(.18)} 100%{opacity:0;transform:scale(6.4)} }
+
+  .hb-spark { position: absolute; left: 50%; top: 46%; border-radius: 50%; animation: hb-spark calc(820ms * var(--sp,1)) cubic-bezier(.14,.85,.3,1) both; }
+  @keyframes hb-spark { 0%{opacity:1;transform:translate(0,0) scale(1)} 70%{opacity:1} 100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.25)} }
+
+  .hb-crack {
+    position: absolute; left: 50%; top: 46%;
+    width: 5px; height: 52vmax; margin-left: -2.5px; transform-origin: 50% 0;
+    background: linear-gradient(180deg, #fff 0%, var(--hb) 22%, rgba(255,255,255,0) 88%);
+    clip-path: polygon(38% 0,62% 0,52% 14%,72% 28%,44% 44%,66% 58%,46% 74%,58% 100%,42% 74%,54% 58%,34% 44%,58% 28%,44% 14%);
+    filter: drop-shadow(0 0 6px var(--hb));
+    animation: hb-crack calc(1500ms * var(--sp,1)) cubic-bezier(.05,.9,.2,1) both;
+  }
+  @keyframes hb-crack { 0%{opacity:0;transform:rotate(var(--a)) scaleY(0) scaleX(.4)} 8%{opacity:1} 26%{transform:rotate(var(--a)) scaleY(1) scaleX(1)} 60%{opacity:.75} 100%{opacity:0;transform:rotate(var(--a)) scaleY(1.08) scaleX(1)} }
+
+  .hb-ember { position: absolute; bottom: -14px; left: var(--x); width: var(--s); height: var(--s); border-radius: 50%; background: var(--hb); box-shadow: 0 0 10px var(--hb); animation: hb-ember var(--d) ease-out both; }
+  @keyframes hb-ember { 0%{opacity:0;transform:translate(0,0) scale(1)} 14%{opacity:1} 100%{opacity:0;transform:translate(var(--dx),-84vh) scale(.2)} }
+
+  .hb-gold { position: absolute; top: -6%; left: var(--x); width: var(--s); height: calc(var(--s)*2.4); background: linear-gradient(180deg,#fff7c2,var(--hb)); box-shadow: 0 0 8px var(--hb); animation: hb-gold var(--d) linear both; }
+  @keyframes hb-gold { 0%{opacity:0;transform:translateY(0) rotate(0)} 8%{opacity:1} 100%{opacity:0;transform:translateY(120vh) rotate(var(--r))} }
+
+  .hb-bar { position: absolute; left: 0; width: 100%; background: #05100b; }
+  .hb-bar.top { top: 0; --from: -100%; }
+  .hb-bar.bottom { bottom: 0; --from: 100%; }
+  @keyframes hb-bar { 0%{transform:translateY(var(--from))} 14%{transform:translateY(0)} 80%{transform:translateY(0)} 100%{transform:translateY(var(--from))} }
+
+  .hb-wash { position: absolute; inset: 0; mix-blend-mode: screen; animation: hb-wash var(--dur) ease-out both;
+    background: linear-gradient(115deg, color-mix(in srgb, var(--hb) 62%, transparent), transparent 46%, color-mix(in srgb, var(--hb) 45%, transparent)); }
+  @keyframes hb-wash { 0%{opacity:0} 14%{opacity:.85} 70%{opacity:.4} 100%{opacity:0} }
+
+  .hb-curtain { position: absolute; inset: 0; background: radial-gradient(circle at 50% 46%, transparent 0%, transparent 18%, rgba(2,8,5,.94) 72%); animation: hb-curtain var(--dur) ease-in-out both; }
+  @keyframes hb-curtain { 0%{opacity:0} 18%{opacity:1} 76%{opacity:.9} 100%{opacity:0} }
+
+  .hb-jk {
+    position: absolute; left: 50%; top: 46%; width: 92px; height: 132px; margin: -66px 0 0 -46px;
+    border-radius: 8px; background: linear-gradient(160deg,#fff 0%,#fdfdfb 52%,#e6e9e1 100%);
+    box-shadow: 0 20px 50px rgba(0,0,0,.7), 0 0 30px var(--hb);
+    display: grid; place-items: center; font-weight: 900; font-size: 34px; color: #b3161d;
+  }
+  .hb-jk.l { animation: hb-jkL var(--d) cubic-bezier(.55,0,.7,1) both; }
+  .hb-jk.r { animation: hb-jkR var(--d) cubic-bezier(.55,0,.7,1) both; color: #1f2937; }
+  @keyframes hb-jkL { 0%{opacity:0;transform:translate(-78vw,-26vh) rotate(-260deg) scale(.42)} 14%{opacity:1} 86%{opacity:1;transform:translate(0,0) rotate(0) scale(1.12)} 100%{opacity:0;transform:translate(0,0) rotate(0) scale(2.3)} }
+  @keyframes hb-jkR { 0%{opacity:0;transform:translate(78vw,26vh) rotate(260deg) scale(.42)} 14%{opacity:1} 86%{opacity:1;transform:translate(0,0) rotate(0) scale(1.12)} 100%{opacity:0;transform:translate(0,0) rotate(0) scale(2.3)} }
+
+  .hb-banner { position: absolute; left: 50%; top: 46%; transform: translate(-50%,-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; white-space: nowrap; }
+  .hb-word { position: relative; font-weight: 900; line-height: .92; letter-spacing: .01em; transform: skewX(-8deg); }
+  .hb-word:not(.split) { animation: hb-slam calc(640ms * var(--sp,1)) cubic-bezier(.12,.9,.24,1) both; }
+  .hb-fill { background: linear-gradient(180deg,#fff 6%,#f3f6f4 34%,#b9c6c0 52%,#fff 74%,#dfe8e3 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hb-stroke { position: absolute; inset: 0; -webkit-text-stroke: .14em #08120d; color: #08120d; z-index: -1; filter: drop-shadow(0 4px 0 rgba(0,0,0,.5)) drop-shadow(0 0 22px var(--hb)); }
+  .hb-ghost { position: absolute; inset: 0; color: transparent; -webkit-text-stroke: .02em currentColor; mix-blend-mode: screen; z-index: -2; }
+  .hb-ghost.r { color: #ff3b5c; animation: hb-ghostR calc(640ms * var(--sp,1)) ease-out both; }
+  .hb-ghost.c { color: #24e5ff; animation: hb-ghostC calc(640ms * var(--sp,1)) ease-out both; }
+  @keyframes hb-ghostR { 0%{transform:translate(26px,-9px);opacity:1} 40%{transform:translate(6px,-2px);opacity:.85} 100%{transform:translate(0,0);opacity:0} }
+  @keyframes hb-ghostC { 0%{transform:translate(-26px,9px);opacity:1} 40%{transform:translate(-6px,2px);opacity:.85} 100%{transform:translate(0,0);opacity:0} }
+  @keyframes hb-slam {
+    0%{opacity:0;transform:skewX(-8deg) scale(3.1);filter:blur(9px)}
+    16%{opacity:1;transform:skewX(-8deg) scale(.9);filter:blur(0)}
+    26%{transform:skewX(-8deg) scale(1.06)}
+    36%{transform:skewX(-8deg) scale(1)}
+    78%{opacity:1;transform:skewX(-8deg) scale(1)}
+    100%{opacity:0;transform:skewX(-8deg) scale(1.14);filter:blur(3px)}
+  }
+  .hb-word.split .g { position: relative; display: inline-block; animation: hb-glyph var(--gd) cubic-bezier(.1,.85,.2,1) both; }
+  @keyframes hb-glyph {
+    0%{opacity:0;transform:scale(4.4) rotate(-16deg);filter:blur(14px)}
+    10%{opacity:1;transform:scale(.86) rotate(2deg);filter:blur(0)}
+    17%{transform:scale(1.1) rotate(-1deg)}
+    25%{transform:scale(1) rotate(0)}
+    86%{opacity:1;transform:scale(1)}
+    100%{opacity:0;transform:scale(1.2);filter:blur(4px)}
+  }
+  .hb-sub { font-family: var(--font-geist-mono), ui-monospace, monospace; font-weight: 600; letter-spacing: .42em; text-indent: .42em; color: #fff; text-shadow: 0 0 10px var(--hb), 0 2px 4px rgba(0,0,0,.8); animation: hb-sub var(--sd) cubic-bezier(.15,.85,.3,1) both; }
+  @keyframes hb-sub { 0%{opacity:0;transform:translateY(12px);letter-spacing:1.1em} 26%{opacity:1;transform:translateY(0);letter-spacing:.42em} 82%{opacity:1} 100%{opacity:0} }
+
+  .hb[data-tier="1"] .hb-word { font-size: clamp(30px,6.4vw,66px); }
+  .hb[data-tier="2"] .hb-word { font-size: clamp(38px,8.2vw,88px); }
+  .hb[data-tier="3"] .hb-word { font-size: clamp(46px,10.4vw,116px); }
+  .hb[data-tier="4"] .hb-word { font-size: clamp(52px,11.8vw,132px); }
+  .hb[data-tier="5"] .hb-word { font-size: clamp(56px,12.8vw,146px); }
+  .hb[data-tier="6"] .hb-word { font-size: clamp(60px,14vw,168px); }
+  .hb[data-tier="7"] .hb-word,
+  .hb[data-tier="comeback"] .hb-word { font-size: clamp(64px,15.4vw,190px); }
+  .hb[data-tier="1"] .hb-sub { font-size: 10px; }
+  .hb[data-tier="2"] .hb-sub { font-size: 11px; }
+  .hb[data-tier="3"] .hb-sub { font-size: 13px; }
+  .hb[data-tier="4"] .hb-sub { font-size: 14px; }
+  .hb[data-tier="5"] .hb-sub { font-size: 15px; }
+  .hb[data-tier="6"] .hb-sub { font-size: 17px; }
+  .hb[data-tier="7"] .hb-sub,
+  .hb[data-tier="comeback"] .hb-sub { font-size: 19px; }
+
   /* Hide scrollbars on the horizontal card strips without losing scrolling. */
   .no-scrollbar {
     scrollbar-width: none;

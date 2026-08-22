@@ -15,6 +15,7 @@ const EMAILS: { email: string; note?: string }[] = [
   { email: 'krimson8@gmail.com', note: 'owner' },
   { email: 'krimson8+1@gmail.com', note: 'test alias 1' },
   { email: 'krimson8+2@gmail.com', note: 'test alias 2' },
+  { email: 'krimson8+3@gmail.com', note: 'test alias 3' },
 ];
 
 async function main() {

@@ -10,13 +10,18 @@ import { BiddingPanel } from './BiddingPanel';
 import { RoleDrawPanel } from './RoleDrawPanel';
 import { PlayHistory } from './PlayHistory';
 import { DealingOverlay } from './effects/DealingOverlay';
-import { ImpactFX, type Impact } from './effects/ImpactFX';
-import { Confetti } from './effects/Confetti';
+import { HitBanner, shakeLevel } from './effects/HitBanner';
+import { useHitEvents } from '@/features/ddz/useHitEvents';
 import { EmojiChatBox, type EmojiHistoryEntry } from '@/components/EmojiChatBox';
 import type { Card, ClientMember, GameState } from '@/features/ddz/types';
 
-/** How long the bomb/rocket burst stays mounted. */
-const IMPACT_MS = 950;
+/** Board shake per hit strength. Index matches shakeLevel(). */
+const SHAKE = [
+  null,
+  { x: [0, -7, 6, -4, 3, 0], y: [0, 4, -4, 2, -1, 0], rotate: [0, -0.4, 0.35, -0.2, 0.1, 0], duration: 0.42 },
+  { x: [0, -13, 11, -8, 6, -3, 0], y: [0, 7, -8, 5, -3, 2, 0], rotate: [0, -0.9, 0.8, -0.5, 0.3, -0.15, 0], duration: 0.68 },
+  { x: [0, -30, 26, -21, 16, -11, 7, -4, 0], y: [0, 19, -22, 14, -10, 7, -4, 2, 0], rotate: [0, -1.9, 1.6, -1.2, 0.8, -0.5, 0.3, -0.1, 0], duration: 1.35 },
+] as const;
 
 /** Pure render of remaining grace seconds — backend owns the truth (endTime). */
 function DisconnectCountdown({ endTime }: { endTime: number }) {
@@ -87,8 +92,6 @@ export function GameBoard({
     roleSubmitted,
     roleLocked,
     playHistory,
-    winner,
-    winReason,
     surrendered,
     disconnectedPlayer,
   } = gameState;
@@ -165,36 +168,25 @@ export function GameBoard({
           ? 'right'
           : null;
 
-  // ── Bomb / rocket impact ──────────────────────────────────────────────────
-  // Derived purely from the hand type the server already puts on the play, so
-  // the burst needs no new event.
+  // ── Hit banners ───────────────────────────────────────────────────────────
+  // Tier (and comeback) is computed from the play itself in hitTier.ts, off
+  // data the server already sends. The hook owns the audio too, so the sting
+  // and the banner can never disagree about which tier a play earned.
   const shake = useAnimationControls();
   const reduceMotion = useReducedMotion();
-  const [impact, setImpact] = useState<Impact | null>(null);
-  const impactSeq = useRef(0);
-  const prevPlayRef = useRef(lastPlay);
-  useEffect(() => {
-    const prev = prevPlayRef.current;
-    prevPlayRef.current = lastPlay;
-    if (!lastPlay || lastPlay === prev) return;
-    const kind = lastPlay.type === 'rocket' ? 'rocket' : lastPlay.type === 'bomb' ? 'bomb' : null;
-    if (!kind) return;
-    impactSeq.current += 1;
-    setImpact({ id: impactSeq.current, kind });
-    if (!reduceMotion) {
-      shake.start({
-        x: [0, -11, 9, -7, 5, -3, 0],
-        y: [0, 6, -7, 4, -3, 2, 0],
-        rotate: [0, -0.8, 0.7, -0.5, 0.3, -0.15, 0],
-        transition: { duration: 0.62, ease: 'easeOut' },
-      });
-    }
-    const t = setTimeout(() => setImpact(null), IMPACT_MS);
-    return () => clearTimeout(t);
-  }, [lastPlay, shake, reduceMotion]);
+  const { event: hitEvent, clear: clearHit } = useHitEvents(gameState);
 
-  const iWon = winner !== null && gameState.winnerIds.includes(mySocketId);
-  const showConfetti = phase === 'result' && winner !== null && (iWon || isSpectator);
+  useEffect(() => {
+    if (!hitEvent || reduceMotion) return;
+    const spec = SHAKE[shakeLevel(hitEvent.level)];
+    if (!spec) return;
+    shake.start({
+      x: [...spec.x],
+      y: [...spec.y],
+      rotate: [...spec.rotate],
+      transition: { duration: spec.duration, ease: 'easeOut' },
+    });
+  }, [hitEvent, shake, reduceMotion]);
 
   return (
     <div className="relative min-h-screen ddz-felt ddz-scene flex flex-col select-none overflow-hidden h-screen">
@@ -408,8 +400,7 @@ export function GameBoard({
 
       {/* ── Full-screen effect layers ────────────────────────────────────── */}
       <AnimatePresence>{phase === 'dealing' && <DealingOverlay />}</AnimatePresence>
-      <ImpactFX impact={impact} />
-      {showConfetti && <Confetti tone={winner === 'landlord' ? 'gold' : 'green'} />}
+      <HitBanner event={hitEvent} onDone={clearHit} />
 
       {/* ── Disconnect overlay ───────────────────────────────────────────── */}
       <AnimatePresence>
@@ -431,57 +422,6 @@ export function GameBoard({
               <DisconnectCountdown endTime={disconnectedPlayer.endTime} />
               <p className="text-white/70 text-sm">等待重連中，若逾時遊戲將中止</p>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Win banner (inline, does not block the board) ───────────────── */}
-      <AnimatePresence>
-        {phase === 'result' && winner && (
-          <motion.div
-            initial={{ opacity: 0, y: -40 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -40 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-            className="absolute top-0 left-0 right-0 z-[60] flex flex-col items-center gap-2 px-4 pt-3 pb-4 bg-gradient-to-b from-black/80 to-transparent pointer-events-none"
-          >
-            {/* Announcement row */}
-            <div className="flex items-center gap-3">
-              <span className="text-3xl">{winner === 'landlord' ? '🏆' : '🎉'}</span>
-              <h2 className="text-2xl font-black text-white drop-shadow-lg">
-                {winReason === 'surrender'
-                  ? (winner === 'landlord' ? '農民投降輸一半！' : '地主投降輸一半！')
-                  : (winner === 'landlord' ? '地主獲勝！' : '農民獲勝！')}
-              </h2>
-            </div>
-
-            {/* Winner names */}
-            <div className="flex gap-2 flex-wrap justify-center">
-              {players.map((member, globalIdx) => {
-                if (!member) return null;
-                const isWinner = gameState.winnerIds.includes(playerOrder[globalIdx]);
-                const colors = ['bg-blue-500', 'bg-purple-500', 'bg-pink-500'];
-                return (
-                  <span
-                    key={member.id}
-                    className={`text-xs font-bold px-2 py-0.5 rounded-full ${isWinner ? `${colors[globalIdx % colors.length]} text-white ring-1 ring-yellow-400` : 'text-white/40'}`}
-                  >
-                    {isWinner ? '✓ ' : ''}{member.nickname}
-                  </span>
-                );
-              })}
-            </div>
-
-            {/* Winning hand cards */}
-            {gameState.winningCards.length > 0 && (
-              <div className="flex gap-1 flex-wrap justify-center mt-1">
-                {gameState.winningCards.map((card, i) => (
-                  <CardComponent key={`win-${card.suit}-${card.rank}-${i}`} {...card} mini glow="gold" />
-                ))}
-              </div>
-            )}
-
-            <p className="text-yellow-300 text-xs font-bold mt-1 animate-pulse">返回大廳中…</p>
           </motion.div>
         )}
       </AnimatePresence>

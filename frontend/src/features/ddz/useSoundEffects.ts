@@ -72,14 +72,11 @@ export function useSoundEffects(gameState: GameState, mySocketId: string) {
       yourTurnAudioRef.current = null;
     }
 
-    // Cards played. Bombs and rockets get their own sting instead of the normal
-    // card sound — the hand type is already on the play, so no backend change.
+    // Cards hitting the table. The tier sting and the big-play music are owned
+    // by useHitEvents — this is only the card thwack that every play gets, with
+    // a little pitch scatter so a long run of singles doesn't sound mechanical.
     if (curr.lastPlay !== prev.lastPlay && curr.lastPlay !== null) {
-      const type = curr.lastPlay.type as string;
-      if (type === 'rocket') sfx.play('rocket');
-      else if (type === 'bomb') sfx.play('bomb');
-      // Slight pitch scatter so a long run of singles doesn't sound mechanical.
-      else sfx.play('cardPlay', { vary: 0.08 });
+      sfx.play('cardPlay', { vary: 0.08 });
     }
 
     // Someone passed — check newest history entry
@@ -132,9 +129,14 @@ export function useSoundEffects(gameState: GameState, mySocketId: string) {
       sfx.stopLoop('surrenderPending');
       sfx.stop(yourTurnAudioRef.current);
       yourTurnAudioRef.current = null;
-      const iAmLandlord = curr.playerOrder[curr.landlordIndex ?? -1] === mySocketId;
-      const landlordWon = curr.winner === 'landlord';
-      sfx.play(iAmLandlord === landlordWon ? 'win' : 'lose');
+      // A round that ended on a bomb or a comeback still has its music running,
+      // and that track is the point of the end screen — don't stomp on it with
+      // a win sting.
+      if (!sfx.isMusicPlaying()) {
+        const iAmLandlord = curr.playerOrder[curr.landlordIndex ?? -1] === mySocketId;
+        const landlordWon = curr.winner === 'landlord';
+        sfx.play(iAmLandlord === landlordWon ? 'win' : 'lose');
+      }
     }
 
     prevStateRef.current = curr;

@@ -17,6 +17,7 @@ import {
 } from '@/features/ddz/cardScale';
 import { RoomLobby } from '@/features/ddz/components/RoomLobby';
 import { GameBoard } from '@/features/ddz/components/GameBoard';
+import { RoundOverScreen } from '@/features/ddz/components/RoundOverScreen';
 import { EmojiChatBox } from '@/components/EmojiChatBox';
 import { SettingsMenu, type SliderSetting } from '@/components/SettingsMenu';
 
@@ -43,6 +44,7 @@ function DdzPlayInner() {
     playCards,
     pass,
     surrender,
+    dismissResult,
   } = useGame();
   const { setVolume: applyVolume, playEmoji } = useSoundEffects(gameState, user?.uid ?? '');
   const { volume, setVolume } = useVolume(applyVolume, 'ddz_volume');
@@ -81,6 +83,16 @@ function DdzPlayInner() {
       : [];
 
   const [error, setError] = useState('');
+
+  // ── End-of-round screen ─────────────────────────────────────────────────
+  // The reducer snapshots the result at game over and carries it through the
+  // server's return_to_lobby, so the screen can stay up until the player is
+  // done — long enough for a 40-second track to finish. Showing it only in
+  // lobby/result phases means a new round starting takes over automatically.
+  const showResult =
+    gameState.lastResult && (phase === 'lobby' || phase === 'result')
+      ? gameState.lastResult
+      : null;
 
   // Perform the create/join intent passed from the unified lobby exactly once.
   const actedRef = useRef(false);
@@ -195,6 +207,10 @@ function DdzPlayInner() {
           onLeave={backToLobby}
         />
       )}
+
+      {/* Sits above both the board and the in-room lobby, so it survives the
+          server's return_to_lobby without blocking it. */}
+      <RoundOverScreen result={showResult} myId={user.uid} onDismiss={dismissResult} />
     </>
   );
 }

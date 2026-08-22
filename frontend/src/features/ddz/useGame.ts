@@ -47,6 +47,7 @@ const initialState: GameState = {
   winCounts: {},
   readyCount: 0,
   canVote: false,
+  lastResult: null,
   disconnectedPlayer: null,
   winReason: "normal",
   surrendered: [],
@@ -55,6 +56,7 @@ const initialState: GameState = {
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 type Action =
+  | { type: "DISMISS_RESULT" }
   | {
       type: "ROOM_JOINED";
       roomCode: string;
@@ -153,6 +155,8 @@ function reducer(state: GameState, action: Action): GameState {
         members: state.members.map((m) => ({ ...m, wantToPlay: false })),
         winCounts: state.winCounts,
         phase: action.phase,
+        // Survives the reset so the player can linger on the result.
+        lastResult: state.lastResult,
       };
     case "GAME_START":
       if (action.reconnect) {
@@ -270,7 +274,12 @@ function reducer(state: GameState, action: Action): GameState {
         disconnectedPlayer: null,
         playerOrder: action.playerIds.length > 0 ? action.playerIds : state.playerOrder,
       };
-    case "GAME_OVER":
+    case "GAME_OVER": {
+      // Snapshot the result now: RETURN_TO_LOBBY is moments away and wipes the
+      // members and seat order this screen needs.
+      const players = state.playerOrder
+        .map((id) => state.members.find((m) => m.id === id))
+        .filter((m): m is ClientMember => Boolean(m));
       return {
         ...state,
         phase: action.phase,
@@ -280,7 +289,20 @@ function reducer(state: GameState, action: Action): GameState {
         winningCards: action.winningCards,
         winCounts: action.winCounts,
         disconnectedPlayer: null,
+        lastResult: {
+          winner: action.winner,
+          winReason: action.winReason,
+          winnerIds: action.winnerIds,
+          winningCards: action.winningCards,
+          winCounts: action.winCounts,
+          players,
+          playerOrder: state.playerOrder,
+          landlordIndex: state.landlordIndex,
+        },
       };
+    }
+    case "DISMISS_RESULT":
+      return { ...state, lastResult: null };
     case "SURRENDER_UPDATE":
       return { ...state, surrendered: action.surrendered };
     case "TURN_CHANGED":
@@ -304,6 +326,8 @@ export interface UseGameReturn {
   playCards: (cards: Card[]) => void;
   pass: () => void;
   surrender: () => void;
+  /** Close the end-of-round screen. Local only — the server has already moved on. */
+  dismissResult: () => void;
 }
 
 export function useGame(): UseGameReturn {
@@ -638,5 +662,9 @@ export function useGame(): UseGameReturn {
 
   const surrender = useCallback(() => { socket.emit("surrender"); }, [socket]);
 
-  return { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, pickRole, revealRoleForFun, playCards, pass, surrender };
+  /** Player closed the end-of-round screen. Purely local — the server has
+   *  already moved the room on, so nothing needs to be sent. */
+  const dismissResult = useCallback(() => { dispatch({ type: "DISMISS_RESULT" }); }, []);
+
+  return { gameState, createRoom, joinRoom, leaveRoom, votePlay, bid, pickRole, revealRoleForFun, playCards, pass, surrender, dismissResult };
 }

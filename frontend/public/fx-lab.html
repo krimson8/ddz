@@ -1,0 +1,873 @@
+<title>鬥地主 Hit Banners</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+TC:wght@700;900&display=swap">
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   鬥地主 Hit Banners — VFX preview harness, 7 tiers
+
+   Single-theme on purpose: this is an arcade screen, so it commits to one dark
+   world rather than tracking the viewer's preference. Every colour is painted
+   explicitly so the page holds on either host ground.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --ground:  #0b1310;
+  --panel:   #111b17;
+  --panel-2: #16221d;
+  --line:    #26362f;
+  --ink:     #e8f0ec;
+  --muted:   #7d908a;
+  --felt:    #14532d;
+
+  /* Seven tiers, cool → hot → gold. The ramp is the escalation made visible. */
+  --c1: #4ade80;
+  --c2: #38bdf8;
+  --c3: #a78bfa;
+  --c4: #f472b6;
+  --c5: #fb923c;
+  --c6: #ef4444;
+  --c7: #fde047;
+  --cc: #22d3ee;   /* comeback — its own hue, off the heat ramp */
+
+  --font-display: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --font-ui: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 72px; display: flex; flex-direction: column; gap: 22px; }
+
+.masthead { display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: clamp(26px,4vw,40px); letter-spacing: -.01em; text-wrap: balance; }
+.lede { margin: 0; max-width: 64ch; color: var(--muted); font-size: 14.5px; }
+
+/* ── Stage ─────────────────────────────────────────────────────────────── */
+.stage-frame { position: relative; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: #000; }
+.stage {
+  --speed: 1;
+  position: relative;
+  aspect-ratio: 16/9; min-height: 340px; overflow: hidden;
+  background-color: var(--felt);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse 90% 65% at 50% 45%, rgba(34,197,94,.28) 0%, rgba(20,83,45,0) 70%),
+    radial-gradient(ellipse 130% 100% at 50% 50%, rgba(0,0,0,0) 42%, rgba(0,0,0,.62) 100%);
+  background-blend-mode: overlay, screen, normal;
+  background-size: 120px 120px, 100% 100%, 100% 100%;
+}
+.stage::before {
+  content: ''; position: absolute; left: 50%; top: 46%;
+  width: min(52%,420px); aspect-ratio: 1; transform: translate(-50%,-50%);
+  border-radius: 50%; border: 1px solid rgba(250,204,21,.10);
+  box-shadow: inset 0 0 60px rgba(250,204,21,.05);
+}
+.stage.sk1 { animation: sk1 calc(560ms*var(--speed)) cubic-bezier(.36,.07,.19,.97); }
+.stage.sk2 { animation: sk2 calc(820ms*var(--speed)) cubic-bezier(.36,.07,.19,.97); }
+.stage.sk3 { animation: sk3 calc(1400ms*var(--speed)) cubic-bezier(.33,.05,.2,.98); }
+
+@keyframes sk1 {
+  0%,100%{transform:translate3d(0,0,0) rotate(0)}
+  15%{transform:translate3d(-8px,5px,0) rotate(-.5deg)}
+  30%{transform:translate3d(7px,-6px,0) rotate(.45deg)}
+  48%{transform:translate3d(-6px,-3px,0) rotate(-.3deg)}
+  66%{transform:translate3d(5px,4px,0) rotate(.2deg)}
+  84%{transform:translate3d(-3px,-2px,0) rotate(-.1deg)}
+}
+@keyframes sk2 {
+  0%,100%{transform:translate3d(0,0,0) rotate(0) scale(1)}
+  7%{transform:translate3d(-22px,14px,0) rotate(-1.4deg) scale(1.02)}
+  16%{transform:translate3d(20px,-17px,0) rotate(1.2deg) scale(1.015)}
+  28%{transform:translate3d(-17px,-10px,0) rotate(-.9deg) scale(1.01)}
+  42%{transform:translate3d(13px,12px,0) rotate(.62deg)}
+  57%{transform:translate3d(-10px,-7px,0) rotate(-.4deg)}
+  73%{transform:translate3d(7px,5px,0) rotate(.24deg)}
+  88%{transform:translate3d(-3px,-2px,0) rotate(-.1deg)}
+}
+/* Tier 6/7: a violent hit that keeps ringing long after. */
+@keyframes sk3 {
+  0%{transform:translate3d(0,0,0) rotate(0) scale(1)}
+  4%{transform:translate3d(-34px,22px,0) rotate(-2.1deg) scale(1.05)}
+  9%{transform:translate3d(31px,-26px,0) rotate(1.9deg) scale(1.042)}
+  15%{transform:translate3d(-27px,-16px,0) rotate(-1.5deg) scale(1.034)}
+  22%{transform:translate3d(22px,20px,0) rotate(1.15deg) scale(1.026)}
+  30%{transform:translate3d(-18px,-13px,0) rotate(-.85deg) scale(1.018)}
+  39%{transform:translate3d(14px,10px,0) rotate(.6deg) scale(1.012)}
+  49%{transform:translate3d(-10px,-8px,0) rotate(-.42deg) scale(1.008)}
+  60%{transform:translate3d(8px,6px,0) rotate(.3deg) scale(1.005)}
+  71%{transform:translate3d(-5px,-4px,0) rotate(-.18deg)}
+  82%{transform:translate3d(3px,2px,0) rotate(.1deg)}
+  92%{transform:translate3d(-2px,-1px,0) rotate(-.05deg)}
+  100%{transform:translate3d(0,0,0) rotate(0) scale(1)}
+}
+
+.seat { position: absolute; top: 14px; display: flex; align-items: center; gap: 7px; font-size: 11px; color: rgba(255,255,255,.62); }
+.seat.left { left: 18px; } .seat.right { right: 18px; }
+.pip { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: #fff; }
+.hand { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; }
+.pcard {
+  width: 42px; height: 61px; border-radius: 4px;
+  background: linear-gradient(160deg,#fff 0%,#fdfdfb 55%,#e9ebe4 100%);
+  box-shadow: 0 3px 7px rgba(0,0,0,.45); color: #16202b;
+  font-weight: 700; font-size: 13px; padding: 3px 4px; flex: none;
+}
+.pcard + .pcard { margin-left: -13px; }
+.pcard .suit { display: block; font-weight: 400; font-size: 11px; }
+.pcard.red { color: #d13b3b; }
+
+/* ── FX layers ─────────────────────────────────────────────────────────── */
+.fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+
+.flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 46%, #fff 0%, rgba(255,255,255,0) 62%); animation: flash calc(420ms*var(--speed)) ease-out both; }
+@keyframes flash { 0%{opacity:0} 6%{opacity:.92} 100%{opacity:0} }
+
+.whiteout { position: absolute; inset: 0; background: #fff; animation: whiteout calc(620ms*var(--speed)) cubic-bezier(.1,.8,.3,1) both; }
+@keyframes whiteout { 0%{opacity:0} 4%{opacity:1} 24%{opacity:.6} 100%{opacity:0} }
+
+.rays {
+  position: absolute; left: 50%; top: 46%;
+  width: 130vmax; height: 130vmax; margin: -65vmax 0 0 -65vmax;
+  background: repeating-conic-gradient(from 0deg, var(--accent) 0deg .7deg, transparent .7deg 4deg);
+  -webkit-mask: radial-gradient(circle, transparent 12%, #000 34%, transparent 62%);
+  mask: radial-gradient(circle, transparent 12%, #000 34%, transparent 62%);
+  animation: rays calc(700ms*var(--speed)) cubic-bezier(.1,.8,.3,1) both;
+}
+@keyframes rays { 0%{opacity:0;transform:scale(.25) rotate(0)} 12%{opacity:.55} 100%{opacity:0;transform:scale(1.05) rotate(9deg)} }
+
+/* Slow, wide, gold — the legendary tier's halo. */
+.godray {
+  position: absolute; left: 50%; top: 46%;
+  width: 150vmax; height: 150vmax; margin: -75vmax 0 0 -75vmax;
+  background: repeating-conic-gradient(from 0deg, var(--accent) 0deg 2.2deg, transparent 2.2deg 11deg);
+  -webkit-mask: radial-gradient(circle, transparent 6%, #000 26%, transparent 58%);
+  mask: radial-gradient(circle, transparent 6%, #000 26%, transparent 58%);
+  animation: godray calc(2600ms*var(--speed)) linear both;
+}
+@keyframes godray { 0%{opacity:0;transform:scale(.4) rotate(0)} 10%{opacity:.5} 72%{opacity:.42} 100%{opacity:0;transform:scale(1.1) rotate(46deg)} }
+
+/* Energy converging inward before a big hit. */
+.charge {
+  position: absolute; left: 50%; top: 46%;
+  width: 120vmax; height: 120vmax; margin: -60vmax 0 0 -60vmax;
+  background: repeating-conic-gradient(from 0deg, var(--accent) 0deg 1.1deg, transparent 1.1deg 6deg);
+  -webkit-mask: radial-gradient(circle, transparent 4%, #000 20%, transparent 46%);
+  mask: radial-gradient(circle, transparent 4%, #000 20%, transparent 46%);
+  animation: charge var(--dur) cubic-bezier(.6,0,.9,.4) both;
+}
+@keyframes charge { 0%{opacity:0;transform:scale(1.5) rotate(0)} 25%{opacity:.75} 100%{opacity:.95;transform:scale(.06) rotate(-140deg)} }
+
+.beam { position: absolute; left: 0; top: 46%; width: 100%; height: 26%; margin-top: -13%; transform-origin: 50% 50%; animation: beam calc(620ms*var(--speed)) cubic-bezier(.16,.9,.3,1) both; }
+.beam i {
+  position: absolute; inset: 0; display: block;
+  background: linear-gradient(90deg, transparent 0%, var(--accent) 14%, #fff 48%, var(--accent) 82%, transparent 100%);
+  clip-path: polygon(0% 46%,6% 30%,11% 52%,17% 34%,24% 55%,31% 36%,38% 58%,45% 33%,52% 56%,59% 31%,66% 57%,73% 35%,80% 54%,87% 32%,94% 50%,100% 40%,100% 60%,94% 70%,87% 55%,80% 72%,73% 58%,66% 76%,59% 54%,52% 74%,45% 56%,38% 78%,31% 57%,24% 75%,17% 58%,11% 72%,6% 55%,0% 62%);
+  filter: drop-shadow(0 0 12px var(--accent));
+}
+.beam u { position: absolute; left: 0; right: 0; top: 50%; height: 3px; margin-top: -1.5px; background: linear-gradient(90deg,transparent,#fff 30%,#fff 70%,transparent); filter: blur(1px) drop-shadow(0 0 14px var(--accent)); }
+@keyframes beam { 0%{opacity:0;transform:scaleX(0) scaleY(.3)} 18%{opacity:1;transform:scaleX(1) scaleY(1.15)} 34%{transform:scaleX(1) scaleY(.9)} 100%{opacity:0;transform:scaleX(1) scaleY(.7)} }
+
+.ring { position: absolute; left: 50%; top: 46%; width: 130px; height: 130px; margin: -65px 0 0 -65px; border-radius: 50%; border: 3px solid var(--accent); animation: ring calc(760ms*var(--speed)) cubic-bezier(.1,.75,.3,1) both; }
+@keyframes ring { 0%{opacity:.95;transform:scale(.18)} 100%{opacity:0;transform:scale(6.4)} }
+.ring.fat { border-width: 8px; }
+
+.spark { position: absolute; left: 50%; top: 46%; border-radius: 50%; animation: spark calc(820ms*var(--speed)) cubic-bezier(.14,.85,.3,1) both; }
+@keyframes spark { 0%{opacity:1;transform:translate(0,0) scale(1)} 70%{opacity:1} 100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.25)} }
+
+/* Screen cracks radiating from the impact point. */
+.crack {
+  position: absolute; left: 50%; top: 46%;
+  width: 5px; height: 52vmax; margin-left: -2.5px;
+  transform-origin: 50% 0;
+  background: linear-gradient(180deg, #fff 0%, var(--accent) 22%, rgba(255,255,255,0) 88%);
+  clip-path: polygon(38% 0,62% 0,52% 14%,72% 28%,44% 44%,66% 58%,46% 74%,58% 100%,42% 74%,54% 58%,34% 44%,58% 28%,44% 14%);
+  filter: drop-shadow(0 0 6px var(--accent));
+  animation: crack calc(1500ms*var(--speed)) cubic-bezier(.05,.9,.2,1) both;
+}
+@keyframes crack {
+  0%{opacity:0;transform:rotate(var(--a)) scaleY(0) scaleX(.4)}
+  8%{opacity:1}
+  26%{transform:rotate(var(--a)) scaleY(1) scaleX(1)}
+  60%{opacity:.75}
+  100%{opacity:0;transform:rotate(var(--a)) scaleY(1.08) scaleX(1)}
+}
+
+.ember {
+  position: absolute; bottom: -14px; left: var(--x);
+  width: var(--s); height: var(--s); border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 10px var(--accent);
+  animation: ember var(--d) ease-out both;
+}
+@keyframes ember { 0%{opacity:0;transform:translate(0,0) scale(1)} 14%{opacity:1} 100%{opacity:0;transform:translate(var(--dx),-84vh) scale(.2)} }
+
+.goldfall {
+  position: absolute; top: -6%; left: var(--x);
+  width: var(--s); height: calc(var(--s)*2.4);
+  background: linear-gradient(180deg,#fff7c2,var(--accent));
+  box-shadow: 0 0 8px var(--accent);
+  animation: goldfall var(--d) linear both;
+}
+@keyframes goldfall { 0%{opacity:0;transform:translateY(0) rotate(0)} 8%{opacity:1} 100%{opacity:0;transform:translateY(120vh) rotate(var(--r))} }
+
+.bar { position: absolute; left: 0; width: 100%; background: #05100b; }
+.bar.top { top: 0; --from: -100%; } .bar.bottom { bottom: 0; --from: 100%; }
+@keyframes bar { 0%{transform:translateY(var(--from))} 14%{transform:translateY(0)} 80%{transform:translateY(0)} 100%{transform:translateY(var(--from))} }
+
+.wash { position: absolute; inset: 0; mix-blend-mode: screen; animation: wash var(--dur) ease-out both;
+  background: linear-gradient(115deg, color-mix(in srgb, var(--accent) 62%, transparent), transparent 46%, color-mix(in srgb, var(--accent) 45%, transparent)); }
+@keyframes wash { 0%{opacity:0} 14%{opacity:.85} 70%{opacity:.4} 100%{opacity:0} }
+
+/* Everything drains and closes in before the legendary hit. */
+.curtain { position: absolute; inset: 0; background: radial-gradient(circle at 50% 46%, transparent 0%, transparent 18%, rgba(2,8,5,.94) 72%); animation: curtain var(--dur) ease-in-out both; }
+@keyframes curtain { 0%{opacity:0} 18%{opacity:1} 76%{opacity:.9} 100%{opacity:0} }
+
+/* Two jokers fly in and collide. */
+.jk {
+  position: absolute; left: 50%; top: 46%; width: 92px; height: 132px; margin: -66px 0 0 -46px;
+  border-radius: 8px; background: linear-gradient(160deg,#fff 0%,#fdfdfb 52%,#e6e9e1 100%);
+  box-shadow: 0 20px 50px rgba(0,0,0,.7), 0 0 30px var(--accent);
+  display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 900; font-size: 34px; color: #b3161d;
+}
+.jk.l { animation: jkL var(--d) cubic-bezier(.55,0,.7,1) both; }
+.jk.r { animation: jkR var(--d) cubic-bezier(.55,0,.7,1) both; color: #1f2937; }
+@keyframes jkL {
+  0%{opacity:0;transform:translate(-78vw,-26vh) rotate(-260deg) scale(.42)}
+  14%{opacity:1}
+  86%{opacity:1;transform:translate(0,0) rotate(0) scale(1.12)}
+  100%{opacity:0;transform:translate(0,0) rotate(0) scale(2.3)}
+}
+@keyframes jkR {
+  0%{opacity:0;transform:translate(78vw,26vh) rotate(260deg) scale(.42)}
+  14%{opacity:1}
+  86%{opacity:1;transform:translate(0,0) rotate(0) scale(1.12)}
+  100%{opacity:0;transform:translate(0,0) rotate(0) scale(2.3)}
+}
+
+/* ── Banner text ───────────────────────────────────────────────────────── */
+.banner { position: absolute; left: 50%; top: 46%; transform: translate(-50%,-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; white-space: nowrap; }
+.word { position: relative; font-family: var(--font-display); font-weight: 900; line-height: .92; letter-spacing: .01em; transform: skewX(-8deg); }
+.word:not(.split) { animation: slam calc(640ms*var(--speed)) cubic-bezier(.12,.9,.24,1) both; }
+
+.fill { background: linear-gradient(180deg,#fff 6%,#f3f6f4 34%,#b9c6c0 52%,#fff 74%,#dfe8e3 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stroke { position: absolute; inset: 0; -webkit-text-stroke: .14em #08120d; color: #08120d; z-index: -1; filter: drop-shadow(0 4px 0 rgba(0,0,0,.5)) drop-shadow(0 0 22px var(--accent)); }
+.ghost { position: absolute; inset: 0; color: transparent; -webkit-text-stroke: .02em currentColor; mix-blend-mode: screen; z-index: -2; }
+.ghost.r { color: #ff3b5c; animation: ghostR calc(640ms*var(--speed)) ease-out both; }
+.ghost.c { color: #24e5ff; animation: ghostC calc(640ms*var(--speed)) ease-out both; }
+@keyframes ghostR { 0%{transform:translate(26px,-9px);opacity:1} 40%{transform:translate(6px,-2px);opacity:.85} 100%{transform:translate(0,0);opacity:0} }
+@keyframes ghostC { 0%{transform:translate(-26px,9px);opacity:1} 40%{transform:translate(-6px,2px);opacity:.85} 100%{transform:translate(0,0);opacity:0} }
+
+@keyframes slam {
+  0%{opacity:0;transform:skewX(-8deg) scale(3.1);filter:blur(9px)}
+  16%{opacity:1;transform:skewX(-8deg) scale(.9);filter:blur(0)}
+  26%{transform:skewX(-8deg) scale(1.06)}
+  36%{transform:skewX(-8deg) scale(1)}
+  78%{opacity:1;transform:skewX(-8deg) scale(1)}
+  100%{opacity:0;transform:skewX(-8deg) scale(1.14);filter:blur(3px)}
+}
+
+/* Per-glyph slam — each character lands on its own beat. Used by tiers 6-7,
+   where the word is the centrepiece rather than a label on an explosion. */
+.word.split .g { position: relative; display: inline-block; animation: glyph var(--gd) cubic-bezier(.1,.85,.2,1) both; }
+@keyframes glyph {
+  0%{opacity:0;transform:scale(4.4) rotate(-16deg);filter:blur(14px)}
+  10%{opacity:1;transform:scale(.86) rotate(2deg);filter:blur(0)}
+  17%{transform:scale(1.1) rotate(-1deg)}
+  25%{transform:scale(1) rotate(0)}
+  86%{opacity:1;transform:scale(1)}
+  100%{opacity:0;transform:scale(1.2);filter:blur(4px)}
+}
+
+.sub { font-family: var(--font-mono); font-weight: 600; letter-spacing: .42em; text-indent: .42em; color: #fff; text-shadow: 0 0 10px var(--accent), 0 2px 4px rgba(0,0,0,.8); animation: subIn var(--sd) cubic-bezier(.15,.85,.3,1) both; }
+@keyframes subIn { 0%{opacity:0;transform:translateY(12px);letter-spacing:1.1em} 26%{opacity:1;transform:translateY(0);letter-spacing:.42em} 82%{opacity:1} 100%{opacity:0} }
+
+.fx[data-tier="1"] .word { font-size: clamp(30px,6.4vw,66px); }
+.fx[data-tier="2"] .word { font-size: clamp(38px,8.2vw,88px); }
+.fx[data-tier="3"] .word { font-size: clamp(46px,10.4vw,116px); }
+.fx[data-tier="4"] .word { font-size: clamp(52px,11.8vw,132px); }
+.fx[data-tier="5"] .word { font-size: clamp(56px,12.8vw,146px); }
+.fx[data-tier="6"] .word { font-size: clamp(60px,14vw,168px); }
+.fx[data-tier="7"] .word,
+.fx[data-tier="comeback"] .word { font-size: clamp(64px,15.4vw,190px); }
+.fx[data-tier="1"] .sub { font-size: 10px; }
+.fx[data-tier="2"] .sub { font-size: 11px; }
+.fx[data-tier="3"] .sub { font-size: 13px; }
+.fx[data-tier="4"] .sub { font-size: 14px; }
+.fx[data-tier="5"] .sub { font-size: 15px; }
+.fx[data-tier="6"] .sub { font-size: 17px; }
+.fx[data-tier="7"] .sub,
+.fx[data-tier="comeback"] .sub { font-size: 19px; }
+
+/* ── Card slam ─────────────────────────────────────────────────────────── */
+.slammer {
+  position: absolute; left: 50%; top: 46%; width: 76px; height: 110px; margin: -55px 0 0 -38px;
+  border-radius: 7px; background: linear-gradient(160deg,#fff 0%,#fdfdfb 55%,#e9ebe4 100%);
+  box-shadow: 0 18px 34px rgba(0,0,0,.6); color: #16202b;
+  display: grid; place-items: center; font-weight: 700; font-size: 30px;
+  animation: slamCard calc(420ms*var(--speed)) cubic-bezier(.4,0,.28,1) both;
+}
+/* The squash at the end is what sells the weight — a card that merely stops
+   reads as a slideshow; one that deforms reads as mass hitting a table. */
+@keyframes slamCard {
+  0%{opacity:0;transform:translate(0,300px) scale(.55) rotate(-16deg)}
+  22%{opacity:1}
+  58%{transform:translate(0,-34px) scale(2.15) rotate(7deg)}
+  84%{transform:translate(0,0) scale(1) rotate(0)}
+  92%{transform:translate(0,6px) scaleX(1.22) scaleY(.8)}
+  100%{opacity:1;transform:translate(0,0) scale(1)}
+}
+.dust { position: absolute; left: 50%; top: 52%; width: 180px; height: 40px; margin: -20px 0 0 -90px; border-radius: 50%; border: 2px solid rgba(255,255,255,.5); animation: dust calc(560ms*var(--speed)) cubic-bezier(.1,.8,.3,1) both; }
+@keyframes dust { 0%{opacity:.8;transform:scale(.2)} 100%{opacity:0;transform:scale(2.8)} }
+
+/* ── Controls ──────────────────────────────────────────────────────────── */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
+.toolbar .spacer { flex: 1; }
+button { font-family: var(--font-ui); font-size: 13px; font-weight: 500; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px; padding: 7px 13px; cursor: pointer; transition: background .12s, border-color .12s; }
+button:hover { background: #1d2b25; border-color: #3a4f45; }
+button:focus-visible { outline: 2px solid var(--c2); outline-offset: 2px; }
+button[aria-pressed="true"] { background: #1f3a2c; border-color: var(--c1); color: #d7ffe8; }
+.readout { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.readout b { color: var(--ink); font-weight: 600; }
+
+.rack { display: flex; flex-direction: column; }
+.tier { display: grid; grid-template-columns: 84px 1fr; gap: 18px; padding: 16px 4px; border-top: 1px solid var(--line); align-items: start; }
+.tier:last-child { border-bottom: 1px solid var(--line); }
+.tier-id { display: flex; flex-direction: column; gap: 3px; }
+.tier-num { font-family: var(--font-mono); font-size: 26px; font-weight: 600; line-height: 1; color: var(--tint); font-variant-numeric: tabular-nums; }
+.tier-name { font-family: var(--font-display); font-weight: 700; font-size: 13px; }
+.tier-note { font-size: 11px; color: var(--muted); line-height: 1.35; }
+.chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip { font-family: var(--font-display); font-weight: 700; font-size: 13px; padding: 7px 12px; border-radius: 2px; border: 1px solid color-mix(in srgb, var(--tint) 34%, var(--line)); background: color-mix(in srgb, var(--tint) 9%, var(--panel)); color: var(--ink); cursor: pointer; transition: background .12s, transform .08s; text-align: left; }
+.chip:hover { background: color-mix(in srgb, var(--tint) 22%, var(--panel)); }
+.chip:active { transform: translateY(1px); }
+.chip:focus-visible { outline: 2px solid var(--tint); outline-offset: 2px; }
+.chip small { display: block; font-family: var(--font-mono); font-weight: 400; font-size: 9px; letter-spacing: .1em; color: var(--muted); margin-top: 2px; }
+
+.tier[data-tier="0"] { --tint: #55655e; }
+.tier[data-tier="1"] { --tint: var(--c1); }
+.tier[data-tier="2"] { --tint: var(--c2); }
+.tier[data-tier="3"] { --tint: var(--c3); }
+.tier[data-tier="4"] { --tint: var(--c4); }
+.tier[data-tier="5"] { --tint: var(--c5); }
+.tier[data-tier="6"] { --tint: var(--c6); }
+.tier[data-tier="7"] { --tint: var(--c7); }
+.tier[data-tier="comeback"] { --tint: var(--cc); }
+
+.foot { font-size: 13px; color: var(--muted); max-width: 70ch; display: flex; flex-direction: column; gap: 9px; }
+.foot strong { color: var(--ink); font-weight: 600; }
+.foot code { font-family: var(--font-mono); font-size: 12px; background: var(--panel-2); border: 1px solid var(--line); padding: 1px 5px; border-radius: 2px; color: #cfe6da; }
+.rm-note { display: none; font-size: 12px; color: var(--muted); border: 1px dashed var(--line); padding: 9px 12px; border-radius: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Every animation here is the direct result of pressing a button, so
+     playback stays. What goes is anything that would move unasked. */
+  .rm-note { display: block; }
+  .chip:active { transform: none; }
+}
+@media (max-width: 620px) {
+  .tier { grid-template-columns: 1fr; gap: 10px; }
+  .stage { min-height: 240px; }
+}
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <span class="eyebrow">VFX preview · 7 tiers · CSS + synthesized audio</span>
+    <h1>鬥地主 Hit Banners</h1>
+    <p class="lede">
+      Fighting-game hit banners for every 牌型. Tier is computed from the play itself —
+      hand type, base rank and card count — so 對子 of 9 and 對子 of A land in different
+      places. Fire any example below and watch it hit a mock table.
+    </p>
+  </header>
+
+  <div class="rm-note">
+    Your system asks for reduced motion. Effects still play on demand, since that's this
+    page's whole purpose — nothing animates on its own.
+  </div>
+
+  <div class="stage-frame">
+    <div class="stage" id="stage">
+      <div class="seat left"><span class="pip" style="background:#7c3aed">明</span><span>阿明 · 7張</span></div>
+      <div class="seat right"><span>小華 · 2張</span><span class="pip" style="background:#db2777">華</span></div>
+      <div class="hand" aria-hidden="true">
+        <div class="pcard">3<span class="suit">♠</span></div>
+        <div class="pcard red">5<span class="suit">♥</span></div>
+        <div class="pcard">7<span class="suit">♣</span></div>
+        <div class="pcard red">9<span class="suit">♦</span></div>
+        <div class="pcard">J<span class="suit">♠</span></div>
+        <div class="pcard red">Q<span class="suit">♥</span></div>
+        <div class="pcard">K<span class="suit">♣</span></div>
+        <div class="pcard red">A<span class="suit">♦</span></div>
+      </div>
+      <div class="fx" id="fx"></div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button id="replay">↻ Replay last</button>
+    <button id="rapid">Rapid fire ×6</button>
+    <button id="slow" aria-pressed="false">Slow motion 0.25×</button>
+    <button id="withSlam" aria-pressed="true">Card slam first</button>
+    <button id="sound" aria-pressed="true">Sound on</button>
+    <button id="stopMusic">■ Stop music</button>
+    <span class="spacer"></span>
+    <span class="readout" id="readout">ready</span>
+  </div>
+
+  <div class="rack" id="rack"></div>
+
+  <div class="foot">
+    <p style="margin:0">
+      <strong>Tier is derived, not assigned.</strong> Each chip carries a real
+      <code>type</code>, <code>rank</code> and card count, and the page runs the same
+      <code>tierOf()</code> that would run in game. All three values already come from the
+      server on <code>lastPlay</code>, so shipping this needs no backend change.
+    </p>
+    <p style="margin:0">
+      <strong>Tier 7 audio is a placeholder.</strong> Drop your track at
+      <code>frontend/public/sounds/tier-7-rocket.mp3</code> and it replaces the synthesized
+      stand-in. Keep it under 5s.
+    </p>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Tier rules
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Tier for a play, 0 = no banner.
+ *
+ * Mirrors exactly what would run in the game. `rank` is the play's comparison
+ * rank, which the server already sends on lastPlay — for 三帶一 that is the
+ * trio's rank, not the kicker's, which is what makes "based on 2 or A" cheap
+ * to test. 14 = A, 15 = 2, 16/17 = jokers.
+ */
+function tierOf(type, rank, count) {
+  const high = rank >= 14;                 // A or 2 as the base of the hand
+  switch (type) {
+    case 'single':          return rank >= 15 ? 1 : 0;   // 2 and jokers only
+    case 'pair':
+    case 'trio':            return high ? 2 : 1;
+    case 'trio_single':
+    case 'trio_pair':       return high ? 3 : 2;
+    case 'pair_sequence':   return count / 2 > 3 ? 3 : 2;
+    case 'sequence':        return count >= 12 ? 4 : count >= 8 ? 3 : 2;
+    case 'trio_sequence':   return count / 3 > 3 ? 4 : 3;
+    case 'trio_seq_singles':return count / 4 > 3 ? 4 : 3;
+    case 'trio_seq_pairs':  return count / 5 > 3 ? 4 : 3;
+    case 'quad_singles':
+    case 'quad_pairs':      return 3;
+    case 'bomb':            return high ? 6 : 5;         // AAAA / 2222
+    case 'rocket':          return 7;
+    default:                return 1;
+  }
+}
+
+const TIERS = {
+  0: { name: '—', note: 'No banner. Anything below a 2.',              dur: 0,    color: '#55655e' },
+  1: { name: '輕', note: 'Word only. Barely interrupts.',              dur: 620,  color: '#4ade80' },
+  2: { name: '中', note: 'Lightning beam behind the word.',            dur: 800,  color: '#38bdf8' },
+  3: { name: '大', note: 'Rays, sparks, a shake.',                     dur: 980,  color: '#a78bfa' },
+  4: { name: '猛', note: 'Rings, chromatic split, letterbox.',         dur: 1300, color: '#f472b6' },
+  5: { name: '爆', note: 'Charge-up, whiteout, cracks, embers.',       dur: 1900, color: '#fb923c' },
+  6: { name: '霸', note: 'Full takeover. Per-glyph slam, aftershock.', dur: 2900, color: '#ef4444' },
+  7: { name: '神', note: 'Jokers collide. God-rays, gold storm.',      dur: 4300, color: '#fde047' },
+  comeback: { name: '反殺', note: 'Cross-party answer to a strong play.', dur: 3200, color: '#22d3ee' },
+};
+
+/**
+ * Comeback: a specific strong play answered by a stronger one ACROSS the table.
+ * Peasant-over-peasant never counts — the drama is in beating the other side.
+ */
+const TRIO_FAMILY = new Set(['trio', 'trio_single', 'trio_pair']);
+const RUN_FAMILY = new Set(['pair_sequence', 'sequence', 'trio_sequence',
+  'trio_seq_singles', 'trio_seq_pairs', 'quad_singles', 'quad_pairs']);
+
+function comebackMatchup(curr, prev) {
+  const c = curr.type, q = prev.type;
+  if (c === 'single' && q === 'single') {
+    if (curr.rank >= 16 && prev.rank === 15) return true;   // joker over a 2
+    if (curr.rank === 17 && prev.rank === 16) return true;  // 大王 over 小王
+    return false;
+  }
+  if (c === 'pair' && q === 'pair') return curr.rank === 15 && prev.rank === 14;
+  if (TRIO_FAMILY.has(c) && c === q) return prev.rank === 13;   // over a trio of kings
+  if (RUN_FAMILY.has(c) && c === q) return true;
+  return false;
+}
+
+/** Full level for an example play, comeback included. */
+function levelOf(p) {
+  const base = tierOf(p.type, p.rank, p.count);
+  if (base >= 5) return base;                       // bombs keep their own tier
+  if (p.prev && !p.sameParty && comebackMatchup(p, p.prev)) return 'comeback';
+  return base;
+}
+
+/* Example plays. `word` is what the banner shows; `zh` labels the chip. */
+const PLAYS = [
+  { zh:'單張 K',      sub:'LOW SINGLE',   word:'',        type:'single',           rank:13, count:1,  glyph:'K' },
+  { zh:'大弟 (2)',    sub:'DEUCE',        word:'大弟',    type:'single',           rank:15, count:1,  glyph:'2' },
+  { zh:'小王',        sub:'LITTLE JOKER', word:'小王',    type:'single',           rank:16, count:1,  glyph:'小' },
+  { zh:'大王',        sub:'BIG JOKER',    word:'大王',    type:'single',           rank:17, count:1,  glyph:'大' },
+  { zh:'對子 9',      sub:'PAIR',         word:'對子',    type:'pair',             rank:9,  count:2,  glyph:'9' },
+  { zh:'三張 10',     sub:'TRIO',         word:'三張',    type:'trio',             rank:10, count:3,  glyph:'10' },
+
+  { zh:'對 A',        sub:'PAIR OF ACES', word:'對子',    type:'pair',             rank:14, count:2,  glyph:'A' },
+  { zh:'對 2',        sub:'PAIR OF TWOS', word:'對子',    type:'pair',             rank:15, count:2,  glyph:'2' },
+  { zh:'三張 A',      sub:'TRIO OF ACES', word:'三張',    type:'trio',             rank:14, count:3,  glyph:'A' },
+  { zh:'三帶一 9',    sub:'TRIO + ONE',   word:'三帶一',  type:'trio_single',      rank:9,  count:4,  glyph:'9' },
+  { zh:'三帶對 8',    sub:'TRIO + PAIR',  word:'三帶對',  type:'trio_pair',        rank:8,  count:5,  glyph:'8' },
+  { zh:'順子 5張',    sub:'STRAIGHT',     word:'順子',    type:'sequence',         rank:9,  count:5,  glyph:'7' },
+  { zh:'連對 3對',    sub:'DOUBLE RUN',   word:'連對',    type:'pair_sequence',    rank:8,  count:6,  glyph:'6' },
+
+  { zh:'三帶一 A',    sub:'TRIO + ONE',   word:'三帶一',  type:'trio_single',      rank:14, count:4,  glyph:'A' },
+  { zh:'三帶對 2',    sub:'TRIO + PAIR',  word:'三帶對',  type:'trio_pair',        rank:15, count:5,  glyph:'2' },
+  { zh:'連對 5對',    sub:'LONG RUN',     word:'連對',    type:'pair_sequence',    rank:10, count:10, glyph:'10' },
+  { zh:'長順 9張',    sub:'LONG STRAIGHT',word:'長順',    type:'sequence',         rank:11, count:9,  glyph:'J' },
+  { zh:'飛機 2組',    sub:'AIRPLANE',     word:'飛機',    type:'trio_sequence',    rank:9,  count:6,  glyph:'9' },
+  { zh:'飛機帶單 3組',sub:'PLANE + ONES', word:'飛機帶單',type:'trio_seq_singles', rank:10, count:12, glyph:'10' },
+  { zh:'四帶二',      sub:'QUAD + TWO',   word:'四帶二',  type:'quad_singles',     rank:12, count:6,  glyph:'Q' },
+
+  { zh:'一條龍 3→A',  sub:'DRAGON',       word:'一條龍',  type:'sequence',         rank:14, count:12, glyph:'A' },
+  { zh:'飛機 4組',    sub:'AIRPLANE ×4',  word:'飛機',    type:'trio_sequence',    rank:11, count:12, glyph:'J' },
+  { zh:'飛機帶對 4組',sub:'PLANE + PAIRS',word:'飛機帶對',type:'trio_seq_pairs',   rank:10, count:20, glyph:'10' },
+
+  { zh:'炸彈 7777',   sub:'BOMB',         word:'炸彈',    type:'bomb',             rank:7,  count:4,  glyph:'7' },
+
+  { zh:'炸彈 AAAA',   sub:'ACE BOMB',     word:'炸彈',    type:'bomb',             rank:14, count:4,  glyph:'A' },
+  { zh:'炸彈 2222',   sub:'DEUCE BOMB',   word:'炸彈',    type:'bomb',             rank:15, count:4,  glyph:'2' },
+
+  { zh:'火箭 雙王',   sub:'ROCKET',       word:'火箭',    type:'rocket',           rank:17, count:2,  glyph:'王' },
+];
+/* Comeback examples. `prev` is the play being beaten; `sameParty` marks the
+   peasant-over-peasant case that must NOT fire. */
+const CB = (zh, sub, word, type, rank, count, prev, sameParty = false) =>
+  ({ zh, sub, word, type, rank, count, glyph: '殺', prev, sameParty });
+
+PLAYS.push(
+  CB('大王 壓 2',      'JOKER OVER DEUCE', '反殺', 'single', 17, 1, { type:'single', rank:15 }),
+  CB('大王 壓 小王',    'BIG OVER LITTLE',  '反殺', 'single', 17, 1, { type:'single', rank:16 }),
+  CB('對2 壓 對A',     'DEUCES OVER ACES', '反殺', 'pair', 15, 2, { type:'pair', rank:14 }),
+  CB('三帶一 壓 三個K', 'TRIO OVER KINGS',  '反殺', 'trio_single', 14, 4, { type:'trio_single', rank:13 }),
+  CB('連對 壓 連對',    'RUN OVER RUN',     '反殺', 'pair_sequence', 12, 8, { type:'pair_sequence', rank:9 }),
+  CB('飛機 壓 飛機',    'PLANE OVER PLANE', '反殺', 'trio_sequence', 12, 9, { type:'trio_sequence', rank:9 }),
+  CB('對2 壓 對A（同隊）', 'SAME SIDE — NO CB', '對子', 'pair', 15, 2, { type:'pair', rank:14 }, true),
+);
+
+PLAYS.forEach(p => { p.tier = levelOf(p); });
+
+/* Base64 tier stingers, injected at build time. */
+const AUDIO = {"tier-1":"sounds/tier-1.wav","tier-2":"sounds/tier-2.wav","tier-3":"sounds/tier-3.wav","tier-4":"sounds/tier-4.wav","tier-5":"sounds/tier-5.wav","tier-6":"sounds/tier6.mp3","tier-7":"sounds/tier7.mp3","tier-comeback":"sounds/tier-comeback.mp3"};
+
+const stage   = document.getElementById('stage');
+const fx      = document.getElementById('fx');
+const readout = document.getElementById('readout');
+
+let last = PLAYS.find(p => p.type === 'rocket');
+let slowMo = false, withSlam = true, soundOn = true;
+let rapidTimers = [];
+const audioCache = {};
+
+/* Tiers 6, 7 and comeback are 30-46 second music tracks, not stingers. They
+   play to the end and deliberately outlive the banner. Only a track that
+   outranks the running one can cut it off — which is what makes "a bigger bomb
+   restarts it" and "a rocket answers a bomb" fall out of one comparison. */
+const MUSIC_LEVELS = new Set(['6', '7', 'comeback']);
+let musicEl = null, musicWeight = -1;
+
+function weightOf(level, rank) {
+  if (level === 'comeback') return 100;
+  if (level === 6) return 200 + rank;      // AAAA = 214, 2222 = 215
+  if (level === 7) return 300;
+  return 0;
+}
+
+function play(level, rank = 0) {
+  if (!soundOn || !level) return;
+  const src = AUDIO['tier-' + level];
+  if (!src) return;
+
+  if (MUSIC_LEVELS.has(String(level))) {
+    const w = weightOf(level, rank);
+    if (musicEl && !musicEl.paused && !musicEl.ended && w <= musicWeight) return;
+    stopMusic();
+    musicEl = new Audio(src);
+    musicWeight = w;
+    musicEl.addEventListener('ended', () => { musicEl = null; musicWeight = -1; }, { once: true });
+    musicEl.play().catch(() => {});
+    return;
+  }
+
+  let a = audioCache[level];
+  if (!a) { a = new Audio(src); audioCache[level] = a; }
+  a.playbackRate = slowMo ? 0.5 : 1;
+  a.currentTime = 0;
+  a.play().catch(() => {});   // blocked before first interaction — fine
+}
+
+function stopMusic() {
+  if (musicEl) { musicEl.pause(); musicEl.currentTime = 0; }
+  musicEl = null; musicWeight = -1;
+}
+/* Only clears stingers — the music channel is left alone on purpose. */
+function hush() {
+  for (const a of Object.values(audioCache)) { a.pause(); a.currentTime = 0; }
+}
+function musicLeft() {
+  if (!musicEl || musicEl.paused || musicEl.ended || !isFinite(musicEl.duration)) return 0;
+  return Math.ceil(musicEl.duration - musicEl.currentTime);
+}
+
+/* ── Rack, grouped by computed tier ────────────────────────────────────── */
+const rack = document.getElementById('rack');
+for (const t of [0, 1, 2, 3, 4, 5, 6, 7, 'comeback']) {
+  const members = PLAYS.filter(p => p.tier === t);
+  if (!members.length) continue;
+  const info = TIERS[t];
+  const row = document.createElement('div');
+  row.className = 'tier';
+  row.dataset.tier = t;
+  const id = document.createElement('div');
+  id.className = 'tier-id';
+  id.innerHTML = `<span class="tier-num">${t === 'comeback' ? '↺' : (t || '·')}</span>` +
+                 `<span class="tier-name">${info.name}</span>` +
+                 `<span class="tier-note">${info.note}</span>`;
+  const chips = document.createElement('div');
+  chips.className = 'chips';
+  for (const p of members) {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.type = 'button';
+    b.innerHTML = `${p.zh}<small>${p.sub}</small>`;
+    b.addEventListener('click', () => fire(p));
+    chips.appendChild(b);
+  }
+  row.append(id, chips);
+  rack.appendChild(row);
+}
+
+/* ── Fire ──────────────────────────────────────────────────────────────── */
+function fire(p) {
+  last = p;
+  const tier = p.tier;
+  const sp = slowMo ? 4 : 1;
+  const ms = (n) => (n * sp) + 'ms';
+
+  stage.style.setProperty('--speed', sp);
+  fx.innerHTML = '';
+  fx.dataset.tier = tier;
+  fx.style.setProperty('--accent', TIERS[tier].color);
+  hush();
+
+  const add = (cls, html = '', style = '') => {
+    const el = document.createElement('div');
+    el.className = cls;
+    if (style) el.setAttribute('style', style);
+    if (html) el.innerHTML = html;
+    fx.appendChild(el);
+    return el;
+  };
+
+  const slam = withSlam;
+  if (slam) {
+    add('slammer', p.glyph);
+    add('dust', '', `animation-delay:${ms(300)}`);
+    setTimeout(() => kick(1), 300 * sp);
+  }
+  if (tier === 0) {
+    readout.innerHTML = `<b>${p.zh}</b> · no banner · card slam only`;
+    return;
+  }
+
+  const t0 = slam ? 300 : 0;           // banner starts after the card lands
+  setTimeout(() => { if (fx.isConnected) build(p, tier, sp, ms, add); }, t0 * sp);
+  play(tier, p.rank);
+
+  const total = TIERS[tier].dur + t0;
+  readout.innerHTML = `<b>${p.zh}</b> · tier ${tier} ${TIERS[tier].name} · ${total}ms` +
+    (slowMo ? ' <span style="opacity:.6">(×4 slow)</span>' : '');
+  updateMusicReadout();
+}
+
+function build(p, tier, sp, ms, add) {
+  // A comeback borrows the legendary layer set, minus the two effects that are
+  // the rocket's signature (the colliding jokers and the gold rain).
+  const n = tier === 'comeback' ? 7 : tier;
+  const accent = TIERS[n].color;
+  const big = n >= 6;
+
+  /* Phase offsets. Tiers 5+ charge up before the hit, so everything after the
+     impact is pushed back by that wind-up. */
+  const chargeMs = tier === 'comeback' ? 620 : n === 7 ? 1150 : n === 6 ? 700 : n === 5 ? 340 : 0;
+  const H = chargeMs;                  // moment of impact
+
+  if (n >= 5) {
+    add('charge', '', `--dur:${ms(chargeMs)}`);
+    add('curtain', '', `--dur:${ms(TIERS[n].dur)}`);
+  }
+  if (tier === 7) {
+    add('jk l', '王', `--d:${ms(H + 120)}`);
+    add('jk r', '王', `--d:${ms(H + 120)}`);
+  }
+
+  const at = (fn, d) => setTimeout(() => { if (fx.isConnected) fn(); }, d * sp);
+
+  at(() => {
+    add(big ? 'whiteout' : 'flash', '', `animation-delay:0ms`);
+    if (n >= 2) add('beam', '<i></i><u></u>');
+    if (n >= 3) add('rays');
+    if (n === 7) add('godray');
+    if (n >= 4) {
+      add('ring');
+      add('ring', '', `animation-delay:${ms(90)}`);
+    }
+    if (n >= 5) add('ring fat', '', `animation-delay:${ms(180)}`);
+    if (big) add('ring fat', '', `animation-delay:${ms(300)}`);
+
+    if (n >= 4) {
+      const h = n >= 6 ? '13%' : '9%';
+      add('bar top', '', `height:${h};animation:bar ${ms(TIERS[n].dur)} cubic-bezier(.2,.9,.25,1) both`);
+      add('bar bottom', '', `height:${h};animation:bar ${ms(TIERS[n].dur)} cubic-bezier(.2,.9,.25,1) both`);
+    }
+    if (n >= 5) add('wash', '', `--dur:${ms(TIERS[n].dur - H)}`);
+
+    /* Sparks */
+    if (n >= 3) {
+      const n = n === 3 ? 16 : n === 4 ? 26 : n === 5 ? 40 : n === 6 ? 60 : 84;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + (i % 3) * .28;
+        const d = 130 + ((i * 137) % (n >= 6 ? 420 : 230));
+        const s = 4 + ((i * 53) % (n >= 6 ? 12 : 8));
+        add('spark', '', `width:${s}px;height:${s}px;margin:${-s/2}px 0 0 ${-s/2}px;` +
+          `background:${i % 3 ? '#fff' : accent};box-shadow:0 0 ${s*2}px ${accent};` +
+          `--dx:${(Math.cos(a)*d).toFixed(1)}px;--dy:${(Math.sin(a)*d*.7+70).toFixed(1)}px;` +
+          `animation-delay:${ms((i % 5) * 24)}`);
+      }
+    }
+
+    /* Cracks — n 5 and up */
+    if (n >= 5) {
+      const n = n === 5 ? 5 : n === 6 ? 9 : 13;
+      for (let i = 0; i < n; i++) {
+        const ang = (i / n) * 360 + ((i * 47) % 23) - 11;
+        add('crack', '', `--a:${ang.toFixed(1)}deg;animation-delay:${ms((i % 3) * 40)}`);
+      }
+    }
+
+    /* Embers drifting up */
+    if (n >= 5) {
+      const n = n === 5 ? 14 : n === 6 ? 26 : 34;
+      for (let i = 0; i < n; i++) {
+        const s = 3 + ((i * 31) % 6);
+        add('ember', '', `--x:${((i * 137) % 100)}%;--s:${s}px;` +
+          `--dx:${(((i * 53) % 60) - 30)}px;--d:${ms(1300 + ((i * 91) % 900))};` +
+          `animation-delay:${ms((i % 7) * 90)}`);
+      }
+    }
+
+    /* Gold rain — legendary only */
+    if (tier === 7) {
+      for (let i = 0; i < 60; i++) {
+        const s = 3 + ((i * 29) % 5);
+        add('goldfall', '', `--x:${((i * 167) % 100)}%;--s:${s}px;` +
+          `--r:${((i * 211) % 900) + 360}deg;--d:${ms(1500 + ((i * 83) % 1100))};` +
+          `animation-delay:${ms((i % 9) * 110)}`);
+      }
+    }
+
+    /* The word */
+    const dur = TIERS[n].dur - H;
+    const ghosts = n >= 4
+      ? `<span class="ghost r">${p.word}</span><span class="ghost c">${p.word}</span>` : '';
+    let inner;
+    if (big) {
+      // Per-glyph: each character lands on its own beat.
+      const chars = [...p.word];
+      const per = Math.round(dur * 0.86);
+      inner = chars.map((ch, i) =>
+        `<span class="g" style="--gd:${ms(per)};animation-delay:${ms(i * 110)}">` +
+        `<span class="stroke" aria-hidden="true">${ch}</span><span class="fill">${ch}</span></span>`
+      ).join('');
+    } else {
+      inner = `<span class="stroke" aria-hidden="true">${p.word}</span>` +
+              `<span class="fill">${p.word}</span>`;
+    }
+    add('banner',
+      `<span class="word${big ? ' split' : ''}">${ghosts}${inner}</span>` +
+      `<span class="sub" style="--sd:${ms(dur)};animation-delay:${ms(big ? 260 : 0)}">${p.sub}</span>`);
+
+    kick(n >= 6 ? 3 : n >= 3 ? 2 : 1);
+    if (n >= 6) at(() => kick(2), 950);       // aftershock
+  }, H);
+}
+
+function kick(level) {
+  const cls = level >= 3 ? 'sk3' : level === 2 ? 'sk2' : 'sk1';
+  stage.classList.remove('sk1', 'sk2', 'sk3');
+  void stage.offsetWidth;                        // force reflow so it restarts
+  stage.classList.add(cls);
+  stage.addEventListener('animationend', () => stage.classList.remove(cls), { once: true });
+}
+
+/* ── Toolbar ───────────────────────────────────────────────────────────── */
+document.getElementById('replay').addEventListener('click', () => fire(last));
+
+document.getElementById('rapid').addEventListener('click', () => {
+  rapidTimers.forEach(clearTimeout);
+  rapidTimers = [];
+  const seq = ['對子 9', '順子 5張', '大王 壓 2', '炸彈 7777', '炸彈 AAAA', '火箭 雙王']
+    .map(z => PLAYS.find(p => p.zh === z));
+  let t = 0;
+  seq.forEach((p) => {
+    rapidTimers.push(setTimeout(() => fire(p), t));
+    t += Math.min(TIERS[p.tier].dur + 340, 1500);   // cut long ones short, as a real round would
+  });
+});
+
+const slowBtn = document.getElementById('slow');
+slowBtn.addEventListener('click', () => { slowMo = !slowMo; slowBtn.setAttribute('aria-pressed', String(slowMo)); });
+
+const slamBtn = document.getElementById('withSlam');
+slamBtn.addEventListener('click', () => { withSlam = !withSlam; slamBtn.setAttribute('aria-pressed', String(withSlam)); });
+
+document.getElementById('stopMusic').addEventListener('click', stopMusic);
+
+const soundBtn = document.getElementById('sound');
+soundBtn.addEventListener('click', () => {
+  soundOn = !soundOn;
+  soundBtn.setAttribute('aria-pressed', String(soundOn));
+  soundBtn.textContent = soundOn ? 'Sound on' : 'Sound off';
+  if (!soundOn) hush();
+});
+
+/* The music outlives the banner, so surface how much is left. */
+const musicNote = document.createElement('span');
+musicNote.className = 'readout';
+musicNote.style.marginLeft = '10px';
+readout.parentElement.appendChild(musicNote);
+function updateMusicReadout() {
+  const left = musicLeft();
+  musicNote.innerHTML = left > 0
+    ? `<span style="color:#22d3ee">♪ music ${left}s left</span>`
+    : '';
+}
+setInterval(updateMusicReadout, 500);
+
+// Open on the ceiling. Audio stays silent until the first interaction — that's
+// the browser's autoplay policy, not a bug.
+setTimeout(() => fire(PLAYS.find(p => p.type === 'rocket')), 600);
+</script>

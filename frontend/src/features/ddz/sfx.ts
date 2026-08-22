@@ -31,7 +31,12 @@ export type SfxKey =
   | 'warning'
   | 'tick'
   | 'select'
-  | 'deselect';
+  | 'deselect'
+  | 'tier1'
+  | 'tier2'
+  | 'tier3'
+  | 'tier4'
+  | 'tier5';
 
 interface SfxDef {
   src: string;
@@ -59,6 +64,13 @@ const SOUNDS: Record<SfxKey, SfxDef> = {
   tick: { src: '/sounds/tick.wav', gain: 0.5, pool: 2 },
   select: { src: '/sounds/select.wav', gain: 0.55, pool: 6 },
   deselect: { src: '/sounds/deselect.wav', gain: 0.45, pool: 6 },
+  // Hit-banner stingers. Tiers 6, 7 and comeback are long music tracks and go
+  // through the music channel instead — see playMusic.
+  tier1: { src: '/sounds/tier-1.wav', gain: 0.5, pool: 2 },
+  tier2: { src: '/sounds/tier-2.wav', gain: 0.6, pool: 2 },
+  tier3: { src: '/sounds/tier-3.wav', gain: 0.7, pool: 2 },
+  tier4: { src: '/sounds/tier-4.wav', gain: 0.8, pool: 2 },
+  tier5: { src: '/sounds/tier-5.wav', gain: 0.9, pool: 2 },
 };
 
 const VOLUME_KEY = 'ddz_volume';
@@ -106,6 +118,7 @@ class SfxBus {
       for (const a of pool) a.volume = clamped * SOUNDS[key].gain;
     }
     for (const a of this.oneShots.values()) a.volume = clamped;
+    if (this.music) this.music.volume = clamped;
     try {
       localStorage.setItem(VOLUME_KEY, String(clamped));
     } catch {
@@ -231,6 +244,59 @@ class SfxBus {
     audio.volume = this.volume;
     audio.currentTime = 0;
     audio.play().catch(() => {});
+  }
+
+  // ── Music channel ─────────────────────────────────────────────────────────
+  // One slot, for the long tier tracks (comeback / tier 6 / tier 7). These are
+  // 30–46 second pieces, not stingers: once one starts it plays to the end and
+  // keeps going straight through the end of the round. Only something that
+  // outranks it can cut it off, which is what makes "a bigger bomb restarts it"
+  // and "a rocket answers a bomb" fall out of one comparison.
+  private music: HTMLAudioElement | null = null;
+  private musicWeight = -1;
+
+  /**
+   * Start a track, unless one with an equal or higher weight is already
+   * running. Returns true if the track actually took the channel.
+   */
+  playMusic(src: string, weight: number): boolean {
+    if (typeof window === 'undefined') return false;
+    this.init();
+    if (this.volume === 0) return false;
+    if (this.music && !this.music.ended && !this.music.paused && weight <= this.musicWeight) {
+      return false;                      // current track outranks it — let it finish
+    }
+    this.stopMusic();
+    const audio = new Audio(src);
+    audio.preload = 'auto';
+    audio.volume = this.volume;
+    this.music = audio;
+    this.musicWeight = weight;
+    audio.addEventListener('ended', () => {
+      if (this.music === audio) { this.music = null; this.musicWeight = -1; }
+    }, { once: true });
+    audio.play().catch(() => {});
+    return true;
+  }
+
+  stopMusic(): void {
+    if (this.music) {
+      this.music.pause();
+      this.music.currentTime = 0;
+    }
+    this.music = null;
+    this.musicWeight = -1;
+  }
+
+  isMusicPlaying(): boolean {
+    return !!this.music && !this.music.paused && !this.music.ended;
+  }
+
+  /** Seconds remaining on the current track, 0 when nothing is playing. */
+  musicRemaining(): number {
+    const m = this.music;
+    if (!m || m.paused || m.ended || !Number.isFinite(m.duration)) return 0;
+    return Math.max(0, m.duration - m.currentTime);
   }
 
   /** Warm the cache for files that are not SOUNDS keys (emoji clips). */
