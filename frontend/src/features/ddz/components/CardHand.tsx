@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Card } from './Card';
+import { Card, NORMAL_CARD_WIDTH } from './Card';
 import { handLayoutId } from './cardLayout';
 import { sfx } from '@/features/ddz/sfx';
 import type { Card as CardType, Play } from '@/features/ddz/types';
@@ -29,7 +29,18 @@ interface CardHandProps {
  */
 const MAX_ARC_DEG = 18;      // total spread, first card to last
 const ARC_ORIGIN_PX = 230;   // pivot distance below the cards
-const OVERLAP_FROM = 8;      // start overlapping once the hand is at least this big
+
+/**
+ * Narrowest strip of a card we will ever leave exposed, in px. Overlapping any
+ * tighter than this makes individual cards genuinely hard to hit — 44px is the
+ * usual minimum comfortable touch target, and the extra couple of px absorbs
+ * the horizontal skew the fan rotation adds.
+ */
+const MIN_STEP = 46;
+/** Breathing room between cards once the hand is small enough to fit outright. */
+const CARD_GAP = 4;
+/** Horizontal padding on the strip (px-3 on each side). */
+const STRIP_PADDING = 24;
 
 function fanAngle(i: number, n: number): number {
   if (n < 2) return 0;
@@ -44,11 +55,66 @@ function fanLift(i: number, n: number): number {
   return (1 - p * p) * -4;
 }
 
+/**
+ * Decide how far apart to space the cards.
+ *
+ * A fixed overlap cannot work across screen sizes: the value that fits 17 cards
+ * on a phone squashes them into an untappable ribbon, and the value that reads
+ * well on a desktop overflows a phone entirely. So we spread the hand as widely
+ * as the strip allows and only start overlapping when it genuinely runs out of
+ * room — never past MIN_STEP, at which point the strip scrolls instead.
+ */
+function useFanSpacing(count: number, ref: RefObject<HTMLDivElement | null>) {
+  const [metrics, setMetrics] = useState<{ width: number; cardW: number }>({
+    width: 0,
+    cardW: NORMAL_CARD_WIDTH.base,
+  });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // ResizeObserver fires once when observation starts, and that initial call
+    // is what seeds the measurement — hence no synchronous read in the body.
+    const ro = new ResizeObserver(() => {
+      setMetrics({
+        width: el.clientWidth,
+        cardW: window.innerWidth >= 640 ? NORMAL_CARD_WIDTH.sm : NORMAL_CARD_WIDTH.base,
+      });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+
+  const { width, cardW } = metrics;
+  const avail = Math.max(0, width - STRIP_PADDING);
+  const maxStep = cardW + CARD_GAP;
+
+  // The cards at each end of the fan are rotated, so their painted box is wider
+  // than their layout box and they hang over the ends of the row. That overhang
+  // is real scroll width, and leaving it out of the sums makes a hand that was
+  // calculated to fit actually overflow — and then a centred row clips its own
+  // leading edge, putting the first cards out of reach.
+  const halfArc = (Math.min(MAX_ARC_DEG, count * 1.4) / 2) * (Math.PI / 180);
+  const cardH = cardW * (104 / 72); // normal cards are 60×87 / 72×104
+  const overhang = Math.max(0, cardW * Math.cos(halfArc) + cardH * Math.sin(halfArc) - cardW);
+
+  const idealStep = count > 1 ? (avail - cardW - overhang) / (count - 1) : maxStep;
+  const step = Math.max(MIN_STEP, Math.min(maxStep, idealStep));
+  // Floor rather than round so accumulated rounding can only ever shrink the
+  // fan, never nudge a hand that just fits into overflowing.
+  //
+  // Before the first measurement arrives `width` is 0, which lands on MIN_STEP.
+  // That is the deliberate fallback: it is always tappable, and centring is
+  // handled in CSS, so nothing breaks if the observer never fires at all.
+  return Math.floor(step - cardW);
+}
+
 export function CardHand({ cards, onPlay, onPass, interactive = true, lastPlay, onSelectionChange, turnEndTime, showActions = true }: CardHandProps) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const margin = useFanSpacing(cards.length, scrollRef);
 
   // Notify parent of selection changes
   useEffect(() => {
@@ -124,21 +190,27 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, lastPlay, 
     .map((i) => cards[i]);
   const canPlay = selected.size > 0 && validatePlay(selectedCards, lastPlay ?? null) !== null;
 
-  const overlap = cards.length >= OVERLAP_FROM;
-
   return (
     <div className="flex flex-col items-center gap-3 w-full">
       {/* Card strip. pt-9 leaves headroom for the lift on a selected card, which
-          the horizontal scroller would otherwise clip. */}
+          the horizontal scroller would otherwise clip.
+
+          The inner row is centred with `m-auto` rather than the outer using
+          `justify-center`: a centred flex row that overflows its scroll
+          container clips its own leading edge, and the clipped part cannot be
+          scrolled back into view — the first cards end up permanently
+          unreachable. Auto margins collapse to zero instead of going negative,
+          so the row centres when it fits and left-aligns when it does not. */}
       <div
         ref={scrollRef}
-        className="flex flex-row items-end justify-center overflow-x-auto no-scrollbar pt-9 pb-2 px-3 max-w-full"
+        className="flex overflow-x-auto no-scrollbar pt-9 pb-2 px-3 max-w-full"
         onWheel={(e) => {
           if (e.deltaY === 0 || !scrollRef.current) return;
           e.preventDefault();
           scrollRef.current.scrollLeft += e.deltaY;
         }}
       >
+        <div className="flex flex-row items-end m-auto">
         <AnimatePresence initial={false} mode="popLayout">
           {cards.map((card, idx) => (
             <motion.div
@@ -150,8 +222,7 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, lastPlay, 
               animate={{ opacity: 1, y: 0, rotateZ: 0 }}
               exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.12 } }}
               transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-              className={overlap && idx > 0 ? '-ml-[26px] sm:-ml-[30px]' : ''}
-              style={{ zIndex: selected.has(idx) ? 100 + idx : idx }}
+              style={{ marginLeft: idx === 0 ? 0 : margin, zIndex: selected.has(idx) ? 100 + idx : idx }}
             >
               <div
                 style={{
@@ -169,6 +240,7 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, lastPlay, 
             </motion.div>
           ))}
         </AnimatePresence>
+        </div>
       </div>
 
       {/* Action buttons + turn timer — always rendered; disabled when it isn't your turn */}
