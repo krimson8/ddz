@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { sfx, type SfxKey } from '@/features/ddz/sfx';
-import { hitLevel, labelFor, musicTrack, musicWeight } from '@/features/ddz/hitTier';
-import type { HitEvent } from '@/features/ddz/components/effects/HitBanner';
+import { hitLevel, labelFor, musicTrack, musicWeight, type HitLevel } from '@/features/ddz/hitTier';
+import { impactDelay, type HitEvent } from '@/features/ddz/components/effects/HitBanner';
 import type { GameState } from '@/features/ddz/types';
 
 /**
@@ -15,8 +15,20 @@ import type { GameState } from '@/features/ddz/types';
  * instead: those are 30–46 second tracks that deliberately outlive the banner
  * and keep playing into the end-of-round screen.
  */
+/**
+ * A card landing on the table. Emitted for every play, including the ones too
+ * small to earn a banner — the table should knock whenever cards hit it.
+ */
+export interface Knock {
+  id: number;
+  level: HitLevel;
+  /** ms after the play before the visible impact, for the charged tiers. */
+  impactAt: number;
+}
+
 export function useHitEvents(gameState: GameState) {
   const [event, setEvent] = useState<HitEvent | null>(null);
+  const [knock, setKnock] = useState<Knock | null>(null);
   const seq = useRef(0);
   const prevLen = useRef(gameState.playHistory.length);
 
@@ -40,10 +52,15 @@ export function useHitEvents(gameState: GameState) {
       history,
       landlordIndex,
     });
+    seq.current += 1;
+
+    // The knock fires for every play — a single 3 still thumps the table, it
+    // just doesn't earn a banner.
+    setKnock({ id: seq.current, level, impactAt: impactDelay(level) });
+
     if (level === 0) return;                        // anything under a 2
 
     const { word, sub } = labelFor(level, latest.play.type as string, latest.play.rank, latest.play.cards.length);
-    seq.current += 1;
     setEvent({ id: seq.current, level, word, sub });
 
     const track = musicTrack(level);
@@ -58,5 +75,5 @@ export function useHitEvents(gameState: GameState) {
   useEffect(() => () => sfx.stopMusic(), []);
 
   const clear = useCallback(() => setEvent(null), []);
-  return { event, clear };
+  return { event, knock, clear };
 }

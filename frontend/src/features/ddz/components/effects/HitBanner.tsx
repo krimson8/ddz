@@ -202,11 +202,26 @@ export function HitBanner({ event, onDone }: { event: HitEvent | null; onDone: (
   return <div ref={hostRef} className="hb" aria-hidden="true" />;
 }
 
-/** Shake strength a level should apply to the board. */
-export function shakeLevel(level: HitLevel): 0 | 1 | 2 | 3 {
+/**
+ * Shake strength a level should apply to the board.
+ *
+ * Never returns 0: every card that lands knocks the table. The tiers only
+ * decide how hard.
+ */
+export function shakeLevel(level: HitLevel): 1 | 2 | 3 {
   const n = num(level);
   if (n >= 6) return 3;
-  if (n >= 4) return 2;
-  if (n >= 3) return 1;
-  return 0;
+  if (n >= 3) return 2;
+  return 1;
+}
+
+/**
+ * When a level's visible impact lands, in ms after the banner starts.
+ *
+ * The heavy tiers wind up first, so shaking on arrival would put the jolt up to
+ * 1.7 seconds before the whiteout it is supposed to belong to.
+ */
+export function impactDelay(level: HitLevel): number {
+  const key = String(level);
+  return Math.round((CHARGE_MS[key] ?? 0) * (STRETCH[key] ?? 1));
 }

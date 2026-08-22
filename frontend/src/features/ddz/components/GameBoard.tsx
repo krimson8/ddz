@@ -15,7 +15,10 @@ import { useHitEvents } from '@/features/ddz/useHitEvents';
 import { EmojiChatBox, type EmojiHistoryEntry } from '@/components/EmojiChatBox';
 import type { Card, ClientMember, GameState } from '@/features/ddz/types';
 
-/** Board shake per hit strength. Index matches shakeLevel(). */
+/** How long a played card takes to reach the table, ms. */
+const LAND_MS = 190;
+
+/** Board shake per hit strength. Index matches shakeLevel(); 0 is unused. */
 const SHAKE = [
   null,
   { x: [0, -7, 6, -4, 3, 0], y: [0, 4, -4, 2, -1, 0], rotate: [0, -0.4, 0.35, -0.2, 0.1, 0], duration: 0.42 },
@@ -174,19 +177,37 @@ export function GameBoard({
   // and the banner can never disagree about which tier a play earned.
   const shake = useAnimationControls();
   const reduceMotion = useReducedMotion();
-  const { event: hitEvent, clear: clearHit } = useHitEvents(gameState);
+  const { event: hitEvent, knock, clear: clearHit } = useHitEvents(gameState);
 
   useEffect(() => {
-    if (!hitEvent || reduceMotion) return;
-    const spec = SHAKE[shakeLevel(hitEvent.level)];
-    if (!spec) return;
-    shake.start({
-      x: [...spec.x],
-      y: [...spec.y],
-      rotate: [...spec.rotate],
-      transition: { duration: spec.duration, ease: 'easeOut' },
-    });
-  }, [hitEvent, shake, reduceMotion]);
+    if (!knock || reduceMotion) return;
+
+    const jolt = (strength: 1 | 2 | 3) => {
+      const spec = SHAKE[strength];
+      shake.start({
+        x: [...spec.x],
+        y: [...spec.y],
+        rotate: [...spec.rotate],
+        transition: { duration: spec.duration, ease: 'easeOut' },
+      });
+    };
+
+    const strength = shakeLevel(knock.level);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    // The heavy tiers wind up before they hit, so the big jolt waits for the
+    // impact. When that wait is long enough to read as a separate beat, the
+    // card still gets its own small knock as it lands — otherwise the two would
+    // collide and the light one would cut the heavy one short.
+    if (strength > 1 && knock.impactAt > LAND_MS + 300) {
+      timers.push(setTimeout(() => jolt(1), LAND_MS));
+      timers.push(setTimeout(() => jolt(strength), knock.impactAt));
+    } else {
+      timers.push(setTimeout(() => jolt(strength), Math.max(LAND_MS, knock.impactAt)));
+    }
+
+    return () => timers.forEach(clearTimeout);
+  }, [knock, shake, reduceMotion]);
 
   return (
     <div className="relative min-h-screen ddz-felt ddz-scene flex flex-col select-none overflow-hidden h-screen">
