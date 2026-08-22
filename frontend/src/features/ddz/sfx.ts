@@ -1,0 +1,248 @@
+'use client';
+
+/**
+ * Module-level sound bus for DDZ.
+ *
+ * Sound used to live entirely inside useSoundEffects, which meant only things
+ * that could see the whole GameState were able to make a noise. UI-level cues
+ * (picking a card up, the turn timer ticking) come from components that never
+ * see that state, so the playback layer lives here as a singleton and the hook
+ * became just the state → cue mapper on top of it.
+ *
+ * Deliberately built on HTMLAudioElement rather than Web Audio: the emoji voice
+ * clips are .ogg, whose decodeAudioData support is still patchy on Safari, and
+ * these files already work today. Pooling gives us overlap, and playbackRate
+ * with preservesPitch off gives us the pitch variation that stops repeated card
+ * plays sounding machine-gunned.
+ */
+
+export type SfxKey =
+  | 'cardPlay'
+  | 'pass'
+  | 'yourTurn'
+  | 'deal'
+  | 'win'
+  | 'lose'
+  | 'landlord'
+  | 'gameStart'
+  | 'surrenderPending'
+  | 'bomb'
+  | 'rocket'
+  | 'warning'
+  | 'tick'
+  | 'select'
+  | 'deselect';
+
+interface SfxDef {
+  src: string;
+  /** Per-sound trim, applied on top of the master volume, so levels sit together. */
+  gain: number;
+  /** How many elements to pool — raise it for sounds that can overlap themselves. */
+  pool?: number;
+}
+
+const SOUNDS: Record<SfxKey, SfxDef> = {
+  // card-play.wav is the one original file and is mastered a lot quieter than
+  // the generated set, so it gets unity gain while the rest are trimmed down.
+  cardPlay: { src: '/sounds/card-play.wav', gain: 1.0, pool: 4 },
+  pass: { src: '/sounds/pass.wav', gain: 0.75 },
+  yourTurn: { src: '/sounds/your-turn.mp3', gain: 0.9 },
+  deal: { src: '/sounds/deal.wav', gain: 0.7 },
+  win: { src: '/sounds/win.wav', gain: 0.85 },
+  lose: { src: '/sounds/lose.wav', gain: 0.75 },
+  landlord: { src: '/sounds/landlord.wav', gain: 0.8 },
+  gameStart: { src: '/sounds/game-ready.mp3', gain: 0.9 },
+  surrenderPending: { src: '/sounds/surrender.mp3', gain: 0.8 },
+  bomb: { src: '/sounds/bomb.wav', gain: 0.95 },
+  rocket: { src: '/sounds/rocket.wav', gain: 0.95 },
+  warning: { src: '/sounds/warning.wav', gain: 0.7 },
+  tick: { src: '/sounds/tick.wav', gain: 0.5, pool: 2 },
+  select: { src: '/sounds/select.wav', gain: 0.55, pool: 6 },
+  deselect: { src: '/sounds/deselect.wav', gain: 0.45, pool: 6 },
+};
+
+const VOLUME_KEY = 'ddz_volume';
+
+interface PlayOpts {
+  /** Playback rate; also shifts pitch, since preservesPitch is disabled. */
+  rate?: number;
+  /** Randomise the rate by ±amount around `rate`. */
+  vary?: number;
+  /** Extra gain multiplier for this one hit. */
+  gain?: number;
+}
+
+class SfxBus {
+  private pools = new Map<SfxKey, HTMLAudioElement[]>();
+  private cursors = new Map<SfxKey, number>();
+  private oneShots = new Map<string, HTMLAudioElement>();
+  private loops = new Map<SfxKey, HTMLAudioElement>();
+  private volume = 1;
+  private loaded = false;
+  private unlocked = false;
+
+  /** Read the persisted master volume. Safe to call repeatedly. */
+  init(): void {
+    if (this.loaded) return;
+    this.loaded = true;
+    try {
+      const v = parseFloat(localStorage.getItem(VOLUME_KEY) ?? '1');
+      this.volume = Number.isNaN(v) ? 1 : Math.max(0, Math.min(1, v));
+    } catch {
+      this.volume = 1;
+    }
+  }
+
+  getVolume(): number {
+    this.init();
+    return this.volume;
+  }
+
+  setVolume(v: number): void {
+    const clamped = Math.max(0, Math.min(1, v));
+    this.volume = clamped;
+    this.loaded = true;
+    for (const [key, pool] of this.pools) {
+      for (const a of pool) a.volume = clamped * SOUNDS[key].gain;
+    }
+    for (const a of this.oneShots.values()) a.volume = clamped;
+    try {
+      localStorage.setItem(VOLUME_KEY, String(clamped));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /**
+   * iOS refuses to play audio that was not started inside a user gesture, and
+   * the refusal is per-element. Priming every pooled element once on the first
+   * touch is what stops the first cue of a session being swallowed.
+   */
+  unlock(): void {
+    if (this.unlocked || typeof window === 'undefined') return;
+    this.unlocked = true;
+    this.ensurePools();
+    for (const pool of this.pools.values()) {
+      for (const a of pool) {
+        const restore = a.volume;
+        a.volume = 0;
+        a.play()
+          .then(() => {
+            a.pause();
+            a.currentTime = 0;
+            a.volume = restore;
+          })
+          .catch(() => {
+            a.volume = restore;
+          });
+      }
+    }
+  }
+
+  private ensurePools(): void {
+    if (this.pools.size > 0 || typeof window === 'undefined') return;
+    this.init();
+    for (const key of Object.keys(SOUNDS) as SfxKey[]) {
+      const def = SOUNDS[key];
+      const pool = Array.from({ length: def.pool ?? 3 }, () => {
+        const a = new Audio(def.src);
+        a.preload = 'auto';
+        a.volume = this.volume * def.gain;
+        // Without this the browser time-stretches instead of pitch-shifting,
+        // which defeats the point of varying the rate.
+        a.preservesPitch = false;
+        (a as HTMLAudioElement & { webkitPreservesPitch?: boolean }).webkitPreservesPitch = false;
+        return a;
+      });
+      this.pools.set(key, pool);
+      this.cursors.set(key, 0);
+    }
+  }
+
+  play(key: SfxKey, opts: PlayOpts = {}): HTMLAudioElement | null {
+    if (typeof window === 'undefined') return null;
+    this.ensurePools();
+    if (this.volume === 0) return null;
+    const pool = this.pools.get(key);
+    if (!pool?.length) return null;
+
+    const idx = this.cursors.get(key) ?? 0;
+    this.cursors.set(key, idx + 1);
+    const audio = pool[idx % pool.length];
+
+    const base = opts.rate ?? 1;
+    const vary = opts.vary ?? 0;
+    audio.playbackRate = vary ? base + (Math.random() * 2 - 1) * vary : base;
+    audio.volume = Math.min(1, this.volume * SOUNDS[key].gain * (opts.gain ?? 1));
+    audio.loop = false;
+    audio.currentTime = 0;
+    audio.play().catch(() => {}); // autoplay block or missing file — stay silent
+    return audio;
+  }
+
+  stop(audio: HTMLAudioElement | null | undefined): void {
+    if (!audio || audio.paused) return;
+    audio.pause();
+    audio.currentTime = 0;
+  }
+
+  startLoop(key: SfxKey): void {
+    if (typeof window === 'undefined') return;
+    this.ensurePools();
+    if (this.volume === 0) return;
+    const existing = this.loops.get(key);
+    if (existing && !existing.paused) return;
+    const pool = this.pools.get(key);
+    if (!pool?.length) return;
+    const audio = pool[0];
+    audio.loop = true;
+    audio.playbackRate = 1;
+    audio.volume = this.volume * SOUNDS[key].gain;
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+    this.loops.set(key, audio);
+  }
+
+  stopLoop(key: SfxKey): void {
+    const audio = this.loops.get(key);
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.loop = false;
+    }
+    this.loops.delete(key);
+  }
+
+  /**
+   * Play an arbitrary file by path — used for the emoji voice clips, which are
+   * data-driven and so cannot be keys in SOUNDS. One cached element each,
+   * because a given clip retriggering itself should cut the previous one off.
+   */
+  playFile(src: string): void {
+    if (typeof window === 'undefined') return;
+    this.init();
+    if (this.volume === 0) return;
+    let audio = this.oneShots.get(src);
+    if (!audio) {
+      audio = new Audio(src);
+      audio.preload = 'auto';
+      this.oneShots.set(src, audio);
+    }
+    audio.volume = this.volume;
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  }
+
+  /** Warm the cache for files that are not SOUNDS keys (emoji clips). */
+  preloadFiles(srcs: string[]): void {
+    if (typeof window === 'undefined') return;
+    for (const src of srcs) {
+      if (this.oneShots.has(src)) continue;
+      const a = new Audio(src);
+      a.preload = 'auto';
+      this.oneShots.set(src, a);
+    }
+  }
+}
+
+export const sfx = new SfxBus();

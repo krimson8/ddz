@@ -19,4 +19,102 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+
+  /* ── 3D primitives ──────────────────────────────────────────────────────
+     Card flips and the dealing tumble are real CSS 3D rotations rather than
+     scaleX fakes, so they need a perspective ancestor and a preserved
+     child context. */
+  .ddz-scene {
+    perspective: 1400px;
+    perspective-origin: 50% 45%;
+  }
+  .ddz-scene-near {
+    perspective: 700px;
+  }
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+  .backface-hidden {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  /* ── Table surface ──────────────────────────────────────────────────────
+     Three stacked layers: a fine noise weave for felt texture, a warm pool of
+     light in the middle, and a vignette pulling the corners down. */
+  .ddz-felt {
+    background-color: #14532d;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E"),
+      radial-gradient(ellipse 90% 65% at 50% 42%, rgba(34, 197, 94, 0.30) 0%, rgba(20, 83, 45, 0) 70%),
+      radial-gradient(ellipse 130% 100% at 50% 50%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.55) 100%);
+    background-blend-mode: overlay, screen, normal;
+    background-size: 120px 120px, 100% 100%, 100% 100%;
+  }
+
+  /* Faint ring marking the centre of the table, under the played cards. */
+  .ddz-table-ring::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: min(78vw, 460px);
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    border-radius: 9999px;
+    border: 1px solid rgba(250, 204, 21, 0.10);
+    box-shadow: inset 0 0 60px rgba(250, 204, 21, 0.05);
+    pointer-events: none;
+  }
+
+  /* Sheen that sweeps across a card when it lands as a bomb/rocket. */
+  @keyframes ddz-sheen {
+    0%   { transform: translateX(-120%) skewX(-18deg); opacity: 0; }
+    18%  { opacity: 0.85; }
+    100% { transform: translateX(220%) skewX(-18deg); opacity: 0; }
+  }
+  .ddz-sheen::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      100deg,
+      transparent 20%,
+      rgba(255, 255, 255, 0.85) 50%,
+      transparent 80%
+    );
+    animation: ddz-sheen 900ms ease-out;
+    pointer-events: none;
+  }
+
+  /* ── Win confetti ───────────────────────────────────────────────────────
+     Driven by a keyframe rather than JS so the pieces cost one composited
+     transform each and no React work after mount. */
+  @keyframes ddz-confetti {
+    0%   { transform: translate3d(0, -12vh, 0) rotate(0deg); opacity: 0; }
+    6%   { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { transform: translate3d(var(--dx, 0), 108vh, 0) rotate(var(--spin, 720deg)); opacity: 0; }
+  }
+
+  /* Hide scrollbars on the horizontal card strips without losing scrolling. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Anyone who has asked the OS for less motion gets the state changes without
+   the theatrics. Framer Motion reads this flag itself via MotionConfig; this
+   covers the hand-written CSS animations. */
+@media (prefers-reduced-motion: reduce) {
+  .ddz-sheen::after {
+    animation: none !important;
+  }
+  [style*="ddz-confetti"] {
+    display: none !important;
+  }
 }

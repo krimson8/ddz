@@ -60,42 +60,65 @@ export function RoleDrawPanel({
           const tappable = canClaim || canRevealForFun;
 
           return (
-            <motion.button
-              key={i}
-              disabled={!tappable}
-              whileTap={tappable ? { scale: 0.92 } : undefined}
-              onClick={
-                canClaim
-                  ? () => onPick(i)
-                  : canRevealForFun
-                    ? () => onRevealForFun(i)
-                    : undefined
-              }
-              className={[
-                'relative w-20 h-28 rounded-xl flex flex-col items-center justify-center font-bold transition-colors',
-                faceUp
-                  ? isLandlord
-                    ? 'bg-yellow-400 text-red-900 border-2 border-yellow-200'
-                    : 'bg-white text-green-900 border-2 border-gray-300'
-                  : tappable
-                    ? 'bg-gradient-to-br from-red-700 to-red-900 text-yellow-300 border-2 border-yellow-400/40 hover:from-red-600 hover:to-red-800 cursor-pointer'
-                    : 'bg-gradient-to-br from-red-900 to-red-950 text-yellow-300/40 border-2 border-yellow-400/10 cursor-default',
-              ].join(' ')}
-            >
-              {faceUp ? (
-                <>
+            <div key={i} className="ddz-scene-near relative w-20 h-28">
+              <motion.button
+                disabled={!tappable}
+                whileTap={tappable ? { scale: 0.92 } : undefined}
+                whileHover={tappable ? { y: -6 } : undefined}
+                onClick={
+                  canClaim
+                    ? () => onPick(i)
+                    : canRevealForFun
+                      ? () => onRevealForFun(i)
+                      : undefined
+                }
+                // The reveal is a genuine Y-axis rotation with both faces
+                // mounted and backface-culled, so the card turns over rather
+                // than cross-fading between two states.
+                className={`preserve-3d relative w-full h-full ${tappable ? 'cursor-pointer' : 'cursor-default'}`}
+                initial={false}
+                animate={{ rotateY: faceUp ? 0 : 180 }}
+                transition={{ type: 'spring', stiffness: 150, damping: 17 }}
+              >
+                {/* Face — the revealed role */}
+                <span
+                  className={[
+                    'backface-hidden absolute inset-0 rounded-xl flex flex-col items-center justify-center font-bold border-2',
+                    isLandlord
+                      ? 'bg-gradient-to-br from-yellow-300 to-amber-500 text-red-900 border-yellow-100 shadow-[0_0_22px_rgba(250,204,21,0.55)]'
+                      : 'bg-gradient-to-br from-white to-gray-200 text-green-900 border-gray-300',
+                  ].join(' ')}
+                  style={{ transform: 'rotateY(0deg)' }}
+                >
                   <span className="text-3xl">{isLandlord ? '👑' : '🌾'}</span>
                   <span className="text-base mt-1">{isLandlord ? '地主' : '農民'}</span>
-                  {slot.pickedBy !== null && (
-                    <span className="absolute -bottom-5 text-[11px] text-white/70 whitespace-nowrap">
-                      {mine ? '你' : playerNames[slot.pickedBy] ?? '玩家'}
-                    </span>
-                  )}
-                </>
-              ) : (
-                <span className="text-4xl">🀄</span>
+                </span>
+
+                {/* Back — still face-down */}
+                <span
+                  className={[
+                    'backface-hidden absolute inset-0 rounded-xl flex items-center justify-center border-2',
+                    tappable
+                      ? 'bg-gradient-to-br from-red-700 to-red-900 text-yellow-300 border-yellow-400/40'
+                      : 'bg-gradient-to-br from-red-900 to-red-950 text-yellow-300/40 border-yellow-400/10',
+                  ].join(' ')}
+                  style={{ transform: 'rotateY(180deg)' }}
+                >
+                  <span className="text-4xl">🀄</span>
+                </span>
+              </motion.button>
+
+              {faceUp && slot.pickedBy !== null && (
+                <motion.span
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.25 }}
+                  className="absolute -bottom-5 left-0 right-0 text-center text-[11px] text-white/70 whitespace-nowrap"
+                >
+                  {mine ? '你' : playerNames[slot.pickedBy] ?? '玩家'}
+                </motion.span>
               )}
-            </motion.button>
+            </div>
           );
         })}
       </div>

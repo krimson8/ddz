@@ -1,21 +1,8 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { sfx } from '@/features/ddz/sfx';
 import type { GameState } from '@/features/ddz/types';
-
-const SOUNDS: Record<string, string> = {
-  cardPlay: '/sounds/card-play.wav',
-  pass: '/sounds/pass.mp3',
-  yourTurn: '/sounds/your-turn.mp3',
-  deal: '/sounds/deal.mp3',
-  win: '/sounds/win.mp3',
-  lose: '/sounds/lose.mp3',
-  landlord: '/sounds/landlord.mp3',
-  gameStart: '/sounds/game-ready.mp3',
-  // Loops while the local player has toggled surrender on (before confirm).
-  // Rename this file as needed — just update the path here.
-  surrenderPending: '/sounds/surrender.mp3',
-};
 
 // Map each emoji/reaction text to a sound file under /sounds/emoji/
 // Add or remove entries as you add sound files.
@@ -35,107 +22,34 @@ const EMOJI_SOUNDS: Record<string, string> = {
   '給我搽皮鞋': '/sounds/emoji/gei-wo-cha-pixie.ogg',
 };
 
-function createAudioPool(src: string, size = 3): HTMLAudioElement[] {
-  return Array.from({ length: size }, () => {
-    const a = new Audio(src);
-    a.preload = 'auto';
-    return a;
-  });
-}
-
-function loadVolume(): number {
-  try {
-    const v = parseFloat(localStorage.getItem('ddz_volume') ?? '1');
-    return isNaN(v) ? 1 : Math.max(0, Math.min(1, v));
-  } catch {
-    return 1;
-  }
-}
+/** Start ticking this many seconds before the turn timer expires. */
+const TICK_FROM_SECONDS = 5;
 
 export function useSoundEffects(gameState: GameState, mySocketId: string) {
-  const poolsRef = useRef<Record<string, HTMLAudioElement[]>>({});
-  const poolIndexRef = useRef<Record<string, number>>({});
-  const emojiPoolsRef = useRef<Record<string, HTMLAudioElement>>({});
   const prevStateRef = useRef<GameState>(gameState);
-  const volumeRef = useRef<number>(1);
   const yourTurnAudioRef = useRef<HTMLAudioElement | null>(null);
-  const surrenderLoopRef = useRef<HTMLAudioElement | null>(null);
 
-  // Hydrate volume from localStorage once on mount
+  // Prime the bus and satisfy iOS's "audio must start in a gesture" rule on the
+  // first touch anywhere in the document.
   useEffect(() => {
-    volumeRef.current = loadVolume();
+    sfx.init();
+    sfx.preloadFiles(Object.values(EMOJI_SOUNDS));
+    const unlock = () => sfx.unlock();
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
   }, []);
 
-  const ensurePools = () => {
-    if (Object.keys(poolsRef.current).length > 0) return;
-    for (const [key, src] of Object.entries(SOUNDS)) {
-      poolsRef.current[key] = createAudioPool(src);
-      poolIndexRef.current[key] = 0;
-    }
-    for (const [emoji, src] of Object.entries(EMOJI_SOUNDS)) {
-      const a = new Audio(src);
-      a.preload = 'auto';
-      emojiPoolsRef.current[emoji] = a;
-    }
-  };
-
-  const play = (key: string) => {
-    if (volumeRef.current === 0) return;
-    ensurePools();
-    const pool = poolsRef.current[key];
-    if (!pool?.length) return;
-    const idx = poolIndexRef.current[key] ?? 0;
-    const audio = pool[idx % pool.length];
-    poolIndexRef.current[key] = idx + 1;
-    audio.volume = volumeRef.current;
-    audio.currentTime = 0;
-    audio.play().catch(() => {});
-    return audio;
-  };
-
-  const startSurrenderLoop = () => {
-    if (volumeRef.current === 0) return;
-    if (surrenderLoopRef.current && !surrenderLoopRef.current.paused) return;
-    ensurePools();
-    const pool = poolsRef.current['surrenderPending'];
-    if (!pool?.length) return;
-    const audio = pool[0];
-    audio.loop = true;
-    audio.volume = volumeRef.current;
-    audio.currentTime = 0;
-    audio.play().catch(() => {});
-    surrenderLoopRef.current = audio;
-  };
-
-  const stopSurrenderLoop = () => {
-    const a = surrenderLoopRef.current;
-    if (a) {
-      a.pause();
-      a.currentTime = 0;
-      a.loop = false;
-    }
-    surrenderLoopRef.current = null;
-  };
-
-  const stopYourTurn = () => {
-    const a = yourTurnAudioRef.current;
-    if (a && !a.paused) {
-      a.pause();
-      a.currentTime = 0;
-    }
-    yourTurnAudioRef.current = null;
-  };
-
   const playEmoji = (emoji: string) => {
-    if (volumeRef.current === 0) return;
-    ensurePools();
-    const audio = emojiPoolsRef.current[emoji];
-    if (!audio) return; // no sound mapped for this emoji — skip silently
-    audio.volume = volumeRef.current;
-    audio.currentTime = 0;
-    audio.play().catch(() => {}); // missing file or autoplay block — skip silently
+    const src = EMOJI_SOUNDS[emoji];
+    if (!src) return; // no sound mapped for this emoji — skip silently
+    sfx.playFile(src);
   };
 
+  // ── State-derived cues ─────────────────────────────────────────────────────
   useEffect(() => {
     const prev = prevStateRef.current;
     const curr = gameState;
@@ -149,17 +63,23 @@ export function useSoundEffects(gameState: GameState, mySocketId: string) {
 
     // Game start: transition into dealing phase (enough players voted)
     if (prev.phase !== 'dealing' && curr.phase === 'dealing') {
-      play('gameStart');
+      sfx.play('gameStart');
     }
 
     // Local player's turn ended (played or passed) — stop the yourTurn alert
     if (isMyPlayTurn(prev) && !isMyPlayTurn(curr)) {
-      stopYourTurn();
+      sfx.stop(yourTurnAudioRef.current);
+      yourTurnAudioRef.current = null;
     }
 
-    // Cards played
+    // Cards played. Bombs and rockets get their own sting instead of the normal
+    // card sound — the hand type is already on the play, so no backend change.
     if (curr.lastPlay !== prev.lastPlay && curr.lastPlay !== null) {
-      play('cardPlay');
+      const type = curr.lastPlay.type as string;
+      if (type === 'rocket') sfx.play('rocket');
+      else if (type === 'bomb') sfx.play('bomb');
+      // Slight pitch scatter so a long run of singles doesn't sound mechanical.
+      else sfx.play('cardPlay', { vary: 0.08 });
     }
 
     // Someone passed — check newest history entry
@@ -168,58 +88,88 @@ export function useSoundEffects(gameState: GameState, mySocketId: string) {
     if (currHistLen > prevHistLen) {
       const latest = curr.playHistory[currHistLen - 1];
       if (latest?.play?.cards?.length === 0) {
-        play('pass');
+        sfx.play('pass', { vary: 0.06 });
       }
     }
 
     // Your turn — play alert and keep a ref so we can stop it
     if (!isMyPlayTurn(prev) && isMyPlayTurn(curr)) {
-      yourTurnAudioRef.current = play('yourTurn') ?? null;
+      yourTurnAudioRef.current = sfx.play('yourTurn');
     }
 
     // Landlord decided
     if (curr.landlordIndex !== null && prev.landlordIndex === null) {
-      play('landlord');
+      sfx.play('landlord');
     }
 
     // Cards dealt
     if (prev.myHand.length === 0 && curr.myHand.length > 0 && curr.phase === 'dealing') {
-      play('deal');
+      sfx.play('deal');
+    }
+
+    // 報單 / 報雙 — someone is down to their last card or two. Guarded on the
+    // previous count being a real mid-game number so the initial deal (undefined
+    // → 17) and a fresh round never trip it.
+    if (curr.phase === 'gameplay') {
+      curr.playerCardCounts.forEach((count, i) => {
+        const before = prev.playerCardCounts[i];
+        if (typeof before !== 'number' || before <= 2) return;
+        if (count > 0 && count <= 2) sfx.play('warning');
+      });
     }
 
     // Surrender toggle (any player): loop sound while at least one is pending, stop when none
     const anyWasSurrendered = prev.surrendered.length > 0;
     const anyIsSurrendered = curr.surrendered.length > 0;
     if (!anyWasSurrendered && anyIsSurrendered) {
-      startSurrenderLoop();
+      sfx.startLoop('surrenderPending');
     } else if (anyWasSurrendered && !anyIsSurrendered) {
-      stopSurrenderLoop();
+      sfx.stopLoop('surrenderPending');
     }
 
     // Game over
     if (curr.winner !== null && prev.winner === null) {
-      stopSurrenderLoop();
-      stopYourTurn();
+      sfx.stopLoop('surrenderPending');
+      sfx.stop(yourTurnAudioRef.current);
+      yourTurnAudioRef.current = null;
       const iAmLandlord = curr.playerOrder[curr.landlordIndex ?? -1] === mySocketId;
       const landlordWon = curr.winner === 'landlord';
-      play(iAmLandlord === landlordWon ? 'win' : 'lose');
+      sfx.play(iAmLandlord === landlordWon ? 'win' : 'lose');
     }
 
     prevStateRef.current = curr;
   }, [gameState, mySocketId]);
 
-  const setVolume = (v: number) => {
-    const clamped = Math.max(0, Math.min(1, v));
-    volumeRef.current = clamped;
-    // Apply immediately to all live audio elements
-    for (const pool of Object.values(poolsRef.current)) {
-      for (const audio of pool) audio.volume = clamped;
-    }
-    for (const audio of Object.values(emojiPoolsRef.current)) {
-      audio.volume = clamped;
-    }
-    try { localStorage.setItem('ddz_volume', String(clamped)); } catch { /* ignore */ }
-  };
+  // ── Turn-timer tick ────────────────────────────────────────────────────────
+  // Driven off the server's endTime rather than a local countdown, so the ticks
+  // stay aligned with the number the player is watching in CardHand.
+  const isMyTurn =
+    gameState.phase === 'gameplay' && gameState.currentPlayer === mySocketId;
+  const endTime = gameState.currentPlayerEndTime;
+
+  useEffect(() => {
+    if (!isMyTurn || !endTime) return;
+    let lastTicked = -1;
+    const id = setInterval(() => {
+      const remaining = Math.ceil((endTime - Date.now()) / 1000);
+      if (remaining <= 0 || remaining > TICK_FROM_SECONDS) return;
+      if (remaining === lastTicked) return;
+      lastTicked = remaining;
+      // Climb in pitch as the clock runs out.
+      sfx.play('tick', { rate: 1 + (TICK_FROM_SECONDS - remaining) * 0.06 });
+    }, 100);
+    return () => clearInterval(id);
+  }, [isMyTurn, endTime]);
+
+  // Stop the surrender loop if the board unmounts mid-round (leave / navigate).
+  useEffect(() => {
+    return () => {
+      sfx.stopLoop('surrenderPending');
+      sfx.stop(yourTurnAudioRef.current);
+    };
+  }, []);
+
+  const setVolume = (v: number) => sfx.setVolume(v);
 
   return { setVolume, playEmoji };
 }

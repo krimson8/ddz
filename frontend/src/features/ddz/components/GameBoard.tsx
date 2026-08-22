@@ -1,16 +1,22 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useAnimationControls, useReducedMotion } from 'framer-motion';
 import { CardHand } from './CardHand';
 import { Card as CardComponent } from './Card';
 import { PlayerSeat } from './PlayerSeat';
-import { PlayArea } from './PlayArea';
+import { PlayArea, type PlayOrigin } from './PlayArea';
 import { BiddingPanel } from './BiddingPanel';
 import { RoleDrawPanel } from './RoleDrawPanel';
 import { PlayHistory } from './PlayHistory';
+import { DealingOverlay } from './effects/DealingOverlay';
+import { ImpactFX, type Impact } from './effects/ImpactFX';
+import { Confetti } from './effects/Confetti';
 import { EmojiChatBox, type EmojiHistoryEntry } from '@/components/EmojiChatBox';
 import type { Card, ClientMember, GameState } from '@/features/ddz/types';
+
+/** How long the bomb/rocket burst stays mounted. */
+const IMPACT_MS = 950;
 
 /** Pure render of remaining grace seconds — backend owns the truth (endTime). */
 function DisconnectCountdown({ endTime }: { endTime: number }) {
@@ -146,8 +152,52 @@ export function GameBoard({
     ? members.find((m) => m.id === lastPlayedBy)?.nickname
     : undefined;
 
+  // Which seat the cards should fly in from. Cards played from the seat shown at
+  // the bottom already animate via their shared layoutId, so those are 'self'
+  // and get no extra offset.
+  const playOrigin: PlayOrigin = !lastPlayedBy
+    ? null
+    : lastPlayedBy === orderedPlayers[0]?.id
+      ? 'self'
+      : lastPlayedBy === orderedPlayers[1]?.id
+        ? 'left'
+        : lastPlayedBy === orderedPlayers[2]?.id
+          ? 'right'
+          : null;
+
+  // ── Bomb / rocket impact ──────────────────────────────────────────────────
+  // Derived purely from the hand type the server already puts on the play, so
+  // the burst needs no new event.
+  const shake = useAnimationControls();
+  const reduceMotion = useReducedMotion();
+  const [impact, setImpact] = useState<Impact | null>(null);
+  const impactSeq = useRef(0);
+  const prevPlayRef = useRef(lastPlay);
+  useEffect(() => {
+    const prev = prevPlayRef.current;
+    prevPlayRef.current = lastPlay;
+    if (!lastPlay || lastPlay === prev) return;
+    const kind = lastPlay.type === 'rocket' ? 'rocket' : lastPlay.type === 'bomb' ? 'bomb' : null;
+    if (!kind) return;
+    impactSeq.current += 1;
+    setImpact({ id: impactSeq.current, kind });
+    if (!reduceMotion) {
+      shake.start({
+        x: [0, -11, 9, -7, 5, -3, 0],
+        y: [0, 6, -7, 4, -3, 2, 0],
+        rotate: [0, -0.8, 0.7, -0.5, 0.3, -0.15, 0],
+        transition: { duration: 0.62, ease: 'easeOut' },
+      });
+    }
+    const t = setTimeout(() => setImpact(null), IMPACT_MS);
+    return () => clearTimeout(t);
+  }, [lastPlay, shake, reduceMotion]);
+
+  const iWon = winner !== null && gameState.winnerIds.includes(mySocketId);
+  const showConfetti = phase === 'result' && winner !== null && (iWon || isSpectator);
+
   return (
-    <div className="relative min-h-screen bg-green-900 flex flex-col select-none overflow-hidden h-screen">
+    <div className="relative min-h-screen ddz-felt ddz-scene flex flex-col select-none overflow-hidden h-screen">
       {/* Draggable emoji chatbox — fixed + highest z so the player can move it
           anywhere on screen and it always sits above the board. Mounted at the
           board root (not inside the centre play area) so reflows there — e.g. a
@@ -171,6 +221,11 @@ export function GameBoard({
         </button>
       )}
 
+      {/* Everything that shakes on a bomb lives inside this wrapper. The fixed
+          overlays (emoji box, settings gear) deliberately stay outside it — a
+          transformed ancestor would become their containing block and break
+          their positioning. */}
+      <motion.div animate={shake} className="relative flex-1 flex flex-col min-h-0 ddz-table-ring">
       {/* ── Top opponents ───────────────────────────────── */}
       {/* pr-16 on mobile keeps the top-right seat/landlord cards clear of the fixed volume button */}
       <div className="flex justify-around px-4 pr-16 sm:pr-4 pt-4">
@@ -221,7 +276,7 @@ export function GameBoard({
               onRevealForFun={onRevealRoleForFun}
             />
           ) : (
-            <PlayArea lastPlay={lastPlay} playerName={lastPlayedByName} />
+            <PlayArea lastPlay={lastPlay} playerName={lastPlayedByName} origin={playOrigin} />
           )}
         </div>
         <div className="flex-[1] flex items-end min-h-0">
@@ -271,7 +326,6 @@ export function GameBoard({
                 onPlay={() => {}}
                 onPass={() => {}}
                 interactive={false}
-                playerIndex={spectatorViewIndex}
                 lastPlay={null}
                 onSelectionChange={() => {}}
                 turnEndTime={null}
@@ -342,7 +396,6 @@ export function GameBoard({
               onPlay={onPlayCards}
               onPass={onPass}
               interactive={isMyTurn && phase === 'gameplay'}
-              playerIndex={myPlayerIndex}
               lastPlay={lastPlay}
               onSelectionChange={setSelectedCards}
               turnEndTime={isMyTurn ? currentPlayerEndTime : null}
@@ -350,6 +403,13 @@ export function GameBoard({
           </>
         )}
       </motion.div>
+
+      </motion.div>
+
+      {/* ── Full-screen effect layers ────────────────────────────────────── */}
+      <AnimatePresence>{phase === 'dealing' && <DealingOverlay />}</AnimatePresence>
+      <ImpactFX impact={impact} />
+      {showConfetti && <Confetti tone={winner === 'landlord' ? 'gold' : 'green'} />}
 
       {/* ── Disconnect overlay ───────────────────────────────────────────── */}
       <AnimatePresence>
@@ -416,7 +476,7 @@ export function GameBoard({
             {gameState.winningCards.length > 0 && (
               <div className="flex gap-1 flex-wrap justify-center mt-1">
                 {gameState.winningCards.map((card, i) => (
-                  <CardComponent key={`win-${card.suit}-${card.rank}-${i}`} {...card} mini />
+                  <CardComponent key={`win-${card.suit}-${card.rank}-${i}`} {...card} mini glow="gold" />
                 ))}
               </div>
             )}

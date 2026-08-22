@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Card } from './Card';
+import { handLayoutId } from './cardLayout';
+import { sfx } from '@/features/ddz/sfx';
 import type { Card as CardType, Play } from '@/features/ddz/types';
 import { validatePlay } from '@/features/ddz/cardUtils';
 
@@ -11,7 +13,6 @@ interface CardHandProps {
   onPlay: (cards: CardType[]) => void;
   onPass: () => void;
   interactive?: boolean;
-  playerIndex?: number;
   lastPlay?: Play | null;
   onSelectionChange?: (cards: CardType[]) => void;
   /** Epoch ms when the current turn expires (from server). Only relevant when interactive. */
@@ -20,7 +21,30 @@ interface CardHandProps {
   showActions?: boolean;
 }
 
-export function CardHand({ cards, onPlay, onPass, interactive = true, playerIndex = 0, lastPlay, onSelectionChange, turnEndTime, showActions = true }: CardHandProps) {
+/**
+ * Fan geometry. The arc is kept deliberately shallow: the cards carry a
+ * layoutId that framer-motion uses to fly them into the play area, and layout
+ * projection measures axis-aligned bounding boxes, so a steep rotation would
+ * make the departing card visibly jump in size as it leaves the hand.
+ */
+const MAX_ARC_DEG = 18;      // total spread, first card to last
+const ARC_ORIGIN_PX = 230;   // pivot distance below the cards
+const OVERLAP_FROM = 8;      // start overlapping once the hand is at least this big
+
+function fanAngle(i: number, n: number): number {
+  if (n < 2) return 0;
+  const arc = Math.min(MAX_ARC_DEG, n * 1.4);
+  return -arc / 2 + (i / (n - 1)) * arc;
+}
+
+/** Cards near the middle of the fan sit a touch higher, as they would in a hand. */
+function fanLift(i: number, n: number): number {
+  if (n < 3) return 0;
+  const p = (i / (n - 1)) * 2 - 1; // -1 … 1
+  return (1 - p * p) * -4;
+}
+
+export function CardHand({ cards, onPlay, onPass, interactive = true, lastPlay, onSelectionChange, turnEndTime, showActions = true }: CardHandProps) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -65,8 +89,15 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, playerInde
     if (!interactive) return;
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx);
-      else next.add(idx);
+      if (next.has(idx)) {
+        next.delete(idx);
+        sfx.play('deselect', { vary: 0.1 });
+      } else {
+        next.add(idx);
+        // Pitch rises slightly with each extra card held, so building a big
+        // hand type has an audible shape to it.
+        sfx.play('select', { rate: 1 + Math.min(next.size, 8) * 0.03, vary: 0.05 });
+      }
       return next;
     });
   }
@@ -93,12 +124,15 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, playerInde
     .map((i) => cards[i]);
   const canPlay = selected.size > 0 && validatePlay(selectedCards, lastPlay ?? null) !== null;
 
+  const overlap = cards.length >= OVERLAP_FROM;
+
   return (
     <div className="flex flex-col items-center gap-3 w-full">
-      {/* Card strip */}
+      {/* Card strip. pt-9 leaves headroom for the lift on a selected card, which
+          the horizontal scroller would otherwise clip. */}
       <div
         ref={scrollRef}
-        className="flex flex-row items-end justify-center overflow-x-auto pb-2 px-2 gap-1 max-w-full"
+        className="flex flex-row items-end justify-center overflow-x-auto no-scrollbar pt-9 pb-2 px-3 max-w-full"
         onWheel={(e) => {
           if (e.deltaY === 0 || !scrollRef.current) return;
           e.preventDefault();
@@ -109,18 +143,29 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, playerInde
           {cards.map((card, idx) => (
             <motion.div
               key={`${card.suit}-${card.rank}`}
-              layout
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8 }}
+              // Position-only layout keeps the projection maths simple next to
+              // the rotated inner wrapper.
+              layout="position"
+              initial={{ opacity: 0, y: 60, rotateZ: -14 }}
+              animate={{ opacity: 1, y: 0, rotateZ: 0 }}
+              exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.12 } }}
               transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+              className={overlap && idx > 0 ? '-ml-[26px] sm:-ml-[30px]' : ''}
+              style={{ zIndex: selected.has(idx) ? 100 + idx : idx }}
             >
-              <Card
-                {...card}
-                selected={selected.has(idx)}
-                onClick={() => toggle(idx)}
-                layoutId={`card-p${playerIndex}-${card.suit}-${card.rank}`}
-              />
+              <div
+                style={{
+                  transform: `rotate(${fanAngle(idx, cards.length)}deg) translateY(${fanLift(idx, cards.length)}px)`,
+                  transformOrigin: `50% ${ARC_ORIGIN_PX}px`,
+                }}
+              >
+                <Card
+                  {...card}
+                  selected={selected.has(idx)}
+                  onClick={() => toggle(idx)}
+                  layoutId={handLayoutId(card)}
+                />
+              </div>
             </motion.div>
           ))}
         </AnimatePresence>
@@ -136,20 +181,28 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, playerInde
         >
           {timeLeft !== null ? `${timeLeft}s` : ''}
         </div>
-        <button
+        <motion.button
           onClick={handlePlay}
           disabled={!interactive || !canPlay}
+          whileTap={interactive && canPlay ? { scale: 0.94 } : undefined}
+          animate={
+            interactive && canPlay
+              ? { boxShadow: ['0 0 0 0 rgba(250,204,21,0)', '0 0 16px 3px rgba(250,204,21,0.6)', '0 0 0 0 rgba(250,204,21,0)'] }
+              : { boxShadow: '0 0 0 0 rgba(250,204,21,0)' }
+          }
+          transition={interactive && canPlay ? { duration: 1.4, repeat: Infinity, ease: 'easeInOut' } : {}}
           className="px-6 py-2 rounded-xl font-bold text-sm bg-yellow-400 hover:bg-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed text-green-900 transition-colors min-h-[44px] min-w-[80px]"
         >
           出牌
-        </button>
-        <button
+        </motion.button>
+        <motion.button
           onClick={handlePass}
           disabled={!interactive}
+          whileTap={interactive ? { scale: 0.94 } : undefined}
           className="px-6 py-2 rounded-xl font-bold text-sm bg-white/20 hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors min-h-[44px] min-w-[80px]"
         >
           不出
-        </button>
+        </motion.button>
       </div>
       )}
     </div>
