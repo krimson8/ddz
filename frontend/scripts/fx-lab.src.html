@@ -68,49 +68,32 @@ h1 { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: c
   background-blend-mode: overlay, screen, normal;
   background-size: 120px 120px, 100% 100%, 100% 100%;
 }
+.stage { --sx: 0px; --sr: 0deg; --sz: 0; --sdur: 600ms; }
 .stage::before {
   content: ''; position: absolute; left: 50%; top: 46%;
   width: min(52%,420px); aspect-ratio: 1; transform: translate(-50%,-50%);
   border-radius: 50%; border: 1px solid rgba(250,204,21,.10);
   box-shadow: inset 0 0 60px rgba(250,204,21,.05);
 }
-.stage.sk1 { animation: sk1 calc(560ms*var(--speed)) cubic-bezier(.36,.07,.19,.97); }
-.stage.sk2 { animation: sk2 calc(820ms*var(--speed)) cubic-bezier(.36,.07,.19,.97); }
-.stage.sk3 { animation: sk3 calc(1400ms*var(--speed)) cubic-bezier(.33,.05,.2,.98); }
+/* One decaying-oscillation profile, scaled by four custom properties. Seven
+   discrete strengths would otherwise be seven near-identical keyframe blocks,
+   and a slider needs them comparable: same shape, different violence. */
+.stage.shaking { animation: shk calc(var(--sdur) * var(--speed)) cubic-bezier(.33,.05,.2,.98) both; }
 
-@keyframes sk1 {
-  0%,100%{transform:translate3d(0,0,0) rotate(0)}
-  15%{transform:translate3d(-8px,5px,0) rotate(-.5deg)}
-  30%{transform:translate3d(7px,-6px,0) rotate(.45deg)}
-  48%{transform:translate3d(-6px,-3px,0) rotate(-.3deg)}
-  66%{transform:translate3d(5px,4px,0) rotate(.2deg)}
-  84%{transform:translate3d(-3px,-2px,0) rotate(-.1deg)}
-}
-@keyframes sk2 {
-  0%,100%{transform:translate3d(0,0,0) rotate(0) scale(1)}
-  7%{transform:translate3d(-22px,14px,0) rotate(-1.4deg) scale(1.02)}
-  16%{transform:translate3d(20px,-17px,0) rotate(1.2deg) scale(1.015)}
-  28%{transform:translate3d(-17px,-10px,0) rotate(-.9deg) scale(1.01)}
-  42%{transform:translate3d(13px,12px,0) rotate(.62deg)}
-  57%{transform:translate3d(-10px,-7px,0) rotate(-.4deg)}
-  73%{transform:translate3d(7px,5px,0) rotate(.24deg)}
-  88%{transform:translate3d(-3px,-2px,0) rotate(-.1deg)}
-}
-/* Tier 6/7: a violent hit that keeps ringing long after. */
-@keyframes sk3 {
-  0%{transform:translate3d(0,0,0) rotate(0) scale(1)}
-  4%{transform:translate3d(-34px,22px,0) rotate(-2.1deg) scale(1.05)}
-  9%{transform:translate3d(31px,-26px,0) rotate(1.9deg) scale(1.042)}
-  15%{transform:translate3d(-27px,-16px,0) rotate(-1.5deg) scale(1.034)}
-  22%{transform:translate3d(22px,20px,0) rotate(1.15deg) scale(1.026)}
-  30%{transform:translate3d(-18px,-13px,0) rotate(-.85deg) scale(1.018)}
-  39%{transform:translate3d(14px,10px,0) rotate(.6deg) scale(1.012)}
-  49%{transform:translate3d(-10px,-8px,0) rotate(-.42deg) scale(1.008)}
-  60%{transform:translate3d(8px,6px,0) rotate(.3deg) scale(1.005)}
-  71%{transform:translate3d(-5px,-4px,0) rotate(-.18deg)}
-  82%{transform:translate3d(3px,2px,0) rotate(.1deg)}
-  92%{transform:translate3d(-2px,-1px,0) rotate(-.05deg)}
-  100%{transform:translate3d(0,0,0) rotate(0) scale(1)}
+@keyframes shk {
+  0%   { transform: translate3d(0,0,0) rotate(0) scale(1) }
+  4%   { transform: translate3d(calc(var(--sx) * -1),   calc(var(--sx) *  .65), 0) rotate(calc(var(--sr) * -1))   scale(calc(1 + var(--sz))) }
+  9%   { transform: translate3d(calc(var(--sx) *  .91), calc(var(--sx) * -.76), 0) rotate(calc(var(--sr) *  .90)) scale(calc(1 + var(--sz) * .84)) }
+  15%  { transform: translate3d(calc(var(--sx) * -.79), calc(var(--sx) * -.47), 0) rotate(calc(var(--sr) * -.71)) scale(calc(1 + var(--sz) * .68)) }
+  22%  { transform: translate3d(calc(var(--sx) *  .65), calc(var(--sx) *  .59), 0) rotate(calc(var(--sr) *  .55)) scale(calc(1 + var(--sz) * .52)) }
+  30%  { transform: translate3d(calc(var(--sx) * -.53), calc(var(--sx) * -.38), 0) rotate(calc(var(--sr) * -.40)) scale(calc(1 + var(--sz) * .36)) }
+  39%  { transform: translate3d(calc(var(--sx) *  .41), calc(var(--sx) *  .29), 0) rotate(calc(var(--sr) *  .29)) scale(calc(1 + var(--sz) * .24)) }
+  49%  { transform: translate3d(calc(var(--sx) * -.29), calc(var(--sx) * -.24), 0) rotate(calc(var(--sr) * -.20)) scale(calc(1 + var(--sz) * .16)) }
+  60%  { transform: translate3d(calc(var(--sx) *  .24), calc(var(--sx) *  .18), 0) rotate(calc(var(--sr) *  .14)) scale(calc(1 + var(--sz) * .10)) }
+  71%  { transform: translate3d(calc(var(--sx) * -.15), calc(var(--sx) * -.12), 0) rotate(calc(var(--sr) * -.09)) scale(1) }
+  82%  { transform: translate3d(calc(var(--sx) *  .09), calc(var(--sx) *  .06), 0) rotate(calc(var(--sr) *  .05)) scale(1) }
+  92%  { transform: translate3d(calc(var(--sx) * -.06), calc(var(--sx) * -.03), 0) rotate(calc(var(--sr) * -.02)) scale(1) }
+  100% { transform: translate3d(0,0,0) rotate(0) scale(1) }
 }
 
 .seat { position: absolute; top: 14px; display: flex; align-items: center; gap: 7px; font-size: 11px; color: rgba(255,255,255,.62); }
@@ -340,6 +323,24 @@ button[aria-pressed="true"] { background: #1f3a2c; border-color: var(--c1); colo
 .readout { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .readout b { color: var(--ink); font-weight: 600; }
 
+/* Shake bench. The track is painted with the same cool-to-gold ramp the tiers
+   use, so the control itself shows the escalation it controls. */
+.bench { display: flex; align-items: center; gap: 10px; padding: 4px 11px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px; }
+.bench .lbl { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.bench output { font-family: var(--font-mono); font-size: 15px; font-weight: 600; line-height: 1; color: var(--hot); min-width: 1ch; text-align: center; font-variant-numeric: tabular-nums; }
+.bench .spec { font-family: var(--font-mono); font-size: 10px; color: var(--muted); min-width: 13ch; font-variant-numeric: tabular-nums; }
+.bench button { padding: 5px 10px; font-size: 12px; }
+
+input[type=range] { -webkit-appearance: none; appearance: none; width: 130px; height: 18px; background: transparent; cursor: pointer; margin: 0; }
+input[type=range]::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: linear-gradient(90deg, var(--c1), var(--c3) 34%, var(--c5) 66%, var(--c7)); }
+input[type=range]::-moz-range-track { height: 3px; border-radius: 2px; background: linear-gradient(90deg, var(--c1), var(--c3) 34%, var(--c5) 66%, var(--c7)); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5.5px; border-radius: 50%; background: var(--hot); border: 2px solid var(--ground); box-shadow: 0 0 0 1px var(--line), 0 0 9px var(--hot); }
+input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--hot); border: 2px solid var(--ground); box-shadow: 0 0 0 1px var(--line), 0 0 9px var(--hot); }
+input[type=range]:focus-visible { outline: 2px solid var(--c2); outline-offset: 4px; border-radius: 2px; }
+
+.tier-shake { font-family: var(--font-mono); font-size: 9px; letter-spacing: .08em; color: var(--muted); margin-top: 2px; }
+.tier-shake b { color: var(--tint); font-weight: 600; }
+
 .rack { display: flex; flex-direction: column; }
 .tier { display: grid; grid-template-columns: 84px 1fr; gap: 18px; padding: 16px 4px; border-top: 1px solid var(--line); align-items: start; }
 .tier:last-child { border-bottom: 1px solid var(--line); }
@@ -422,6 +423,17 @@ button[aria-pressed="true"] { background: #1f3a2c; border-color: var(--c1); colo
     <button id="withSlam" aria-pressed="true">Card slam first</button>
     <button id="sound" aria-pressed="true">Sound on</button>
     <button id="stopMusic">■ Stop music</button>
+
+    <span class="bench">
+      <span class="lbl">Shake</span>
+      <input type="range" id="shake" min="1" max="7" step="1" value="4"
+             aria-label="Shake strength, 1 to 7">
+      <output id="shakeOut" for="shake">4</output>
+      <span class="spec" id="shakeSpec"></span>
+      <button type="button" id="shakeTest">Feel it</button>
+      <button type="button" id="shakeLock" aria-pressed="false">Force</button>
+    </span>
+
     <span class="spacer"></span>
     <span class="readout" id="readout">ready</span>
   </div>
@@ -436,9 +448,11 @@ button[aria-pressed="true"] { background: #1f3a2c; border-color: var(--c1); colo
       server on <code>lastPlay</code>, so shipping this needs no backend change.
     </p>
     <p style="margin:0">
-      <strong>Tier 7 audio is a placeholder.</strong> Drop your track at
-      <code>frontend/public/sounds/tier-7-rocket.mp3</code> and it replaces the synthesized
-      stand-in. Keep it under 5s.
+      <strong>Shake is a seven-step ladder.</strong> Drag the slider and hit
+      <em>Feel it</em> to compare any two rungs back to back; <em>Force</em> pins every play
+      to the slider value so you can judge one strength against the whole banner. The px and
+      ms readout is the real spec — <code>GameBoard.tsx</code> runs the same seven numbers
+      through framer-motion that this page runs through CSS.
     </p>
   </div>
 </div>
@@ -585,6 +599,7 @@ const readout = document.getElementById('readout');
 let last = PLAYS.find(p => p.type === 'rocket');
 let slowMo = false, withSlam = true, soundOn = true;
 let rapidTimers = [];
+let curSpeed = 1, forceShake = false;
 const audioCache = {};
 
 /* Tiers 6, 7 and comeback are 30-46 second music tracks, not stingers. They
@@ -639,6 +654,24 @@ function musicLeft() {
   return Math.ceil(musicEl.duration - musicEl.currentTime);
 }
 
+/* ── Shake ─────────────────────────────────────────────────────────────────
+   Seven strengths, not three. The old 1/2/3 collapsed tiers 3-5 into one jolt
+   and 6/7/comeback into another, so half the ladder felt identical — which is
+   exactly what a slider makes obvious. */
+const SHAKE = {
+  1: { x: 6,  r: 0.35, z: 0,     dur: 420,  name: 'tap' },
+  2: { x: 11, r: 0.60, z: 0.004, dur: 560,  name: 'knock' },
+  3: { x: 17, r: 0.95, z: 0.010, dur: 720,  name: 'thud' },
+  4: { x: 24, r: 1.35, z: 0.018, dur: 900,  name: 'slam' },
+  5: { x: 32, r: 1.80, z: 0.028, dur: 1120, name: 'blast' },
+  6: { x: 42, r: 2.30, z: 0.040, dur: 1400, name: 'quake' },
+  7: { x: 54, r: 2.90, z: 0.055, dur: 1750, name: 'cataclysm' },
+};
+
+/* Tier → strength. Straight through, with the comeback one notch under the
+   rocket: it borrows the legendary look but it is not the top of the ladder. */
+const SHAKE_FOR = { 0: 1, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, comeback: 6 };
+
 /* ── Rack, grouped by computed tier ────────────────────────────────────── */
 const rack = document.getElementById('rack');
 for (const t of [0, 1, 2, 3, 4, 5, 6, 7, 'comeback']) {
@@ -652,7 +685,8 @@ for (const t of [0, 1, 2, 3, 4, 5, 6, 7, 'comeback']) {
   id.className = 'tier-id';
   id.innerHTML = `<span class="tier-num">${t === 'comeback' ? '↺' : (t || '·')}</span>` +
                  `<span class="tier-name">${info.name}</span>` +
-                 `<span class="tier-note">${info.note}</span>`;
+                 `<span class="tier-note">${info.note}</span>` +
+                 `<span class="tier-shake">SHAKE <b>${SHAKE_FOR[t]}</b> · ${SHAKE[SHAKE_FOR[t]].name}</span>`;
   const chips = document.createElement('div');
   chips.className = 'chips';
   for (const p of members) {
@@ -674,6 +708,7 @@ function fire(p) {
   const sp = (slowMo ? 4 : 1) * stretch;
   const ms = (n) => (n * sp) + 'ms';
 
+  curSpeed = sp;
   stage.style.setProperty('--speed', sp);
   fx.innerHTML = '';
   fx.dataset.tier = tier;
@@ -706,6 +741,7 @@ function fire(p) {
 
   const total = Math.round((TIERS[tier].dur + t0) * stretch);
   readout.innerHTML = `<b>${p.zh}</b> · tier ${tier} ${TIERS[tier].name} · ${total}ms` +
+    ` · shake ${SHAKE_FOR[tier]} ${SHAKE[SHAKE_FOR[tier]].name}` +
     (slowMo ? ' <span style="opacity:.6">(×4 slow)</span>' : '');
   updateMusicReadout();
 }
@@ -817,17 +853,33 @@ function build(p, tier, sp, ms, add) {
       `<span class="word${big ? ' split' : ''}">${ghosts}${inner}</span>` +
       `<span class="sub" style="--sd:${ms(dur)};animation-delay:${ms(big ? 260 : 0)}">${p.sub}</span>`);
 
-    kick(n >= 6 ? 3 : n >= 3 ? 2 : 1);
-    if (n >= 6) at(() => kick(2), 950);       // aftershock
+    const strength = SHAKE_FOR[tier];
+    kick(strength);
+    // A blast and up rings twice: the hit, then the room settling.
+    if (strength >= 5) at(() => kick(Math.ceil(strength / 2)), 950);
   }, H);
 }
 
+let shakeTimer = null;
+
+/**
+ * Shake the stage at strength 1-7.
+ *
+ * Cleared on a timer rather than animationend, because that event bubbles: a
+ * spark finishing inside the stage used to cancel the shake early.
+ */
 function kick(level) {
-  const cls = level >= 3 ? 'sk3' : level === 2 ? 'sk2' : 'sk1';
-  stage.classList.remove('sk1', 'sk2', 'sk3');
+  const lvl = Math.max(1, Math.min(7, Math.round(forceShake ? shakeInput.valueAsNumber : level)));
+  const s = SHAKE[lvl];
+  clearTimeout(shakeTimer);
+  stage.classList.remove('shaking');
   void stage.offsetWidth;                        // force reflow so it restarts
-  stage.classList.add(cls);
-  stage.addEventListener('animationend', () => stage.classList.remove(cls), { once: true });
+  stage.style.setProperty('--sx', s.x + 'px');
+  stage.style.setProperty('--sr', s.r + 'deg');
+  stage.style.setProperty('--sz', String(s.z));
+  stage.style.setProperty('--sdur', s.dur + 'ms');
+  stage.classList.add('shaking');
+  shakeTimer = setTimeout(() => stage.classList.remove('shaking'), s.dur * curSpeed + 60);
 }
 
 /* ── Toolbar ───────────────────────────────────────────────────────────── */
@@ -843,6 +895,45 @@ document.getElementById('rapid').addEventListener('click', () => {
     rapidTimers.push(setTimeout(() => fire(p), t));
     t += Math.min(TIERS[p.tier].dur + 340, 1500);   // cut long ones short, as a real round would
   });
+});
+
+/* Shake bench. Fires on release rather than on every input event — a shake
+   restarting thirty times a second is a blur, not a demonstration. */
+const shakeInput = document.getElementById('shake');
+const shakeOut   = document.getElementById('shakeOut');
+const shakeSpec  = document.getElementById('shakeSpec');
+const shakeLock  = document.getElementById('shakeLock');
+const RAMP = ['#4ade80', '#38bdf8', '#a78bfa', '#f472b6', '#fb923c', '#ef4444', '#fde047'];
+
+function paintShake() {
+  const lvl = shakeInput.valueAsNumber;
+  const s = SHAKE[lvl];
+  shakeOut.textContent = String(lvl);
+  shakeSpec.textContent = `${s.name} · ${s.x}px · ${s.dur}ms`;
+  shakeInput.closest('.bench').style.setProperty('--hot', RAMP[lvl - 1]);
+}
+
+function demoShake() {
+  curSpeed = slowMo ? 4 : 1;
+  stage.style.setProperty('--speed', curSpeed);
+  const lvl = shakeInput.valueAsNumber;
+  const s = SHAKE[lvl];
+  const was = forceShake;
+  forceShake = false;                            // the slider IS the request here
+  kick(lvl);
+  forceShake = was;
+  readout.innerHTML = `<b>shake ${lvl}</b> · ${s.name} · ${s.x}px · ${s.r}° · ${s.dur}ms` +
+    (slowMo ? ' <span style="opacity:.6">(×4 slow)</span>' : '');
+}
+
+paintShake();
+shakeInput.addEventListener('input', paintShake);
+shakeInput.addEventListener('change', demoShake);
+document.getElementById('shakeTest').addEventListener('click', demoShake);
+shakeLock.addEventListener('click', () => {
+  forceShake = !forceShake;
+  shakeLock.setAttribute('aria-pressed', String(forceShake));
+  shakeLock.textContent = forceShake ? 'Forcing' : 'Force';
 });
 
 const slowBtn = document.getElementById('slow');

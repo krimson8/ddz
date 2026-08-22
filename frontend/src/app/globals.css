@@ -87,6 +87,36 @@ body {
     pointer-events: none;
   }
 
+  /* ── Card impact dust ───────────────────────────────────────────────────
+     Thrown out from under a card as it hits the felt. Positioned by the flight
+     overlay, which also sets the delay so each card in a run kicks up its own
+     as it arrives. Two rings at different rates read as dust rather than as a
+     single expanding circle. */
+  @keyframes ddz-dust {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.18) scaleY(0.38); }
+    12%  { opacity: 0.55; }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(2.6) scaleY(0.38); }
+  }
+  .ddz-dust {
+    position: absolute;
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 22px rgba(255, 255, 255, 0.16);
+    opacity: 0;
+    pointer-events: none;
+    animation: ddz-dust 520ms cubic-bezier(0.1, 0.8, 0.3, 1) both;
+  }
+  .ddz-dust::after {
+    content: '';
+    position: absolute;
+    inset: 18%;
+    border-radius: 50%;
+    border: 1px solid rgba(250, 204, 21, 0.32);
+    animation: ddz-dust 660ms cubic-bezier(0.1, 0.8, 0.3, 1) both;
+  }
+
   /* ── Win confetti ───────────────────────────────────────────────────────
      Driven by a keyframe rather than JS so the pieces cost one composited
      transform each and no React work after mount. */
@@ -259,6 +289,9 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .ddz-sheen::after {
     animation: none !important;
+  }
+  .ddz-dust {
+    display: none !important;
   }
   [style*="ddz-confetti"] {
     display: none !important;

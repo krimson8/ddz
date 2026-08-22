@@ -202,17 +202,26 @@ export function HitBanner({ event, onDone }: { event: HitEvent | null; onDone: (
   return <div ref={hostRef} className="hb" aria-hidden="true" />;
 }
 
+export type ShakeStrength = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
 /**
- * Shake strength a level should apply to the board.
+ * Tier → shake strength.
  *
- * Never returns 0: every card that lands knocks the table. The tiers only
- * decide how hard.
+ * Seven steps rather than three: collapsing tiers 3-5 into one jolt and
+ * 6/7/comeback into another made half the ladder feel identical, so a bomb and
+ * a rocket hit the table the same way. Straight through now, with the comeback
+ * one notch under the rocket — it borrows the legendary look but it is not the
+ * top of the ladder.
+ *
+ * Never 0: every card that lands knocks the table. The tiers only decide how
+ * hard.
  */
-export function shakeLevel(level: HitLevel): 1 | 2 | 3 {
-  const n = num(level);
-  if (n >= 6) return 3;
-  if (n >= 3) return 2;
-  return 1;
+const SHAKE_FOR: Record<string, ShakeStrength> = {
+  0: 1, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, comeback: 6,
+};
+
+export function shakeLevel(level: HitLevel): ShakeStrength {
+  return SHAKE_FOR[String(level)] ?? 1;
 }
 
 /**

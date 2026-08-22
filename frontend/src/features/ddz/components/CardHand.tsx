@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Card } from './Card';
 import { handLayoutId } from './cardLayout';
 import { sfx } from '@/features/ddz/sfx';
+import { recordHandRects, type FlightRect } from '@/features/ddz/cardFlight';
 import type { Card as CardType, Play } from '@/features/ddz/types';
 import { validatePlay } from '@/features/ddz/cardUtils';
 
@@ -22,10 +23,10 @@ interface CardHandProps {
 }
 
 /**
- * Fan geometry. The arc is kept deliberately shallow: the cards carry a
- * layoutId that framer-motion uses to fly them into the play area, and layout
- * projection measures axis-aligned bounding boxes, so a steep rotation would
- * make the departing card visibly jump in size as it leaves the hand.
+ * Fan geometry. The arc is kept deliberately shallow: a played card is measured
+ * out of this row and flown to the table (see cardFlight.ts), and a steep angle
+ * would make the card it launches from read as a different size than the one
+ * that takes off.
  */
 const MAX_ARC_DEG = 18;      // total spread, first card to last
 const ARC_ORIGIN_PX = 230;   // pivot distance below the cards
@@ -70,6 +71,8 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, lastPlay, 
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Live element per card, so a play can be measured on its way out.
+  const cardEls = useRef(new Map<string, HTMLDivElement>());
   const fanPad = fanPadding(cards.length);
 
   // Notify parent of selection changes
@@ -127,6 +130,32 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, lastPlay, 
   function handlePlay() {
     if (!canPlay) return;
     const toPlay = Array.from(selected).sort((a, b) => a - b).map((i) => cards[i]);
+
+    // Snapshot where these cards are sitting right now. Once the server echoes
+    // the play they are gone from the hand, and the play area needs somewhere
+    // to fly them from. Measured by centre and layout size rather than by the
+    // bounding rect, because each card sits inside a fan rotation and the rect
+    // is the rotated card's larger axis-aligned box.
+    const rects = new Map<string, FlightRect>();
+    for (const idx of Array.from(selected).sort((a, b) => a - b)) {
+      const card = cards[idx];
+      const el = cardEls.current.get(handLayoutId(card));
+      if (!el) continue;
+      // The card itself, not the fan wrapper around it: a selected card is
+      // lifted 18px by its own transform, and launching from the wrapper would
+      // drop it back down before it set off.
+      const inner = (el.firstElementChild as HTMLElement | null) ?? el;
+      const r = inner.getBoundingClientRect();
+      rects.set(handLayoutId(card), {
+        cx: r.left + r.width / 2,
+        cy: r.top + r.height / 2,
+        w: inner.offsetWidth,
+        h: inner.offsetHeight,
+        rot: fanAngle(idx, cards.length),
+      });
+    }
+    if (rects.size) recordHandRects(rects);
+
     if (timerRef.current) clearInterval(timerRef.current);
     setSelected(new Set());
     setTimeLeft(null);
@@ -184,6 +213,11 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, lastPlay, 
               style={{ zIndex: selected.has(idx) ? 100 + idx : idx }}
             >
               <div
+                ref={(el) => {
+                  const id = handLayoutId(card);
+                  if (el) cardEls.current.set(id, el);
+                  else cardEls.current.delete(id);
+                }}
                 style={{
                   transform: `rotate(${fanAngle(idx, cards.length)}deg) translateY(${fanLift(idx, cards.length)}px)`,
                   transformOrigin: `50% ${ARC_ORIGIN_PX}px`,
@@ -193,7 +227,6 @@ export function CardHand({ cards, onPlay, onPass, interactive = true, lastPlay, 
                   {...card}
                   selected={selected.has(idx)}
                   onClick={() => toggle(idx)}
-                  layoutId={handLayoutId(card)}
                 />
               </div>
             </motion.div>

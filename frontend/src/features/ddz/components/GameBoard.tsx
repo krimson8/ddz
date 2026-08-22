@@ -10,21 +10,45 @@ import { BiddingPanel } from './BiddingPanel';
 import { RoleDrawPanel } from './RoleDrawPanel';
 import { PlayHistory } from './PlayHistory';
 import { DealingOverlay } from './effects/DealingOverlay';
-import { HitBanner, shakeLevel } from './effects/HitBanner';
+import { HitBanner, shakeLevel, type ShakeStrength } from './effects/HitBanner';
 import { useHitEvents } from '@/features/ddz/useHitEvents';
+import { FLIGHT_IMPACT_MS } from '@/features/ddz/cardFlight';
 import { EmojiChatBox, type EmojiHistoryEntry } from '@/components/EmojiChatBox';
 import type { Card, ClientMember, GameState } from '@/features/ddz/types';
 
-/** How long a played card takes to reach the table, ms. */
-const LAND_MS = 190;
+/**
+ * How long a played card takes to reach the table, ms.
+ *
+ * Taken from the flight itself rather than guessed, so the jolt lands on the
+ * frame the card hits the felt.
+ */
+const LAND_MS = FLIGHT_IMPACT_MS;
 
-/** Board shake per hit strength. Index matches shakeLevel(); 0 is unused. */
-const SHAKE = [
-  null,
-  { x: [0, -7, 6, -4, 3, 0], y: [0, 4, -4, 2, -1, 0], rotate: [0, -0.4, 0.35, -0.2, 0.1, 0], duration: 0.42 },
-  { x: [0, -13, 11, -8, 6, -3, 0], y: [0, 7, -8, 5, -3, 2, 0], rotate: [0, -0.9, 0.8, -0.5, 0.3, -0.15, 0], duration: 0.68 },
-  { x: [0, -30, 26, -21, 16, -11, 7, -4, 0], y: [0, 19, -22, 14, -10, 7, -4, 2, 0], rotate: [0, -1.9, 1.6, -1.2, 0.8, -0.5, 0.3, -0.1, 0], duration: 1.35 },
-] as const;
+/**
+ * Board shake, seven strengths.
+ *
+ * One decaying-oscillation profile scaled by amplitude, rather than seven
+ * hand-written keyframe sets. The strengths have to be comparable to each other
+ * — that is the whole point of a ladder — and hand-tuning each rung
+ * independently is how they drift apart. Shared with the fx-lab preview, which
+ * runs the identical numbers through CSS.
+ */
+const SHAKE_TIMES = [0, 0.04, 0.09, 0.15, 0.22, 0.3, 0.39, 0.49, 0.6, 0.71, 0.82, 0.92, 1];
+const SHAKE_X = [0, -1, 0.91, -0.79, 0.65, -0.53, 0.41, -0.29, 0.24, -0.15, 0.09, -0.06, 0];
+const SHAKE_Y = [0, 0.65, -0.76, -0.47, 0.59, -0.38, 0.29, -0.24, 0.18, -0.12, 0.06, -0.03, 0];
+const SHAKE_R = [0, -1, 0.9, -0.71, 0.55, -0.4, 0.29, -0.2, 0.14, -0.09, 0.05, -0.02, 0];
+const SHAKE_S = [0, 1, 0.84, 0.68, 0.52, 0.36, 0.24, 0.16, 0.1, 0, 0, 0, 0];
+
+/** Amplitude in px, rotation in deg, scale bump, and length in seconds. */
+const SHAKE: Record<ShakeStrength, { x: number; r: number; z: number; d: number }> = {
+  1: { x: 6, r: 0.35, z: 0, d: 0.42 },
+  2: { x: 11, r: 0.6, z: 0.004, d: 0.56 },
+  3: { x: 17, r: 0.95, z: 0.01, d: 0.72 },
+  4: { x: 24, r: 1.35, z: 0.018, d: 0.9 },
+  5: { x: 32, r: 1.8, z: 0.028, d: 1.12 },
+  6: { x: 42, r: 2.3, z: 0.04, d: 1.4 },
+  7: { x: 54, r: 2.9, z: 0.055, d: 1.75 },
+};
 
 /** Pure render of remaining grace seconds — backend owns the truth (endTime). */
 function DisconnectCountdown({ endTime }: { endTime: number }) {
@@ -158,9 +182,9 @@ export function GameBoard({
     ? members.find((m) => m.id === lastPlayedBy)?.nickname
     : undefined;
 
-  // Which seat the cards should fly in from. Cards played from the seat shown at
-  // the bottom already animate via their shared layoutId, so those are 'self'
-  // and get no extra offset.
+  // Which seat the cards should fly in from. 'self' is the seat shown at the
+  // bottom, whose cards are measured out of the real hand rather than launched
+  // from a synthesised off-screen point.
   const playOrigin: PlayOrigin = !lastPlayedBy
     ? null
     : lastPlayedBy === orderedPlayers[0]?.id
@@ -182,13 +206,16 @@ export function GameBoard({
   useEffect(() => {
     if (!knock || reduceMotion) return;
 
-    const jolt = (strength: 1 | 2 | 3) => {
-      const spec = SHAKE[strength];
+    const jolt = (strength: ShakeStrength) => {
+      const s = SHAKE[strength];
       shake.start({
-        x: [...spec.x],
-        y: [...spec.y],
-        rotate: [...spec.rotate],
-        transition: { duration: spec.duration, ease: 'easeOut' },
+        x: SHAKE_X.map((f) => f * s.x),
+        y: SHAKE_Y.map((f) => f * s.x),
+        rotate: SHAKE_R.map((f) => f * s.r),
+        scale: SHAKE_S.map((f) => 1 + f * s.z),
+        // The profile above already carries the decay, so the easing only has
+        // to shape each individual swing.
+        transition: { duration: s.d, times: SHAKE_TIMES, ease: [0.33, 0.05, 0.2, 0.98] },
       });
     };
 
@@ -199,11 +226,17 @@ export function GameBoard({
     // impact. When that wait is long enough to read as a separate beat, the
     // card still gets its own small knock as it lands — otherwise the two would
     // collide and the light one would cut the heavy one short.
+    const hitAt = Math.max(LAND_MS, knock.impactAt);
     if (strength > 1 && knock.impactAt > LAND_MS + 300) {
       timers.push(setTimeout(() => jolt(1), LAND_MS));
       timers.push(setTimeout(() => jolt(strength), knock.impactAt));
     } else {
-      timers.push(setTimeout(() => jolt(strength), Math.max(LAND_MS, knock.impactAt)));
+      timers.push(setTimeout(() => jolt(strength), hitAt));
+    }
+    // A blast and up rings twice: the hit, then the room settling.
+    if (strength >= 5) {
+      const after = Math.ceil(strength / 2) as ShakeStrength;
+      timers.push(setTimeout(() => jolt(after), hitAt + 950));
     }
 
     return () => timers.forEach(clearTimeout);
@@ -238,16 +271,22 @@ export function GameBoard({
           overlays (emoji box, settings gear) deliberately stay outside it — a
           transformed ancestor would become their containing block and break
           their positioning. */}
-      <motion.div animate={shake} className="relative flex-1 flex flex-col min-h-0 ddz-table-ring">
+      {/* id: the card-flight overlay portals in here, so a card in the air is
+          moved by the same shake transform as the table it is about to hit. */}
+      <motion.div id="ddz-board" animate={shake} className="relative flex-1 flex flex-col min-h-0 ddz-table-ring">
       {/* ── Top opponents ───────────────────────────────── */}
       {/* pr-16 on mobile keeps the top-right seat/landlord cards clear of the fixed volume button */}
       <div className="flex justify-around px-4 pr-16 sm:pr-4 pt-4">
-        {orderedPlayers.slice(1).map((member) => {
+        {orderedPlayers.slice(1).map((member, seat) => {
           if (!member) return null;
           const globalIdx = players.indexOf(member);
           return (
             <div
               key={member.id}
+              // Launch point for this seat's cards. The row is justify-around
+              // inside a padding that changes at the sm breakpoint, so the seats
+              // are nowhere near a fixed offset from the table on a phone.
+              data-ddz-seat={seat === 0 ? 'left' : 'right'}
               onClick={isSpectator ? () => setSpectatorViewIndex(globalIdx) : undefined}
               className={isSpectator ? 'cursor-pointer' : undefined}
             >
