@@ -28,11 +28,11 @@ const ACCENT: Record<string, string> = {
 
 /** Base length of the banner, ms, before STRETCH. Music outlives this. */
 export const BANNER_MS: Record<string, number> = {
-  1: 620, 2: 800, 3: 980, 4: 1300, 5: 1900, 6: 2900, 7: 4300, comeback: 3200, friendly: 2900,
+  1: 620, 2: 800, 3: 980, 4: 1300, 5: 1900, 6: 2900, 7: 4300, comeback: 3200, friendly: 3600,
 };
 
 /** Wind-up before the impact, ms, before STRETCH. Only heavy tiers charge up. */
-const CHARGE_MS: Record<string, number> = { 5: 340, 6: 700, 7: 1150, comeback: 620, friendly: 620 };
+const CHARGE_MS: Record<string, number> = { 5: 340, 6: 700, 7: 1150, comeback: 620 };
 
 /**
  * How much to slow each level down. Applied to every duration at once — the CSS
@@ -41,8 +41,18 @@ const CHARGE_MS: Record<string, number> = { 5: 340, 6: 700, 7: 1150, comeback: 6
  * sync with itself.
  */
 const STRETCH: Record<string, number> = {
-  1: 2, 2: 2, 3: 2, 4: 2, 5: 2, 6: 1.5, 7: 1.5, comeback: 1.5, friendly: 1.5,
+  1: 2, 2: 2, 3: 2, 4: 2, 5: 2, 6: 1.5, 7: 1.5, comeback: 1.5, friendly: 1,
 };
+
+/**
+ * Levels that arrive whole instead of being hit onto the screen.
+ *
+ * Friendly fire is not a triumph — it is a mistake being named — so it borrows
+ * the finale's manner: one fade in, a hold, one fade out. No wind-up, no
+ * shockwaves, no second blast, and above all no shake. Their timings are
+ * absolute, which is why they sit at STRETCH 1.
+ */
+const SERENE = new Set(['friendly']);
 
 /**
  * The beat.
@@ -75,7 +85,7 @@ export type ShakeStrength = 1 | 2 | 3 | 4 | 5 | 6 | 7;
  * hard.
  */
 const SHAKE_FOR: Record<string, ShakeStrength> = {
-  0: 1, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, comeback: 6, friendly: 5,
+  0: 1, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, comeback: 6, friendly: 1,
 };
 
 export function shakeLevel(level: HitLevel): ShakeStrength {
@@ -102,6 +112,8 @@ export interface BannerPlan {
   chars: string[];
   /** Whether the word lands glyph by glyph and detonates again at the end. */
   seq: boolean;
+  /** Whether the word arrives whole and still, the way the finale does. */
+  serene: boolean;
   /** Every jolt the table takes, ms from the banner start. Empty when !seq. */
   beats: Beat[];
   /** When the second blast goes off, ms from the banner start. */
@@ -124,8 +136,9 @@ export function bannerPlan(level: HitLevel, word: string, type = ''): BannerPlan
   const charge = Math.round((CHARGE_MS[key] ?? 0) * stretch);
   const chars = [...word];
   const shake = shakeLevel(level);
+  const serene = SERENE.has(key);
   // Tier 5 and up are centrepieces: the word is the event, not a label on one.
-  const seq = n >= 5 && chars.length > 0;
+  const seq = !serene && n >= 5 && chars.length > 0;
 
   let total = Math.round((BANNER_MS[key] ?? 1000) * stretch);
   const beats: Beat[] = [];
@@ -156,6 +169,7 @@ export function bannerPlan(level: HitLevel, word: string, type = ''): BannerPlan
     body: total - charge,
     chars,
     seq,
+    serene,
     beats,
     detonateAt,
     // Two 王 flying in and colliding is the rocket's own gesture — 天堂製造
@@ -257,6 +271,23 @@ export function HitBanner({ event, onDone }: { event: HitEvent | null; onDone: (
     }
 
     const timers: ReturnType<typeof setTimeout>[] = [];
+
+    if (plan.serene) {
+      add('hb-godray', '', `animation-duration:${total}ms`);
+      add('hb-wash', '', `--dur:${total}ms`);
+      const banner = add('hb-banner hb-serene',
+        `<span class="hb-word">` +
+        `<span class="hb-stroke" aria-hidden="true">${event.word}</span>` +
+        `<span class="hb-fill">${event.word}</span></span>` +
+        `<span class="hb-sub">${event.sub}</span>`,
+        `--od:${total}ms`);
+      fitWord(host, banner);
+      timers.push(setTimeout(() => {
+        if (hostRef.current) hostRef.current.innerHTML = '';
+        onDone();
+      }, total + 60));
+      return () => timers.forEach(clearTimeout);
+    }
 
     timers.push(setTimeout(() => {
       if (!hostRef.current) return;

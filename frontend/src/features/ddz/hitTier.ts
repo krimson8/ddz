@@ -213,7 +213,7 @@ export function hitLevel(input: ComebackInput): HitLevel {
  */
 export function musicWeight(level: HitLevel): number {
   if (level === 6) return 100;          // 炸彈
-  if (level === 'friendly') return 150; // 裏切り者のレクイエム
+  if (level === 'friendly') return 150; // 裏切り者
   if (level === 'comeback') return 200; // 殺
   if (level === 7) return 300;          // 火箭
   return 0;                              // no music
@@ -252,8 +252,8 @@ export const LEVEL_LABEL: Record<string, { word: string; sub: string }> = {
   quad_pairs:       { word: '四帶二對', sub: 'QUAD + PAIRS' },
   bomb:             { word: '炸彈',     sub: 'BOMB' },
   rocket:           { word: '神拳震撼波', sub: 'GOD HAND IMPACT' },
-  comeback:         { word: '殺',       sub: 'COMEBACK' },
-  friendly:         { word: '裏切り者のレクイエム', sub: "TRAITOR'S REQUIEM" },
+  comeback:         { word: '殺',       sub: 'IM BIGGER THAN YOU' },
+  friendly:         { word: '裏切り者', sub: "TRAITOR'S REQUIEM" },
 };
 
 /**

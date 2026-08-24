@@ -627,15 +627,25 @@ const TIERS = {
   6: { name: '霸', note: 'Full takeover. Beats, aftershock, blast.',   dur: 2900, color: '#ef4444' },
   7: { name: '神', note: 'Only 天堂製造 and 火箭. Gold, jokers, blast.', dur: 4300, color: '#fde047' },
   comeback: { name: '殺', note: 'Cross-party answer to a strong play.', dur: 3200, color: '#22d3ee' },
-  friendly: { name: '坑', note: 'Friendly fire. Peasant over peasant.', dur: 2900, color: '#fb7185' },
+  friendly: { name: '坑', note: 'Friendly fire. One fade, no shake.',   dur: 3600, color: '#fb7185' },
 };
 
 /* How much to slow each level down. Folded into the speed multiplier, so the
    CSS keyframes and every JS-computed delay stretch together. */
-const STRETCH = { 1: 2, 2: 2, 3: 2, 4: 2, 5: 2, 6: 1.5, 7: 1.5, comeback: 1.5, friendly: 1.5 };
+const STRETCH = { 1: 2, 2: 2, 3: 2, 4: 2, 5: 2, 6: 1.5, 7: 1.5, comeback: 1.5, friendly: 1 };
+
+/**
+ * Levels that arrive whole instead of being hit onto the screen.
+ *
+ * Friendly fire is not a triumph — it is a mistake being named — so it borrows
+ * the finale's manner: one fade in, a hold, one fade out. No wind-up, no
+ * shockwaves, no second blast, and above all no shake. Their timings are
+ * absolute, which is why they sit at STRETCH 1.
+ */
+const SERENE = new Set(['friendly']);
 
 /** Wind-up before the impact, unscaled ms. Only the heavy tiers charge up. */
-const CHARGE = { 5: 340, 6: 700, 7: 1150, comeback: 620, friendly: 620 };
+const CHARGE = { 5: 340, 6: 700, 7: 1150, comeback: 620 };
 
 /**
  * Two contests, one shape test.
@@ -709,8 +719,8 @@ const LABEL = {
   quad_pairs:       { word: '四帶二對', sub: 'QUAD + PAIRS' },
   bomb:             { word: '炸彈',     sub: 'BOMB' },
   rocket:           { word: '神拳震撼波', sub: 'GOD HAND IMPACT' },
-  comeback:         { word: '殺',       sub: 'COMEBACK' },
-  friendly:         { word: '裏切り者のレクイエム', sub: "TRAITOR'S REQUIEM" },
+  comeback:         { word: '殺',       sub: 'IM BIGGER THAN YOU' },
+  friendly:         { word: '裏切り者', sub: "TRAITOR'S REQUIEM" },
 };
 
 /**
@@ -846,7 +856,7 @@ let musicEl = null, musicWeight = -1;
    already running, and the traitor is the news. */
 function weightOf(level) {
   if (level === 6) return 100;             // 炸彈
-  if (level === 'friendly') return 150;    // 裏切り者のレクイエム
+  if (level === 'friendly') return 150;    // 裏切り者
   if (level === 'comeback') return 200;    // 殺
   if (level === 7) return 300;             // 火箭
   return 0;
@@ -906,7 +916,7 @@ const SHAKE = {
 
 /* Tier → strength. Straight through, with the comeback one notch under the
    rocket: it borrows the legendary look but it is not the top of the ladder. */
-const SHAKE_FOR = { 0: 1, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, comeback: 6, friendly: 5 };
+const SHAKE_FOR = { 0: 1, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, comeback: 6, friendly: 1 };
 
 /* ── Rack, grouped by computed tier ────────────────────────────────────── */
 const rack = document.getElementById('rack');
@@ -1068,8 +1078,9 @@ function planOf(p) {
   const stretch = STRETCH[tier] ?? 1;
   const charge = CHARGE[tier] ?? 0;
   const chars = [...(p.word ?? '')];
+  const serene = SERENE.has(String(tier));
   // Tier 5 and up are centrepieces: the word is the event, not a label on one.
-  const seq = n >= 5 && chars.length > 0;
+  const seq = !serene && n >= 5 && chars.length > 0;
   /* The beat. Quoted here divided by the tier's stretch because every number
      below is multiplied by `sp` on the way out — that is what makes the gap
      land at 300ms on screen whether the tier plays at 1.5x or 2x, and still
@@ -1086,7 +1097,7 @@ function planOf(p) {
     // rather than cutting the word off halfway through its own sequence.
     total = Math.max(total, detonateAt + 1500 / stretch);
   }
-  return { n, stretch, charge, chars, seq, gap, glyphIn, land, total, detonateAt };
+  return { n, stretch, charge, chars, seq, serene, gap, glyphIn, land, total, detonateAt };
 }
 
 /**
@@ -1113,9 +1124,23 @@ function build(p, tier, sp, ms, add) {
   // the rocket's signature (the colliding jokers and the gold rain); friendly
   // fire borrows the bomb's.
   const plan = planOf(p);
-  const { n, chars, seq, gap, glyphIn, land, total } = plan;
+  const { n, chars, seq, serene, gap, glyphIn, land, total } = plan;
   const accent = TIERS[tier].color;
   const big = n >= 6;
+
+  /* Two soft layers and the word, and nothing else at all. */
+  if (serene) {
+    add('godray', '', `animation-duration:${ms(total)}`);
+    add('wash', '', `--dur:${ms(total)}`);
+    const el = add('banner serene',
+      `<span class="word">` +
+      `<span class="stroke" aria-hidden="true">${p.word}</span>` +
+      `<span class="fill">${p.word}</span></span>` +
+      `<span class="sub">${p.sub}</span>`,
+      `--od:${ms(total)}`);
+    fitWord(el);
+    return;
+  }
 
   const H = plan.charge;               // moment of impact
 
