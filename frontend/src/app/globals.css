@@ -311,6 +311,24 @@ body {
   .hb-sub { --ls: .42em; font-family: var(--font-geist-mono), ui-monospace, monospace; font-weight: 600; letter-spacing: var(--ls); text-indent: var(--ls); color: #fff; text-shadow: 0 0 10px var(--hb), 0 2px 4px rgba(0,0,0,.8); animation: hb-sub var(--sd) cubic-bezier(.15,.85,.3,1) both; }
   @keyframes hb-sub { 0%{opacity:0;transform:translateY(12px);letter-spacing:calc(var(--ls)*2.6)} 26%{opacity:1;transform:translateY(0);letter-spacing:var(--ls)} 82%{opacity:1} 100%{opacity:0} }
 
+  /* 天堂製造's finale. Everything else on this layer arrives by being hit;
+     this one arrives whole, holds, and goes. The word and sub-line run no
+     animation of their own — the banner fades as a single object, which is the
+     entire difference between a game ending and a card landing. */
+  .hb-banner.hb-serene { animation: hb-serene var(--od) ease-in-out both; }
+  .hb-banner.hb-serene .hb-word,
+  .hb-banner.hb-serene .hb-sub { animation: none; }
+  .hb-banner.hb-serene { gap: 14px; }
+  .hb-banner.hb-serene .hb-word { line-height: 1; }
+  @keyframes hb-serene {
+    0%   { opacity: 0; transform: translate(-50%,-50%) scale(1.16); filter: blur(12px) }
+    22%  { opacity: 1; transform: translate(-50%,-50%) scale(1); filter: blur(0) }
+    78%  { opacity: 1; transform: translate(-50%,-50%) scale(1); filter: blur(0) }
+    100% { opacity: 0; transform: translate(-50%,-50%) scale(1.05); filter: blur(7px) }
+  }
+  .hb[data-tier="heaven"] .hb-word { font-size: clamp(52px,12.4vw,152px); }
+  .hb[data-tier="heaven"] .hb-sub { font-size: 17px; }
+
   .hb[data-tier="1"] .hb-word { font-size: clamp(30px,6.4vw,66px); }
   .hb[data-tier="2"] .hb-word { font-size: clamp(38px,8.2vw,88px); }
   .hb[data-tier="3"] .hb-word { font-size: clamp(46px,10.4vw,116px); }

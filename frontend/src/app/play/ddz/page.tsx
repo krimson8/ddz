@@ -18,6 +18,9 @@ import {
 import { RoomLobby } from '@/features/ddz/components/RoomLobby';
 import { GameBoard } from '@/features/ddz/components/GameBoard';
 import { RoundOverScreen } from '@/features/ddz/components/RoundOverScreen';
+import { HeavenFinale } from '@/features/ddz/components/effects/HeavenFinale';
+import { useHeavenFinale } from '@/features/ddz/heavenFinale';
+import type { PlayOrigin } from '@/features/ddz/components/PlayArea';
 import { EmojiChatBox } from '@/components/EmojiChatBox';
 import { SettingsMenu, type SliderSetting } from '@/components/SettingsMenu';
 
@@ -93,6 +96,26 @@ function DdzPlayInner() {
     gameState.lastResult && (phase === 'lobby' || phase === 'result')
       ? gameState.lastResult
       : null;
+
+  // ── 天堂製造 ─────────────────────────────────────────────────────────────
+  // A win inside six of that player's own plays opens with a line from their
+  // seat and a banner of its own, and the result screen waits behind it. It
+  // lives up here rather than in the board because the server resets the room
+  // — unmounting the board — while it is still playing.
+  const heaven = useHeavenFinale(gameState);
+  /**
+   * Seat index → where that player sits on this screen.
+   *
+   * The board seats [me, me+1, me+2] clockwise, so the offset from the local
+   * seat is the answer. A spectator has no seat of their own to measure from;
+   * null sends the bubble to the table instead of to somebody else's chair.
+   */
+  const heavenSeat = (playerIndex: number): PlayOrigin => {
+    const mine = gameState.playerOrder.indexOf(user?.uid ?? '');
+    if (mine < 0) return null;
+    const offset = (playerIndex - mine + 3) % 3;
+    return offset === 0 ? 'self' : offset === 1 ? 'left' : 'right';
+  };
 
   // Perform the create/join intent passed from the unified lobby exactly once.
   const actedRef = useRef(false);
@@ -208,9 +231,16 @@ function DdzPlayInner() {
         />
       )}
 
+      <HeavenFinale state={heaven} seatOf={heavenSeat} />
+
       {/* Sits above both the board and the in-room lobby, so it survives the
-          server's return_to_lobby without blocking it. */}
-      <RoundOverScreen result={showResult} myId={user.uid} onDismiss={dismissResult} />
+          server's return_to_lobby without blocking it. The finale holds it back
+          until the words have been and gone. */}
+      <RoundOverScreen
+        result={heaven.blocking ? null : showResult}
+        myId={user.uid}
+        onDismiss={dismissResult}
+      />
     </>
   );
 }

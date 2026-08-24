@@ -99,7 +99,7 @@ export interface Room {
   turnTimer: NodeJS.Timeout | null; // per-turn 30s auto-pass timer
   /** uid → total wins in this room session (kept for in-game GameResult overlay) */
   winCounts: Record<string, number>;
-  resultPending: boolean; // true during the 5s game_over → return_to_lobby delay
+  resultPending: boolean; // true during the 8s game_over → return_to_lobby delay
   /** Player indices (0-2) that have surrendered this round. Peasants toggle; landlord requires double-press. */
   surrendered: number[];
   /** Active mid-game disconnect grace window, if any. */

@@ -1019,12 +1019,14 @@ export class GameService {
 
     room.state = 'waiting';
 
+    // Eight seconds, not five: a 天堂製造 finish spends 2.4s on its cold open
+    // and 3.6s on its banner before the result screen is allowed to appear.
     setTimeout(() => {
       room.resultPending = false;
       this.emitToRoom(room, 'return_to_lobby', { phase: 'lobby' });
       this.emitMembersUpdate(room);
       this.broadcastRoomList();
-    }, 5_000);
+    }, 8_000);
   }
 
   /**

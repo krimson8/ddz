@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { sfx, type SfxKey } from '@/features/ddz/sfx';
-import { hitLevel, isOpeningPlay, labelFor, musicTrack, musicWeight, type HitLevel } from '@/features/ddz/hitTier';
+import { hitLevel, labelFor, musicTrack, musicWeight, type HitLevel } from '@/features/ddz/hitTier';
 import { bannerPlan, type Beat, type HitEvent } from '@/features/ddz/components/effects/HitBanner';
+import { heavenWin } from '@/features/ddz/heavenFinale';
 import type { GameState } from '@/features/ddz/types';
 
 /**
@@ -59,7 +60,7 @@ const GOD_IMPACT = '/sounds/god_hand_impact.mp3';
  * silently never fires its banner would be far worse than one that starts a
  * beat early. kamida.mp3 is 4.2s; this is that plus room to breathe.
  */
-const GOD_CUE_MS = 4600;
+export const GOD_CUE_MS = 4600;
 
 export function useHitEvents(gameState: GameState) {
   const [event, setEvent] = useState<HitEvent | null>(null);
@@ -100,13 +101,8 @@ export function useHitEvents(gameState: GameState) {
     seq.current += 1;
     const id = seq.current;
 
-    // 天堂製造: 20 cards is the landlord's entire hand, so a four-group 飛機帶對
-    // as the opening play of the round wins off the deal. hitLevel() reads the
-    // same flag for the tier, so the two can never disagree about which hand
-    // this is.
     const type = latest.play.type as string;
-    const firstWin = isOpeningPlay(history);
-    const { word, sub } = labelFor(level, type, latest.play.rank, latest.play.cards.length, firstWin);
+    const { word, sub } = labelFor(level, type, latest.play.rank, latest.play.cards.length);
     const plan = bannerPlan(level, word, type);
     // Tier 7 holds 天堂製造 as well now, and the cold open is the rocket's.
     const isRocket = type === 'rocket';
@@ -130,6 +126,12 @@ export function useHitEvents(gameState: GameState) {
     // A newer play supersedes anything still winding up.
     pending.current?.cancel();
     pending.current = null;
+
+    // A six-turn win takes the moment for itself: no banner, no tier music, no
+    // knock — the table goes quiet and 天堂製造 opens. A 火箭 is the exception,
+    // because it has a cold open of its own that is worth hearing first; the
+    // finale queues behind it. See heavenFinale.ts.
+    if (heavenWin(history, gameState.playerCardCounts) && !isRocket) return;
 
     if (!isRocket) {
       launch();
@@ -163,13 +165,17 @@ export function useHitEvents(gameState: GameState) {
         setPreroll(null);
       },
     };
-  }, [history, landlordIndex]);
+  }, [history, landlordIndex, gameState.playerCardCounts]);
 
-  // Stop the music if the board unmounts entirely (leaving the room).
-  useEffect(() => () => {
-    pending.current?.cancel();
-    sfx.stopMusic();
-  }, []);
+  /**
+   * The pending cold open dies with the board; the music deliberately does not.
+   *
+   * The board unmounts on the server's return_to_lobby, five seconds after the
+   * round ends — while the end-of-round screen is still up offering to let a
+   * 23-46 second track finish. Stopping the music here cut every one of them
+   * off mid-phrase. The room session owns the track now; see useSoundEffects.
+   */
+  useEffect(() => () => pending.current?.cancel(), []);
 
   const clear = useCallback(() => setEvent(null), []);
   return { event, knock, preroll, clear };

@@ -25,6 +25,16 @@ const EMOJI_SOUNDS: Record<string, string> = {
 /** Start ticking this many seconds before the turn timer expires. */
 const TICK_FROM_SECONDS = 5;
 
+/**
+ * Is anything still entitled to the music channel?
+ *
+ * A live round is, and so is the end-of-round screen — which is exactly the
+ * lobby phase with a result still on it, the state the server puts the client
+ * in five seconds after the round ends. Once the result is dismissed, aborted
+ * or left behind, nothing is, and the track stops.
+ */
+const holdsMusic = (s: GameState) => s.phase !== 'lobby' || !!s.lastResult;
+
 export function useSoundEffects(gameState: GameState, mySocketId: string) {
   const prevStateRef = useRef<GameState>(gameState);
   const yourTurnAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -42,6 +52,10 @@ export function useSoundEffects(gameState: GameState, mySocketId: string) {
       window.removeEventListener('keydown', unlock);
     };
   }, []);
+
+  // Navigating away is not a state transition, and the bus is a module
+  // singleton that would otherwise keep playing over the next page.
+  useEffect(() => () => sfx.stopMusic(), []);
 
   const playEmoji = (emoji: string) => {
     const src = EMOJI_SOUNDS[emoji];
@@ -63,7 +77,19 @@ export function useSoundEffects(gameState: GameState, mySocketId: string) {
 
     // Game start: transition into dealing phase (enough players voted)
     if (prev.phase !== 'dealing' && curr.phase === 'dealing') {
+      // A new deal is a clean slate: players can re-ready long before a 46
+      // second track has finished, and the last round's music must not follow
+      // them into this one.
+      sfx.stopMusic();
       sfx.play('gameStart');
+    }
+
+    // The music channel outlives the banner *and* the board, so that a big
+    // finish can play out under the end-of-round screen while the server's
+    // return_to_lobby resets everything underneath it. It ends here instead:
+    // the moment nothing is entitled to it any more.
+    if (holdsMusic(prev) && !holdsMusic(curr)) {
+      sfx.stopMusic();
     }
 
     // Local player's turn ended (played or passed) — stop the yourTurn alert

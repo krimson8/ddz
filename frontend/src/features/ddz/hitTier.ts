@@ -53,27 +53,13 @@ export function planeGroups(type: string, count: number): number {
 }
 
 /**
- * Is the newest entry the first actual play of the round?
- *
- * Passes do not count, so this stays true through a lead that everybody folded
- * to. One definition, because both the tier and the copy turn on it.
- */
-export function isOpeningPlay(history: HistoryEntry[]): boolean {
-  return history.filter((h) => h.play?.cards?.length).length === 1;
-}
-
-/**
  * Base tier for a play, ignoring context.
  *
  * `rank` is the play's comparison rank, which for 三帶一 is the trio's rank and
  * not the kicker's — that is what makes "based on 2 or A" a one-line test.
  * 14 = A, 15 = 2, 16 = 小王, 17 = 大王.
- *
- * `firstWin` decides one case and only one: 20 cards is the landlord's whole
- * hand, so a four-group 飛機帶對 opening the round wins off the deal, and that
- * is the only plane that reaches tier 7.
  */
-export function baseTier(type: string, rank: number, count: number, firstWin = false): HitTier {
+export function baseTier(type: string, rank: number, count: number): HitTier {
   const high = rank >= HIGH_BASE;
   switch (type) {
     case 'single':           return rank >= 15 ? 1 : 0;   // 2 and the jokers only
@@ -89,8 +75,7 @@ export function baseTier(type: string, rank: number, count: number, firstWin = f
     case 'trio_seq_singles':
     case 'trio_seq_pairs': {
       const groups = planeGroups(type, count);
-      if (groups > 3) return type === 'trio_seq_pairs' && firstWin ? 7 : 6;
-      return groups === 3 ? 5 : 3;
+      return groups > 3 ? 6 : groups === 3 ? 5 : 3;
     }
     case 'quad_singles':
     case 'quad_pairs':       return 5;
@@ -202,12 +187,7 @@ export function isFriendlyFire(input: ComebackInput): boolean {
 /** Full level for a play, contests included. */
 export function hitLevel(input: ComebackInput): HitLevel {
   const { curr } = input;
-  const base = baseTier(
-    curr.type as string,
-    curr.rank,
-    curr.cards.length,
-    isOpeningPlay(input.history),
-  );
+  const base = baseTier(curr.type as string, curr.rank, curr.cards.length);
   const prev = beatenEntry(input.history)?.play ?? null;
   const bombDuel = (curr.type as string) === 'bomb' && (prev?.type as string) === 'bomb';
   // The heavy tiers are already the loudest thing on the table and do not need
@@ -279,18 +259,12 @@ export const LEVEL_LABEL: Record<string, { word: string; sub: string }> = {
 /**
  * Pick the banner copy for a play.
  *
- * `firstWin` is the 天堂製造 case: 20 cards is the landlord's entire hand, so a
- * four-group 飛機帶對 as the opening play of the round ends the game on the
- * deal. That hand and 火箭 are the only two plays that reach tier 7; every
- * other four-group plane is 我的很大你忍一下 at tier 6.
+ * 火箭 is the only play that reaches tier 7 now. 天堂製造 left this table with
+ * the hand it used to belong to: it is no longer a shape you can hold, it is
+ * what winning inside six turns is called — see heavenFinale.ts. Its copy stays
+ * in LEVEL_LABEL because the finale still needs the words.
  */
-export function labelFor(
-  level: HitLevel,
-  type: string,
-  rank: number,
-  count: number,
-  firstWin = false,
-) {
+export function labelFor(level: HitLevel, type: string, rank: number, count: number) {
   if (level === 'comeback') return LEVEL_LABEL.comeback;
   if (level === 'friendly') return LEVEL_LABEL.friendly;
   if (type === 'single') {
@@ -306,10 +280,7 @@ export function labelFor(
   }
   const groups = planeGroups(type, count);
   if (groups) {
-    if (groups > 3) {
-      if (type === 'trio_seq_pairs' && firstWin) return LEVEL_LABEL.heaven;
-      return LEVEL_LABEL.plane_max;
-    }
+    if (groups > 3) return LEVEL_LABEL.plane_max;
     if (groups === 3) return LEVEL_LABEL.plane_big;
   }
   return LEVEL_LABEL[type] ?? { word: type, sub: '' };

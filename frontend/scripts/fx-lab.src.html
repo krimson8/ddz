@@ -360,6 +360,24 @@ h1 { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: c
 .sub { --ls: .42em; font-family: var(--font-mono); font-weight: 600; letter-spacing: var(--ls); text-indent: var(--ls); color: #fff; text-shadow: 0 0 10px var(--accent), 0 2px 4px rgba(0,0,0,.8); animation: subIn var(--sd) cubic-bezier(.15,.85,.3,1) both; }
 @keyframes subIn { 0%{opacity:0;transform:translateY(12px);letter-spacing:calc(var(--ls)*2.6)} 26%{opacity:1;transform:translateY(0);letter-spacing:var(--ls)} 82%{opacity:1} 100%{opacity:0} }
 
+/* 天堂製造's finale. Everything else on this layer arrives by being hit; this
+   one arrives whole, holds, and goes. The word and sub-line run no animation of
+   their own — the banner fades as a single object, which is the entire
+   difference between a game ending and a card landing. */
+.banner.serene { animation: serene var(--od) ease-in-out both; }
+.banner.serene .word,
+.banner.serene .sub { animation: none; }
+.banner.serene { gap: 14px }
+.banner.serene .word { line-height: 1 }
+@keyframes serene {
+  0%   { opacity: 0; transform: translate(-50%,-50%) scale(1.16); filter: blur(12px) }
+  22%  { opacity: 1; transform: translate(-50%,-50%) scale(1); filter: blur(0) }
+  78%  { opacity: 1; transform: translate(-50%,-50%) scale(1); filter: blur(0) }
+  100% { opacity: 0; transform: translate(-50%,-50%) scale(1.05); filter: blur(7px) }
+}
+.fx[data-tier="heaven"] .word { font-size: clamp(52px,12.4vw,152px); }
+.fx[data-tier="heaven"] .sub { font-size: 17px; }
+
 .fx[data-tier="1"] .word { font-size: clamp(30px,6.4vw,66px); }
 .fx[data-tier="2"] .word { font-size: clamp(38px,8.2vw,88px); }
 .fx[data-tier="3"] .word { font-size: clamp(46px,10.4vw,116px); }
@@ -517,6 +535,7 @@ input[type=range]:focus-visible { outline: 2px solid var(--c2); outline-offset: 
     <button id="withSlam" aria-pressed="true">Card slam first</button>
     <button id="sound" aria-pressed="true">Sound on</button>
     <button id="godIntro" aria-pressed="true">火箭 cold open</button>
+    <button id="heaven">天堂製造 finale</button>
     <button id="stopMusic">■ Stop music</button>
 
     <span class="bench">
@@ -1349,6 +1368,96 @@ const slamBtn = document.getElementById('withSlam');
 slamBtn.addEventListener('click', () => { withSlam = !withSlam; slamBtn.setAttribute('aria-pressed', String(withSlam)); });
 
 document.getElementById('stopMusic').addEventListener('click', stopMusic);
+
+
+/* ── 天堂製造 ──────────────────────────────────────────────────────────────
+   Not a tier: a way of finishing. Winning inside six of your own plays ends the
+   round with a line from the winner's seat, then the words — no shake, no
+   whacking, one fade. Previewed from a button because the real trigger needs a
+   real six-turn win, and the result screen waits behind it either way. */
+const HEAVEN_CUE_MS = 2800;          // made_in_heaven.mp3 is 2.4s
+const HEAVEN_BANNER_MS = 3600;       // fade in, hold ~2s, fade out
+
+function heavenBanner() {
+  fx.innerHTML = '';
+  fx.dataset.tier = 'heaven';
+  fx.style.setProperty('--accent', '#fde047');
+
+  const add = (cls, html = '', style = '') => {
+    const el = document.createElement('div');
+    el.className = cls;
+    if (style) el.setAttribute('style', style);
+    if (html) el.innerHTML = html;
+    fx.appendChild(el);
+    return el;
+  };
+
+  add('godray', '', `animation-duration:${HEAVEN_BANNER_MS}ms`);
+  for (let i = 0; i < 44; i++) {
+    const s = 3 + ((i * 29) % 6);
+    add('goldfall', '', `--x:${(i * 149) % 100}%;--s:${s}px;` +
+      `--r:${((i * 197) % 900) + 360}deg;--d:${2600 + ((i * 71) % 1400)}ms;` +
+      `animation-delay:${(i % 8) * 110}ms`);
+  }
+  const label = LABEL.heaven;
+  add('banner serene',
+    `<span class="word">` +
+    `<span class="stroke" aria-hidden="true">${label.word}</span>` +
+    `<span class="fill">${label.word}</span></span>` +
+    `<span class="sub">${label.sub}</span>`,
+    `--od:${HEAVEN_BANNER_MS}ms`);
+  fitWord(fx.querySelector('.banner'));
+
+  if (soundOn) {
+    stopMusic();
+    musicEl = new Audio(AUDIO.heaventrack);
+    musicWeight = 400;               // nothing follows the end of the game
+    musicEl.play().catch(() => {});
+  }
+  readout.innerHTML = `<b>天堂製造</b> · six-turn win · ${HEAVEN_BANNER_MS}ms · no shake`;
+  updateMusicReadout();
+  setTimeout(() => { if (fx.dataset.tier === 'heaven') fx.innerHTML = ''; }, HEAVEN_BANNER_MS + 60);
+}
+
+function fireHeaven() {
+  cancelPreroll();
+  hush();
+  stopMusic();
+  fx.innerHTML = '';
+  stage.style.setProperty('--speed', 1);
+  curSpeed = 1;
+  readout.innerHTML = `<b>天堂製造</b> · <span style="color:#fde047">MADE IN HEAVEN…</span>`;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = 'MADE IN HEAVEN';
+  stage.appendChild(bubble);
+
+  const a = cue(AUDIO.heavencue);
+  const go = () => {
+    prerollPending = null;
+    a?.removeEventListener('ended', go);
+    clearTimeout(timer);
+    bubble.classList.add('out');
+    setTimeout(() => bubble.remove(), 220);
+    heavenBanner();
+  };
+  const wait = a && isFinite(a.duration) && a.duration > 0
+    ? Math.max(HEAVEN_CUE_MS, a.duration * 1000 + 300)
+    : HEAVEN_CUE_MS;
+  const timer = setTimeout(go, wait);
+  a?.addEventListener('ended', go, { once: true });
+  prerollPending = {
+    cancel: () => {
+      a?.removeEventListener('ended', go);
+      a?.pause();
+      clearTimeout(timer);
+      bubble.remove();
+    },
+  };
+}
+
+document.getElementById('heaven').addEventListener('click', fireHeaven);
 
 const godBtn = document.getElementById('godIntro');
 godBtn.addEventListener('click', () => {

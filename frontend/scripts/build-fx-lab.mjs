@@ -53,6 +53,8 @@ const CANDIDATES = {
 const EXTRA = {
   kamida: ['kamida.mp3'],
   godhand: ['god_hand_impact.mp3'],
+  heavencue: ['made_in_heaven.mp3'],
+  heaventrack: ['crucified_full.mp3'],
 };
 
 /** Levels whose audio is a full music track, not a stinger. */
