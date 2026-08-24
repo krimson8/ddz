@@ -226,11 +226,24 @@ body {
   @keyframes hb-jkL { 0%{opacity:0;transform:translate(-78vw,-26vh) rotate(-260deg) scale(.42)} 14%{opacity:1} 86%{opacity:1;transform:translate(0,0) rotate(0) scale(1.12)} 100%{opacity:0;transform:translate(0,0) rotate(0) scale(2.3)} }
   @keyframes hb-jkR { 0%{opacity:0;transform:translate(78vw,26vh) rotate(260deg) scale(.42)} 14%{opacity:1} 86%{opacity:1;transform:translate(0,0) rotate(0) scale(1.12)} 100%{opacity:0;transform:translate(0,0) rotate(0) scale(2.3)} }
 
-  .hb-banner { position: absolute; left: 50%; top: 46%; transform: translate(-50%,-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; white-space: nowrap; }
+  .hb-banner { position: absolute; left: 50%; top: 46%; z-index: 5; transform: translate(-50%,-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; white-space: nowrap; }
   .hb-word { position: relative; font-weight: 900; line-height: .92; letter-spacing: .01em; transform: skewX(-8deg); }
   .hb-word:not(.split) { animation: hb-slam calc(640ms * var(--sp,1)) cubic-bezier(.12,.9,.24,1) both; }
-  .hb-fill { background: linear-gradient(180deg,#fff 6%,#f3f6f4 34%,#b9c6c0 52%,#fff 74%,#dfe8e3 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .hb-stroke { position: absolute; inset: 0; -webkit-text-stroke: .14em #08120d; color: #08120d; z-index: -1; filter: drop-shadow(0 4px 0 rgba(0,0,0,.5)) drop-shadow(0 0 22px var(--hb)); }
+  /* The fill is brushed metal, but the old dark band through the middle read as
+     haze at speed. Every stop now sits in the near-white range, so the glyph is
+     legible on the frame it lands rather than two frames later. */
+  .hb-fill { background: linear-gradient(180deg,#fff 4%,#fbfdfc 32%,#dde6e1 50%,#fff 68%,#eef4f1 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  /* Three shadows, in order of what each is for: a hard drop for weight, a
+     tight near-black halo separating the outline from the glow, then the glow
+     itself, pushed out and dimmed. The old single 22px accent shadow sat
+     directly on the contour, which is what made the edges look faded. */
+  .hb-stroke {
+    position: absolute; inset: 0; z-index: -1;
+    -webkit-text-stroke: .15em #06100c; color: #06100c;
+    filter: drop-shadow(0 3px 0 rgba(0,0,0,.72))
+            drop-shadow(0 0 5px rgba(2,8,5,.92))
+            drop-shadow(0 0 30px color-mix(in srgb, var(--hb) 50%, transparent));
+  }
   .hb-ghost { position: absolute; inset: 0; color: transparent; -webkit-text-stroke: .02em currentColor; mix-blend-mode: screen; z-index: -2; }
   .hb-ghost.r { color: #ff3b5c; animation: hb-ghostR calc(640ms * var(--sp,1)) ease-out both; }
   .hb-ghost.c { color: #24e5ff; animation: hb-ghostC calc(640ms * var(--sp,1)) ease-out both; }
@@ -253,8 +266,50 @@ body {
     86%{opacity:1;transform:scale(1)}
     100%{opacity:0;transform:scale(1.2);filter:blur(4px)}
   }
-  .hb-sub { font-family: var(--font-geist-mono), ui-monospace, monospace; font-weight: 600; letter-spacing: .42em; text-indent: .42em; color: #fff; text-shadow: 0 0 10px var(--hb), 0 2px 4px rgba(0,0,0,.8); animation: hb-sub var(--sd) cubic-bezier(.15,.85,.3,1) both; }
-  @keyframes hb-sub { 0%{opacity:0;transform:translateY(12px);letter-spacing:1.1em} 26%{opacity:1;transform:translateY(0);letter-spacing:.42em} 82%{opacity:1} 100%{opacity:0} }
+  /* Tier 5 and up: the glyphs land 300ms apart and then have to HOLD together
+     while the second blast goes off, so the entrance and the exit are split —
+     .g plays hb-glyphHit and stops, the banner as a whole plays hb-out. The
+     shared hb-glyph keyframes carry their own exit and only work when the whole
+     word lands inside one beat. */
+  .hb-word.split.seq .g { animation: hb-glyphHit var(--gd) cubic-bezier(.12,.86,.2,1) both; }
+  @keyframes hb-glyphHit {
+    0%{opacity:0;transform:scale(5.2) rotate(-19deg);filter:blur(17px)}
+    20%{opacity:1;transform:scale(.8) rotate(3deg);filter:blur(0)}
+    33%{transform:scale(1.17) rotate(-2deg)}
+    48%{transform:scale(.96) rotate(1deg)}
+    66%{transform:scale(1.04) rotate(0)}
+    100%{opacity:1;transform:scale(1) rotate(0)}
+  }
+  .hb-banner.outro { animation: hb-out var(--od) linear both; }
+  @keyframes hb-out { 0%,90%{opacity:1;transform:translate(-50%,-50%) scale(1);filter:blur(0)} 100%{opacity:0;transform:translate(-50%,-50%) scale(1.18);filter:blur(5px)} }
+  /* The word takes the second blast rather than ignoring it. */
+  .hb-banner.detonate .hb-word { animation: hb-punch calc(760ms * var(--sp,1)) cubic-bezier(.12,.9,.24,1) both; }
+  @keyframes hb-punch {
+    0%{transform:skewX(-8deg) scale(1)}
+    12%{transform:skewX(-8deg) scale(1.1)}
+    30%{transform:skewX(-8deg) scale(.97)}
+    46%{transform:skewX(-8deg) scale(1.03)}
+    100%{transform:skewX(-8deg) scale(1)}
+  }
+  /* CJK ink overflows the .92 line box, and a long word with a sentence under
+     it collides. The sequenced banners buy their sub-line its own air. */
+  .hb-banner.outro { gap: 12px; }
+  .hb-banner.outro .hb-word { line-height: 1; }
+  /* Per-glyph impact wave: smaller and faster than hb-ring on purpose, so four
+     of these in a row read as four punches, not the main blast stuttering. */
+  .hb-shock {
+    position: absolute; width: 116px; height: 116px; margin: -58px 0 0 -58px;
+    border-radius: 50%; border: 4px solid #fff;
+    box-shadow: 0 0 26px var(--hb), inset 0 0 18px var(--hb);
+    animation: hb-shock var(--d) cubic-bezier(.1,.8,.3,1) both;
+  }
+  @keyframes hb-shock { 0%{opacity:.95;transform:scale(.12)} 62%{opacity:.45} 100%{opacity:0;transform:scale(3.6)} }
+
+  /* Tracking is a custom property because the keyframes animate it: a tier
+     whose sub-line is a sentence rather than a word has to tighten, and the
+     resting value and the value the animation settles on must be one number. */
+  .hb-sub { --ls: .42em; font-family: var(--font-geist-mono), ui-monospace, monospace; font-weight: 600; letter-spacing: var(--ls); text-indent: var(--ls); color: #fff; text-shadow: 0 0 10px var(--hb), 0 2px 4px rgba(0,0,0,.8); animation: hb-sub var(--sd) cubic-bezier(.15,.85,.3,1) both; }
+  @keyframes hb-sub { 0%{opacity:0;transform:translateY(12px);letter-spacing:calc(var(--ls)*2.6)} 26%{opacity:1;transform:translateY(0);letter-spacing:var(--ls)} 82%{opacity:1} 100%{opacity:0} }
 
   .hb[data-tier="1"] .hb-word { font-size: clamp(30px,6.4vw,66px); }
   .hb[data-tier="2"] .hb-word { font-size: clamp(38px,8.2vw,88px); }
@@ -262,16 +317,20 @@ body {
   .hb[data-tier="4"] .hb-word { font-size: clamp(52px,11.8vw,132px); }
   .hb[data-tier="5"] .hb-word { font-size: clamp(56px,12.8vw,146px); }
   .hb[data-tier="6"] .hb-word { font-size: clamp(60px,14vw,168px); }
-  .hb[data-tier="7"] .hb-word,
+  /* The rocket's word runs long where most banners are two or three glyphs,
+     so it takes its own step down. Anything longer is caught by fitWord(). */
+  .hb[data-tier="7"] .hb-word { font-size: clamp(42px,10.2vw,136px); }
   .hb[data-tier="comeback"] .hb-word { font-size: clamp(64px,15.4vw,190px); }
+  .hb[data-tier="friendly"] .hb-word { font-size: clamp(44px,10.6vw,142px); }
   .hb[data-tier="1"] .hb-sub { font-size: 10px; }
   .hb[data-tier="2"] .hb-sub { font-size: 11px; }
   .hb[data-tier="3"] .hb-sub { font-size: 13px; }
   .hb[data-tier="4"] .hb-sub { font-size: 14px; }
   .hb[data-tier="5"] .hb-sub { font-size: 15px; }
   .hb[data-tier="6"] .hb-sub { font-size: 17px; }
-  .hb[data-tier="7"] .hb-sub,
+  .hb[data-tier="7"] .hb-sub { font-size: 14px; --ls: .2em; }
   .hb[data-tier="comeback"] .hb-sub { font-size: 19px; }
+  .hb[data-tier="friendly"] .hb-sub { font-size: 14px; --ls: .2em; }
 
   /* Hide scrollbars on the horizontal card strips without losing scrolling. */
   .no-scrollbar {

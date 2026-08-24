@@ -232,11 +232,15 @@ class SfxBus {
    * Play an arbitrary file by path — used for the emoji voice clips, which are
    * data-driven and so cannot be keys in SOUNDS. One cached element each,
    * because a given clip retriggering itself should cut the previous one off.
+   *
+   * Returns the element so a caller can wait for it to finish. Null means
+   * nothing is playing — muted, or off-browser — and the caller has to fall
+   * back to a timer rather than to an 'ended' event that will never arrive.
    */
-  playFile(src: string): void {
-    if (typeof window === 'undefined') return;
+  playFile(src: string): HTMLAudioElement | null {
+    if (typeof window === 'undefined') return null;
     this.init();
-    if (this.volume === 0) return;
+    if (this.volume === 0) return null;
     let audio = this.oneShots.get(src);
     if (!audio) {
       audio = new Audio(src);
@@ -246,6 +250,7 @@ class SfxBus {
     audio.volume = this.volume;
     audio.currentTime = 0;
     audio.play().catch(() => {});
+    return audio;
   }
 
   // ── Music channel ─────────────────────────────────────────────────────────

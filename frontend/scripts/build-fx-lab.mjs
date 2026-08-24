@@ -42,13 +42,24 @@ const CANDIDATES = {
   6: ['tier6.mp3', 'tier-6.mp3', 'tier-6.wav'],
   7: ['tier7.mp3', 'tier-7.mp3', 'tier-7-rocket.mp3', 'tier-7-rocket.wav', 'tier-7.wav'],
   comeback: ['tier-comeback.mp3', 'tier-comeback.wav'],
+  friendly: ['traitor.mp3', 'tier-friendly.mp3', 'tier-friendly.wav'],
+};
+
+/**
+ * Cues the page loads by name rather than by tier: the 火箭 cold open and the
+ * impact that rides on top of the tier-7 track. Keyed bare in the audio map,
+ * where the tiers are keyed `tier-N`.
+ */
+const EXTRA = {
+  kamida: ['kamida.mp3'],
+  godhand: ['god_hand_impact.mp3'],
 };
 
 /** Levels whose audio is a full music track, not a stinger. */
-const MUSIC_LEVELS = new Set(['6', '7', 'comeback']);
+const MUSIC_LEVELS = new Set(['6', '7', 'comeback', 'friendly']);
 
-function pick(level) {
-  for (const name of CANDIDATES[level] ?? []) {
+function pick(level, table = CANDIDATES) {
+  for (const name of table[level] ?? []) {
     if (existsSync(join(SOUNDS, name))) return name;
   }
   return null;
@@ -61,7 +72,12 @@ const files = [];
 for (const level of Object.keys(CANDIDATES)) {
   const name = pick(level);
   if (!name) { console.warn(`  tier-${level}  MISSING`); continue; }
-  files.push([level, name]);
+  files.push([`tier-${level}`, name]);
+}
+for (const cue of Object.keys(EXTRA)) {
+  const name = pick(cue, EXTRA);
+  if (!name) { console.warn(`  ${cue}  MISSING`); continue; }
+  files.push([cue, name]);
 }
 
 const kb = (n) => (n / 1024).toFixed(0).padStart(5) + ' KB';
@@ -69,13 +85,13 @@ const kb = (n) => (n / 1024).toFixed(0).padStart(5) + ' KB';
 // ── link build ───────────────────────────────────────────────────────────────
 {
   const map = {};
-  for (const [level, name] of files) map[`tier-${level}`] = `sounds/${name}`;
+  for (const [key, name] of files) map[key] = `sounds/${name}`;
   writeFileSync(LINK_OUT, src.replace(MARKER, JSON.stringify(map)));
   console.log('link  public/fx-lab.html      ' + kb(statSync(LINK_OUT).size));
-  for (const [level, name] of files) {
+  for (const [key, name] of files) {
     const size = statSync(join(SOUNDS, name)).size;
-    const tag = MUSIC_LEVELS.has(String(level)) ? '  <- music track' : '';
-    console.log(`        tier-${String(level).padEnd(8)} -> sounds/${name.padEnd(20)}${kb(size)}${tag}`);
+    const tag = MUSIC_LEVELS.has(key.replace('tier-', '')) ? '  <- music track' : '';
+    console.log(`        ${key.padEnd(13)} -> sounds/${name.padEnd(22)}${kb(size)}${tag}`);
   }
 }
 
@@ -83,11 +99,11 @@ const kb = (n) => (n / 1024).toFixed(0).padStart(5) + ' KB';
 if (EMBED_OUT) {
   const map = {};
   let raw = 0;
-  for (const [level, name] of files) {
+  for (const [key, name] of files) {
     const bytes = readFileSync(join(SOUNDS, name));
     raw += bytes.length;
     const ext = name.slice(name.lastIndexOf('.'));
-    map[`tier-${level}`] = `data:${MIME[ext] ?? 'audio/wav'};base64,${bytes.toString('base64')}`;
+    map[key] = `data:${MIME[ext] ?? 'audio/wav'};base64,${bytes.toString('base64')}`;
   }
   writeFileSync(EMBED_OUT, src.replace(MARKER, JSON.stringify(map)));
   const size = statSync(EMBED_OUT).size;

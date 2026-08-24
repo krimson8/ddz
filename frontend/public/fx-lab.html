@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>鬥地主 Hit Banners</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -5,7 +6,7 @@
 
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
-   鬥地主 Hit Banners — VFX preview harness, 7 tiers
+   鬥地主 Hit Banners — VFX preview harness, 7 tiers + 2 contests
 
    Single-theme on purpose: this is an arcade screen, so it commits to one dark
    world rather than tracking the viewer's preference. Every colour is painted
@@ -30,6 +31,7 @@
   --c6: #ef4444;
   --c7: #fde047;
   --cc: #22d3ee;   /* comeback — its own hue, off the heat ramp */
+  --cf: #fb7185;   /* friendly fire — a warning colour, not a reward one */
 
   --font-display: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
   --font-ui: 'IBM Plex Sans', system-ui, sans-serif;
@@ -238,13 +240,59 @@ h1 { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: c
   100%{opacity:0;transform:translate(0,0) rotate(0) scale(2.3)}
 }
 
+/* ── 火箭 cold open ─────────────────────────────────────────────────────────
+   The rocket does not cut straight to its banner: the table holds still while
+   the player's own avatar says its line over kamida.mp3, and only when that cue
+   ends does anything else happen. Anchored under the left seat here; in game it
+   is measured off whichever seat actually fired it. */
+.bubble {
+  position: absolute; left: 18px; top: 46px; z-index: 6;
+  max-width: 340px; padding: 10px 16px;
+  border: 2px solid rgba(253,224,71,.9); border-radius: 16px;
+  background: linear-gradient(160deg, rgba(12,20,16,.97), rgba(28,22,6,.97));
+  box-shadow: 0 10px 30px rgba(0,0,0,.6), 0 0 26px rgba(253,224,71,.35);
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Meiryo', var(--font-ui);
+  font-weight: 700; font-size: 17px; line-height: 1.35; color: #fff; text-align: center;
+  text-shadow: 0 0 12px rgba(253,224,71,.85), 0 2px 3px rgba(0,0,0,.9);
+  animation: bubbleIn 320ms cubic-bezier(.15,.9,.25,1) both;
+}
+/* Tail: a rotated square clipped to its outer corner, tucked under the border. */
+.bubble::after {
+  content: ''; position: absolute; left: 26px; top: -8px;
+  width: 13px; height: 13px; transform: rotate(45deg);
+  border: 2px solid rgba(253,224,71,.9);
+  background: rgba(12,20,16,.97);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+@keyframes bubbleIn {
+  0%   { opacity: 0; transform: scale(.55) translateY(-14px) }
+  60%  { opacity: 1; transform: scale(1.06) translateY(0) }
+  100% { opacity: 1; transform: scale(1) }
+}
+.bubble.out { animation: bubbleOut 220ms ease-in both; }
+@keyframes bubbleOut { 0%{opacity:1;transform:scale(1)} 100%{opacity:0;transform:scale(.9)} }
+
 /* ── Banner text ───────────────────────────────────────────────────────── */
-.banner { position: absolute; left: 50%; top: 46%; transform: translate(-50%,-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; white-space: nowrap; }
+.banner { position: absolute; left: 50%; top: 46%; z-index: 5; transform: translate(-50%,-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; white-space: nowrap; }
 .word { position: relative; font-family: var(--font-display); font-weight: 900; line-height: .92; letter-spacing: .01em; transform: skewX(-8deg); }
 .word:not(.split) { animation: slam calc(640ms*var(--speed)) cubic-bezier(.12,.9,.24,1) both; }
 
-.fill { background: linear-gradient(180deg,#fff 6%,#f3f6f4 34%,#b9c6c0 52%,#fff 74%,#dfe8e3 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.stroke { position: absolute; inset: 0; -webkit-text-stroke: .14em #08120d; color: #08120d; z-index: -1; filter: drop-shadow(0 4px 0 rgba(0,0,0,.5)) drop-shadow(0 0 22px var(--accent)); }
+/* The fill is brushed metal, but the old dark band through the middle read as
+   haze at speed. Every stop now sits in the near-white range, so the glyph is
+   legible on the frame it lands rather than two frames later. */
+.fill { background: linear-gradient(180deg,#fff 4%,#fbfdfc 32%,#dde6e1 50%,#fff 68%,#eef4f1 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* Three shadows, in order of what each one is for: a hard drop that gives the
+   glyph weight, a tight near-black halo that separates the outline from the
+   accent glow, then the glow itself — pushed out and dimmed. The old single
+   22px accent shadow sat directly on the contour, which is what made the edges
+   look faded rather than lit. */
+.stroke {
+  position: absolute; inset: 0; z-index: -1;
+  -webkit-text-stroke: .15em #06100c; color: #06100c;
+  filter: drop-shadow(0 3px 0 rgba(0,0,0,.72))
+          drop-shadow(0 0 5px rgba(2,8,5,.92))
+          drop-shadow(0 0 30px color-mix(in srgb, var(--accent) 50%, transparent));
+}
 .ghost { position: absolute; inset: 0; color: transparent; -webkit-text-stroke: .02em currentColor; mix-blend-mode: screen; z-index: -2; }
 .ghost.r { color: #ff3b5c; animation: ghostR calc(640ms*var(--speed)) ease-out both; }
 .ghost.c { color: #24e5ff; animation: ghostC calc(640ms*var(--speed)) ease-out both; }
@@ -272,8 +320,45 @@ h1 { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: c
   100%{opacity:0;transform:scale(1.2);filter:blur(4px)}
 }
 
-.sub { font-family: var(--font-mono); font-weight: 600; letter-spacing: .42em; text-indent: .42em; color: #fff; text-shadow: 0 0 10px var(--accent), 0 2px 4px rgba(0,0,0,.8); animation: subIn var(--sd) cubic-bezier(.15,.85,.3,1) both; }
-@keyframes subIn { 0%{opacity:0;transform:translateY(12px);letter-spacing:1.1em} 26%{opacity:1;transform:translateY(0);letter-spacing:.42em} 82%{opacity:1} 100%{opacity:0} }
+/* Tracking is a custom property because the keyframes animate it: a tier whose
+   sub-line is a sentence rather than a word has to tighten, and the resting
+   value and the value the animation settles on must be the same number. */
+/* ── Rocket: four beats, then a second detonation ──────────────────────────
+   The shared .glyph keyframes carry their own exit, which works when the whole
+   word lands inside one beat. Here the glyphs land 300ms apart and then have to
+   HOLD together while the blast goes off, so the entrance and the exit are split:
+   .g plays glyphHit and stops, and the banner as a whole plays bannerOut. */
+.word.split.seq .g { animation: glyphHit var(--gd) cubic-bezier(.12,.86,.2,1) both; }
+@keyframes glyphHit {
+  0%   { opacity:0; transform: scale(5.2) rotate(-19deg); filter: blur(17px) }
+  20%  { opacity:1; transform: scale(.8)  rotate(3deg);   filter: blur(0) }
+  33%  { transform: scale(1.17) rotate(-2deg) }
+  48%  { transform: scale(.96)  rotate(1deg) }
+  66%  { transform: scale(1.04) rotate(0) }
+  100% { opacity:1; transform: scale(1) rotate(0) }
+}
+.banner.outro { animation: bannerOut var(--od) linear both; }
+@keyframes bannerOut { 0%,90%{opacity:1;transform:translate(-50%,-50%) scale(1);filter:blur(0)} 100%{opacity:0;transform:translate(-50%,-50%) scale(1.18);filter:blur(5px)} }
+/* The word takes the second blast rather than ignoring it. */
+.banner.detonate .word { animation: wordPunch calc(760ms*var(--speed)) cubic-bezier(.12,.9,.24,1) both; }
+@keyframes wordPunch {
+  0%   { transform: skewX(-8deg) scale(1) }
+  12%  { transform: skewX(-8deg) scale(1.1) }
+  30%  { transform: skewX(-8deg) scale(.97) }
+  46%  { transform: skewX(-8deg) scale(1.03) }
+  100% { transform: skewX(-8deg) scale(1) }
+}
+/* Per-glyph impact wave. Smaller and faster than .ring on purpose — four of
+   these in a row have to read as four punches, not as the main blast stuttering. */
+.shock {
+  position: absolute; width: 116px; height: 116px; margin: -58px 0 0 -58px;
+  border-radius: 50%; border: 4px solid #fff; box-shadow: 0 0 26px var(--accent), inset 0 0 18px var(--accent);
+  animation: shock var(--d) cubic-bezier(.1,.8,.3,1) both;
+}
+@keyframes shock { 0%{opacity:.95;transform:scale(.12)} 62%{opacity:.45} 100%{opacity:0;transform:scale(3.6)} }
+
+.sub { --ls: .42em; font-family: var(--font-mono); font-weight: 600; letter-spacing: var(--ls); text-indent: var(--ls); color: #fff; text-shadow: 0 0 10px var(--accent), 0 2px 4px rgba(0,0,0,.8); animation: subIn var(--sd) cubic-bezier(.15,.85,.3,1) both; }
+@keyframes subIn { 0%{opacity:0;transform:translateY(12px);letter-spacing:calc(var(--ls)*2.6)} 26%{opacity:1;transform:translateY(0);letter-spacing:var(--ls)} 82%{opacity:1} 100%{opacity:0} }
 
 .fx[data-tier="1"] .word { font-size: clamp(30px,6.4vw,66px); }
 .fx[data-tier="2"] .word { font-size: clamp(38px,8.2vw,88px); }
@@ -281,16 +366,24 @@ h1 { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: c
 .fx[data-tier="4"] .word { font-size: clamp(52px,11.8vw,132px); }
 .fx[data-tier="5"] .word { font-size: clamp(56px,12.8vw,146px); }
 .fx[data-tier="6"] .word { font-size: clamp(60px,14vw,168px); }
-.fx[data-tier="7"] .word,
+/* The rocket's word runs long where most banners are two or three glyphs, so
+   it takes its own step down. Anything longer still is caught by fitWord(). */
+.fx[data-tier="7"] .word { font-size: clamp(42px,10.2vw,136px); }
 .fx[data-tier="comeback"] .word { font-size: clamp(64px,15.4vw,190px); }
+.fx[data-tier="friendly"] .word { font-size: clamp(44px,10.6vw,142px); }
 .fx[data-tier="1"] .sub { font-size: 10px; }
 .fx[data-tier="2"] .sub { font-size: 11px; }
 .fx[data-tier="3"] .sub { font-size: 13px; }
 .fx[data-tier="4"] .sub { font-size: 14px; }
 .fx[data-tier="5"] .sub { font-size: 15px; }
 .fx[data-tier="6"] .sub { font-size: 17px; }
-.fx[data-tier="7"] .sub,
+.fx[data-tier="7"] .sub { font-size: 14px; --ls: .2em; }
+/* CJK ink overflows the .92 line box, and four glyphs of it with a sentence
+   underneath collide. The rocket buys the sub-line its own air. */
+.banner.outro { gap: 12px }
+.banner.outro .word { line-height: 1 }
 .fx[data-tier="comeback"] .sub { font-size: 19px; }
+.fx[data-tier="friendly"] .sub { font-size: 14px; --ls: .2em; }
 
 /* ── Card slam ─────────────────────────────────────────────────────────── */
 .slammer {
@@ -364,6 +457,7 @@ input[type=range]:focus-visible { outline: 2px solid var(--c2); outline-offset: 
 .tier[data-tier="6"] { --tint: var(--c6); }
 .tier[data-tier="7"] { --tint: var(--c7); }
 .tier[data-tier="comeback"] { --tint: var(--cc); }
+.tier[data-tier="friendly"] { --tint: var(--cf); }
 
 .foot { font-size: 13px; color: var(--muted); max-width: 70ch; display: flex; flex-direction: column; gap: 9px; }
 .foot strong { color: var(--ink); font-weight: 600; }
@@ -384,7 +478,7 @@ input[type=range]:focus-visible { outline: 2px solid var(--c2); outline-offset: 
 
 <div class="wrap">
   <header class="masthead">
-    <span class="eyebrow">VFX preview · 7 tiers · CSS + synthesized audio</span>
+    <span class="eyebrow">VFX preview · 7 tiers + 2 contests · CSS + synthesized audio</span>
     <h1>鬥地主 Hit Banners</h1>
     <p class="lede">
       Fighting-game hit banners for every 牌型. Tier is computed from the play itself —
@@ -422,6 +516,7 @@ input[type=range]:focus-visible { outline: 2px solid var(--c2); outline-offset: 
     <button id="slow" aria-pressed="false">Slow motion 0.25×</button>
     <button id="withSlam" aria-pressed="true">Card slam first</button>
     <button id="sound" aria-pressed="true">Sound on</button>
+    <button id="godIntro" aria-pressed="true">火箭 cold open</button>
     <button id="stopMusic">■ Stop music</button>
 
     <span class="bench">
@@ -444,8 +539,9 @@ input[type=range]:focus-visible { outline: 2px solid var(--c2); outline-offset: 
     <p style="margin:0">
       <strong>Tier is derived, not assigned.</strong> Each chip carries a real
       <code>type</code>, <code>rank</code> and card count, and the page runs the same
-      <code>tierOf()</code> that would run in game. All three values already come from the
-      server on <code>lastPlay</code>, so shipping this needs no backend change.
+      <code>tierOf()</code> and <code>labelFor()</code> that run in game, so a chip can
+      never claim a word the rules would not produce. All three values already come from
+      the server on <code>lastPlay</code>, so shipping this needs no backend change.
     </p>
     <p style="margin:0">
       <strong>Shake is a seven-step ladder.</strong> Drag the slider and hit
@@ -462,15 +558,19 @@ input[type=range]:focus-visible { outline: 2px solid var(--c2); outline-offset: 
    Tier rules
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/** Cards per group in the three plane shapes — 飛機 / 帶單 / 帶對. */
+const PLANE_SIZE = { trio_sequence: 3, trio_seq_singles: 4, trio_seq_pairs: 5 };
+const planeGroups = (type, count) => (PLANE_SIZE[type] ? count / PLANE_SIZE[type] : 0);
+
 /**
  * Tier for a play, 0 = no banner.
  *
- * Mirrors exactly what would run in the game. `rank` is the play's comparison
- * rank, which the server already sends on lastPlay — for 三帶一 that is the
- * trio's rank, not the kicker's, which is what makes "based on 2 or A" cheap
- * to test. 14 = A, 15 = 2, 16/17 = jokers.
+ * Mirrors exactly what runs in the game (hitTier.ts). `rank` is the play's
+ * comparison rank, which the server already sends on lastPlay — for 三帶一 that
+ * is the trio's rank, not the kicker's, which is what makes "based on 2 or A"
+ * cheap to test. 14 = A, 15 = 2, 16/17 = jokers.
  */
-function tierOf(type, rank, count) {
+function tierOf(type, rank, count, firstWin) {
   const high = rank >= 14;                 // A or 2 as the base of the hand
   switch (type) {
     case 'single':          return rank >= 15 ? 1 : 0;   // 2 and jokers only
@@ -479,12 +579,19 @@ function tierOf(type, rank, count) {
     case 'trio_single':
     case 'trio_pair':       return high ? 3 : 2;
     case 'pair_sequence':   return count / 2 > 3 ? 3 : 2;
-    case 'sequence':        return count >= 12 ? 5 : count >= 8 ? 3 : 2;   // 一條龍 stands alone
-    case 'trio_sequence':   return count / 3 > 3 ? 4 : 3;
-    case 'trio_seq_singles':return count / 4 > 3 ? 4 : 3;
-    case 'trio_seq_pairs':  return count / 5 > 3 ? 4 : 3;
+    // The run ladder tops out at the full 3→A, which is rarer than any bomb.
+    case 'sequence':        return count >= 12 ? 6 : count >= 10 ? 5 : count >= 8 ? 3 : 2;
+    case 'trio_sequence':
+    case 'trio_seq_singles':
+    case 'trio_seq_pairs': {
+      // 20 cards is the landlord's whole hand, so a four-group 飛機帶對 opening
+      // the round wins off the deal — the only plane that reaches tier 7.
+      const groups = planeGroups(type, count);
+      if (groups > 3) return type === 'trio_seq_pairs' && firstWin ? 7 : 6;
+      return groups === 3 ? 5 : 3;
+    }
     case 'quad_singles':
-    case 'quad_pairs':      return 3;
+    case 'quad_pairs':      return 5;
     case 'bomb':            return 6;                    // every bomb, not just AAAA+
     case 'rocket':          return 7;
     default:                return 1;
@@ -497,107 +604,213 @@ const TIERS = {
   2: { name: '中', note: 'Lightning beam behind the word.',            dur: 800,  color: '#38bdf8' },
   3: { name: '大', note: 'Rays, sparks, a shake.',                     dur: 980,  color: '#a78bfa' },
   4: { name: '猛', note: 'Rings, chromatic split, letterbox.',         dur: 1300, color: '#f472b6' },
-  5: { name: '爆', note: 'Charge-up, whiteout, cracks, embers.',       dur: 1900, color: '#fb923c' },
-  6: { name: '霸', note: 'Full takeover. Per-glyph slam, aftershock.', dur: 2900, color: '#ef4444' },
-  7: { name: '神', note: 'Jokers collide. God-rays, gold storm.',      dur: 4300, color: '#fde047' },
-  comeback: { name: '反殺', note: 'Cross-party answer to a strong play.', dur: 3200, color: '#22d3ee' },
+  5: { name: '爆', note: 'Beat-by-beat word, cracks, second blast.',   dur: 1900, color: '#fb923c' },
+  6: { name: '霸', note: 'Full takeover. Beats, aftershock, blast.',   dur: 2900, color: '#ef4444' },
+  7: { name: '神', note: 'Only 天堂製造 and 火箭. Gold, jokers, blast.', dur: 4300, color: '#fde047' },
+  comeback: { name: '殺', note: 'Cross-party answer to a strong play.', dur: 3200, color: '#22d3ee' },
+  friendly: { name: '坑', note: 'Friendly fire. Peasant over peasant.', dur: 2900, color: '#fb7185' },
 };
 
 /* How much to slow each level down. Folded into the speed multiplier, so the
    CSS keyframes and every JS-computed delay stretch together. */
-const STRETCH = { 1: 2, 2: 2, 3: 2, 4: 2, 5: 2, 6: 1.5, 7: 1.5, comeback: 1.5 };
+const STRETCH = { 1: 2, 2: 2, 3: 2, 4: 2, 5: 2, 6: 1.5, 7: 1.5, comeback: 1.5, friendly: 1.5 };
+
+/** Wind-up before the impact, unscaled ms. Only the heavy tiers charge up. */
+const CHARGE = { 5: 340, 6: 700, 7: 1150, comeback: 620, friendly: 620 };
 
 /**
- * Comeback: a specific strong play answered by a stronger one ACROSS the table.
- * Peasant-over-peasant never counts — the drama is in beating the other side.
+ * Two contests, one shape test.
+ *
+ * A comeback is a strong play answered ACROSS the table. Friendly fire is the
+ * same shapes reaching further down the deck, landing on your own side — only
+ * peasants can do it, since the landlord has nobody to hit. They differ only in
+ * how high the beaten play has to be, so they share one function.
  */
 const TRIO_FAMILY = new Set(['trio', 'trio_single', 'trio_pair']);
 const RUN_FAMILY = new Set(['pair_sequence', 'sequence', 'trio_sequence',
   'trio_seq_singles', 'trio_seq_pairs', 'quad_singles', 'quad_pairs']);
 
-function comebackMatchup(curr, prev) {
+const CB_PAIR_BASE = 13;   // 對K and up
+const TRIO_BASE = 11;      // JJJ and up — shared by both contests
+const FF_BASE = 11;        // J for singles and pairs
+
+function matchup(curr, prev, mode) {
   const c = curr.type, q = prev.type;
+  // A bomb answered by a bomb is a contest at any rank — both sides have just
+  // spent their get-out-of-jail card.
+  if (c === 'bomb' && q === 'bomb') return true;
   if (c === 'single' && q === 'single') {
+    if (mode === 'friendly') return prev.rank >= FF_BASE && curr.rank > prev.rank;
     if (curr.rank >= 16 && prev.rank === 15) return true;   // joker over a 2
-    if (curr.rank === 17 && prev.rank === 16) return true;  // 大王 over 小王
-    return false;
+    return curr.rank === 17 && prev.rank === 16;            // 大王 over 小王
   }
-  if (c === 'pair' && q === 'pair') return curr.rank === 15 && prev.rank === 14;
-  if (TRIO_FAMILY.has(c) && c === q) return prev.rank === 13;   // over a trio of kings
+  if (c === 'pair' && q === 'pair') {
+    const base = mode === 'friendly' ? FF_BASE : CB_PAIR_BASE;
+    return prev.rank >= base && curr.rank > prev.rank;
+  }
+  if (TRIO_FAMILY.has(c) && c === q) return prev.rank >= TRIO_BASE;
   if (RUN_FAMILY.has(c) && c === q) return true;
   return false;
 }
 
-/** Full level for an example play, comeback included. */
+/** Full level for an example play, both contests included. */
 function levelOf(p) {
-  const base = tierOf(p.type, p.rank, p.count);
-  if (base >= 5) return base;                       // bombs keep their own tier
-  if (p.prev && !p.sameParty && comebackMatchup(p, p.prev)) return 'comeback';
+  const base = tierOf(p.type, p.rank, p.count, p.firstWin);
+  const bombDuel = p.type === 'bomb' && p.prev?.type === 'bomb';
+  // The heavy tiers are already the loudest thing on the table. The exception
+  // is a bomb answering a bomb, worth calling out precisely because both sides
+  // just burned one.
+  if (base >= 5 && !bombDuel) return base;
+  if (p.prev && !p.sameParty && matchup(p, p.prev, 'comeback')) return 'comeback';
+  if (p.prev && p.sameParty && matchup(p, p.prev, 'friendly')) return 'friendly';
   return base;
 }
 
-/* Example plays. `word` is what the banner shows; `zh` labels the chip. */
+/** Banner copy per level. */
+const LABEL = {
+  single_2:         { word: '大弟',     sub: 'DEUCE' },
+  single_16:        { word: '小王',     sub: 'LITTLE JOKER' },
+  single_17:        { word: '大王',     sub: 'BIG JOKER' },
+  pair:             { word: '對子',     sub: 'PAIR' },
+  trio:             { word: '三張',     sub: 'TRIO' },
+  trio_single:      { word: '三帶一',   sub: 'TRIO + ONE' },
+  trio_pair:        { word: '三帶對',   sub: 'TRIO + PAIR' },
+  sequence:         { word: '順子',     sub: 'STRAIGHT' },
+  sequence_long:    { word: '長順',     sub: 'LONG STRAIGHT' },
+  sequence_dragon:  { word: '一條龍',   sub: 'DRAGON' },
+  sequence_full:    { word: '坑龍有悔', sub: 'DRAGON REGRETS' },
+  pair_sequence:    { word: '連對',     sub: 'DOUBLE RUN' },
+  trio_sequence:    { word: '飛機',     sub: 'AIRPLANE' },
+  trio_seq_singles: { word: '飛機帶單', sub: 'PLANE + ONES' },
+  trio_seq_pairs:   { word: '飛機帶對', sub: 'PLANE + PAIRS' },
+  plane_big:        { word: '大飛機',   sub: 'BIG PLANE' },
+  plane_max:        { word: '我的很大你忍一下', sub: 'ME BIG YOU SMALL' },
+  heaven:           { word: '天堂製造',     sub: 'MADE IN HEAVEN' },
+  quad_singles:     { word: '四帶二',   sub: 'QUAD + TWO' },
+  quad_pairs:       { word: '四帶二對', sub: 'QUAD + PAIRS' },
+  bomb:             { word: '炸彈',     sub: 'BOMB' },
+  rocket:           { word: '神拳震撼波', sub: 'GOD HAND IMPACT' },
+  comeback:         { word: '殺',       sub: 'COMEBACK' },
+  friendly:         { word: '裏切り者のレクイエム', sub: "TRAITOR'S REQUIEM" },
+};
+
+/**
+ * Banner copy for a play.
+ *
+ * `firstWin` is the 天堂製造 case: 20 cards is the landlord's entire hand, so a
+ * four-group 飛機帶對 as the opening play of the round wins off the deal.
+ */
+function labelFor(level, type, rank, count, firstWin) {
+  if (level === 'comeback') return LABEL.comeback;
+  if (level === 'friendly') return LABEL.friendly;
+  if (type === 'single') {
+    if (rank === 17) return LABEL.single_17;
+    if (rank === 16) return LABEL.single_16;
+    return LABEL.single_2;
+  }
+  if (type === 'sequence') {
+    if (count >= 12) return LABEL.sequence_full;
+    if (count >= 10) return LABEL.sequence_dragon;
+    if (count >= 8) return LABEL.sequence_long;
+    return LABEL.sequence;
+  }
+  const groups = planeGroups(type, count);
+  if (groups) {
+    if (groups > 3) {
+      if (type === 'trio_seq_pairs' && firstWin) return LABEL.heaven;
+      return LABEL.plane_max;
+    }
+    if (groups === 3) return LABEL.plane_big;
+  }
+  return LABEL[type] ?? { word: type, sub: '' };
+}
+
+/* Example plays. `zh` labels the chip; the banner copy is derived, so a chip
+   can never claim a word the tier rules would not produce. */
 const PLAYS = [
-  { zh:'單張 K',      sub:'LOW SINGLE',   word:'',        type:'single',           rank:13, count:1,  glyph:'K' },
-  { zh:'大弟 (2)',    sub:'DEUCE',        word:'大弟',    type:'single',           rank:15, count:1,  glyph:'2' },
-  { zh:'小王',        sub:'LITTLE JOKER', word:'小王',    type:'single',           rank:16, count:1,  glyph:'小' },
-  { zh:'大王',        sub:'BIG JOKER',    word:'大王',    type:'single',           rank:17, count:1,  glyph:'大' },
-  { zh:'對子 9',      sub:'PAIR',         word:'對子',    type:'pair',             rank:9,  count:2,  glyph:'9' },
-  { zh:'三張 10',     sub:'TRIO',         word:'三張',    type:'trio',             rank:10, count:3,  glyph:'10' },
+  { zh:'單張 K',      type:'single',           rank:13, count:1,  glyph:'K' },
+  { zh:'大弟 (2)',    type:'single',           rank:15, count:1,  glyph:'2' },
+  { zh:'小王',        type:'single',           rank:16, count:1,  glyph:'小' },
+  { zh:'大王',        type:'single',           rank:17, count:1,  glyph:'大' },
+  { zh:'對子 9',      type:'pair',             rank:9,  count:2,  glyph:'9' },
+  { zh:'三張 10',     type:'trio',             rank:10, count:3,  glyph:'10' },
 
-  { zh:'對 A',        sub:'PAIR OF ACES', word:'對子',    type:'pair',             rank:14, count:2,  glyph:'A' },
-  { zh:'對 2',        sub:'PAIR OF TWOS', word:'對子',    type:'pair',             rank:15, count:2,  glyph:'2' },
-  { zh:'三張 A',      sub:'TRIO OF ACES', word:'三張',    type:'trio',             rank:14, count:3,  glyph:'A' },
-  { zh:'三帶一 9',    sub:'TRIO + ONE',   word:'三帶一',  type:'trio_single',      rank:9,  count:4,  glyph:'9' },
-  { zh:'三帶對 8',    sub:'TRIO + PAIR',  word:'三帶對',  type:'trio_pair',        rank:8,  count:5,  glyph:'8' },
-  { zh:'順子 5張',    sub:'STRAIGHT',     word:'順子',    type:'sequence',         rank:9,  count:5,  glyph:'7' },
-  { zh:'連對 3對',    sub:'DOUBLE RUN',   word:'連對',    type:'pair_sequence',    rank:8,  count:6,  glyph:'6' },
+  { zh:'對 A',        type:'pair',             rank:14, count:2,  glyph:'A' },
+  { zh:'對 2',        type:'pair',             rank:15, count:2,  glyph:'2' },
+  { zh:'三張 A',      type:'trio',             rank:14, count:3,  glyph:'A' },
+  { zh:'三帶一 9',    type:'trio_single',      rank:9,  count:4,  glyph:'9' },
+  { zh:'三帶對 8',    type:'trio_pair',        rank:8,  count:5,  glyph:'8' },
+  { zh:'順子 5張',    type:'sequence',         rank:9,  count:5,  glyph:'7' },
+  { zh:'連對 3對',    type:'pair_sequence',    rank:8,  count:6,  glyph:'6' },
 
-  { zh:'三帶一 A',    sub:'TRIO + ONE',   word:'三帶一',  type:'trio_single',      rank:14, count:4,  glyph:'A' },
-  { zh:'三帶對 2',    sub:'TRIO + PAIR',  word:'三帶對',  type:'trio_pair',        rank:15, count:5,  glyph:'2' },
-  { zh:'連對 5對',    sub:'LONG RUN',     word:'連對',    type:'pair_sequence',    rank:10, count:10, glyph:'10' },
-  { zh:'長順 9張',    sub:'LONG STRAIGHT',word:'長順',    type:'sequence',         rank:11, count:9,  glyph:'J' },
-  { zh:'飛機 2組',    sub:'AIRPLANE',     word:'飛機',    type:'trio_sequence',    rank:9,  count:6,  glyph:'9' },
-  { zh:'飛機帶單 3組',sub:'PLANE + ONES', word:'飛機帶單',type:'trio_seq_singles', rank:10, count:12, glyph:'10' },
-  { zh:'四帶二',      sub:'QUAD + TWO',   word:'四帶二',  type:'quad_singles',     rank:12, count:6,  glyph:'Q' },
+  { zh:'三帶一 A',    type:'trio_single',      rank:14, count:4,  glyph:'A' },
+  { zh:'三帶對 2',    type:'trio_pair',        rank:15, count:5,  glyph:'2' },
+  { zh:'連對 5對',    type:'pair_sequence',    rank:10, count:10, glyph:'10' },
+  { zh:'長順 9張',    type:'sequence',         rank:11, count:9,  glyph:'J' },
+  { zh:'飛機 2組',    type:'trio_sequence',    rank:9,  count:6,  glyph:'9' },
 
-  { zh:'一條龍 3→A',  sub:'DRAGON',       word:'一條龍',  type:'sequence',         rank:14, count:12, glyph:'A' },
-  { zh:'飛機 4組',    sub:'AIRPLANE ×4',  word:'飛機',    type:'trio_sequence',    rank:11, count:12, glyph:'J' },
-  { zh:'飛機帶對 4組',sub:'PLANE + PAIRS',word:'飛機帶對',type:'trio_seq_pairs',   rank:10, count:20, glyph:'10' },
+  { zh:'順子 10張',   type:'sequence',         rank:12, count:10, glyph:'Q' },
+  { zh:'四帶二',      type:'quad_singles',     rank:12, count:6,  glyph:'Q' },
+  { zh:'四帶二對',    type:'quad_pairs',       rank:13, count:8,  glyph:'K' },
+  { zh:'飛機 3組',    type:'trio_sequence',    rank:10, count:9,  glyph:'10' },
+  { zh:'飛機帶單 3組',type:'trio_seq_singles', rank:10, count:12, glyph:'10' },
+  { zh:'飛機帶對 3組',type:'trio_seq_pairs',   rank:9,  count:15, glyph:'9' },
 
-  { zh:'炸彈 7777',   sub:'BOMB',         word:'炸彈',    type:'bomb',             rank:7,  count:4,  glyph:'7' },
+  { zh:'一條龍 3→A',  type:'sequence',         rank:14, count:12, glyph:'A' },
+  { zh:'炸彈 7777',   type:'bomb',             rank:7,  count:4,  glyph:'7' },
+  { zh:'炸彈 AAAA',   type:'bomb',             rank:14, count:4,  glyph:'A' },
+  { zh:'炸彈 2222',   type:'bomb',             rank:15, count:4,  glyph:'2' },
 
-  { zh:'炸彈 AAAA',   sub:'ACE BOMB',     word:'炸彈',    type:'bomb',             rank:14, count:4,  glyph:'A' },
-  { zh:'炸彈 2222',   sub:'DEUCE BOMB',   word:'炸彈',    type:'bomb',             rank:15, count:4,  glyph:'2' },
-
-  { zh:'火箭 雙王',   sub:'ROCKET',       word:'火箭',    type:'rocket',           rank:17, count:2,  glyph:'王' },
+  { zh:'飛機 4組',    type:'trio_sequence',    rank:11, count:12, glyph:'J' },
+  { zh:'飛機帶單 4組',type:'trio_seq_singles', rank:11, count:16, glyph:'J' },
+  { zh:'飛機帶對 4組',type:'trio_seq_pairs',   rank:10, count:20, glyph:'10' },
+  { zh:'天堂製造 開局20張',type:'trio_seq_pairs', rank:10, count:20, glyph:'天', firstWin:true },
+  { zh:'火箭 雙王',   type:'rocket',           rank:17, count:2,  glyph:'王' },
 ];
-/* Comeback examples. `prev` is the play being beaten; `sameParty` marks the
-   peasant-over-peasant case that must NOT fire. */
-const CB = (zh, sub, word, type, rank, count, prev, sameParty = false) =>
-  ({ zh, sub, word, type, rank, count, glyph: '殺', prev, sameParty });
+
+/* Contest examples. `prev` is the play being beaten; `sameParty` puts both
+   players on the peasant side, which is what turns a comeback into friendly
+   fire. */
+const CB = (zh, type, rank, count, prev, sameParty = false) =>
+  ({ zh, type, rank, count, glyph: sameParty ? '坑' : '殺', prev, sameParty });
 
 PLAYS.push(
-  CB('大王 壓 2',      'JOKER OVER DEUCE', '反殺', 'single', 17, 1, { type:'single', rank:15 }),
-  CB('大王 壓 小王',    'BIG OVER LITTLE',  '反殺', 'single', 17, 1, { type:'single', rank:16 }),
-  CB('對2 壓 對A',     'DEUCES OVER ACES', '反殺', 'pair', 15, 2, { type:'pair', rank:14 }),
-  CB('三帶一 壓 三個K', 'TRIO OVER KINGS',  '反殺', 'trio_single', 14, 4, { type:'trio_single', rank:13 }),
-  CB('連對 壓 連對',    'RUN OVER RUN',     '反殺', 'pair_sequence', 12, 8, { type:'pair_sequence', rank:9 }),
-  CB('飛機 壓 飛機',    'PLANE OVER PLANE', '反殺', 'trio_sequence', 12, 9, { type:'trio_sequence', rank:9 }),
-  CB('對2 壓 對A（同隊）', 'SAME SIDE — NO CB', '對子', 'pair', 15, 2, { type:'pair', rank:14 }, true),
+  CB('大王 壓 2',       'single', 17, 1, { type:'single', rank:15 }),
+  CB('大王 壓 小王',     'single', 17, 1, { type:'single', rank:16 }),
+  CB('對2 壓 對A',      'pair', 15, 2, { type:'pair', rank:14 }),
+  CB('對A 壓 對K',      'pair', 14, 2, { type:'pair', rank:13 }),
+  CB('三帶一 壓 三個K',  'trio_single', 14, 4, { type:'trio_single', rank:13 }),
+  CB('三帶一 壓 三個J',  'trio_single', 14, 4, { type:'trio_single', rank:11 }),
+  CB('連對 壓 連對',     'pair_sequence', 12, 8, { type:'pair_sequence', rank:9 }),
+  CB('飛機 壓 飛機',     'trio_sequence', 12, 9, { type:'trio_sequence', rank:9 }),
+  CB('炸彈 壓 炸彈',     'bomb', 15, 4, { type:'bomb', rank:7 }),
+
+  CB('對2 壓 對A（隊友）',  'pair', 15, 2, { type:'pair', rank:14 }, true),
+  CB('對K 壓 對J（隊友）',  'pair', 13, 2, { type:'pair', rank:11 }, true),
+  CB('大弟 壓 J（隊友）',   'single', 15, 1, { type:'single', rank:11 }, true),
+  CB('炸彈 壓 炸彈（隊友）', 'bomb', 15, 4, { type:'bomb', rank:7 }, true),
+  CB('對10 壓 對9（隊友）', 'pair', 10, 2, { type:'pair', rank:9 }, true),
 );
 
-PLAYS.forEach(p => { p.tier = levelOf(p); });
+PLAYS.forEach(p => {
+  p.tier = levelOf(p);
+  // Tier 0 never draws a banner, so it has no copy to quote on its chip.
+  const label = p.tier === 0
+    ? { word: '', sub: 'NO BANNER' }
+    : labelFor(p.tier, p.type, p.rank, p.count, p.firstWin);
+  p.word = label.word;
+  p.sub = label.sub;
+});
 
 /* Base64 tier stingers, injected at build time. */
-const AUDIO = {"tier-1":"sounds/tier-1.wav","tier-2":"sounds/tier-2.wav","tier-3":"sounds/tier-3.wav","tier-4":"sounds/tier-4.wav","tier-5":"sounds/tier-5.wav","tier-6":"sounds/tier6.mp3","tier-7":"sounds/tier7.mp3","tier-comeback":"sounds/tier-comeback.mp3"};
+const AUDIO = {"tier-1":"sounds/tier-1.wav","tier-2":"sounds/tier-2.wav","tier-3":"sounds/tier-3.wav","tier-4":"sounds/tier-4.wav","tier-5":"sounds/tier-5.wav","tier-6":"sounds/tier6.mp3","tier-7":"sounds/tier7.mp3","tier-comeback":"sounds/tier-comeback.mp3","tier-friendly":"sounds/traitor.mp3","kamida":"sounds/kamida.mp3","godhand":"sounds/god_hand_impact.mp3"};
 
 const stage   = document.getElementById('stage');
 const fx      = document.getElementById('fx');
 const readout = document.getElementById('readout');
 
 let last = PLAYS.find(p => p.type === 'rocket');
-let slowMo = false, withSlam = true, soundOn = true;
+let slowMo = false, withSlam = true, soundOn = true, godIntro = true;
 let rapidTimers = [];
 let curSpeed = 1, forceShake = false;
 const audioCache = {};
@@ -606,12 +819,16 @@ const audioCache = {};
    play to the end and deliberately outlive the banner. Only a track that
    outranks the running one can cut it off — which is what makes "a bigger bomb
    restarts it" and "a rocket answers a bomb" fall out of one comparison. */
-const MUSIC_LEVELS = new Set(['6', '7', 'comeback']);
+const MUSIC_LEVELS = new Set(['6', '7', 'comeback', 'friendly']);
 let musicEl = null, musicWeight = -1;
 
+/* Friendly fire sits above 炸彈 rather than below it because the case that
+   actually comes up is a peasant bombing a peasant's bomb: the 炸彈 track is
+   already running, and the traitor is the news. */
 function weightOf(level) {
   if (level === 6) return 100;             // 炸彈
-  if (level === 'comeback') return 200;    // 反殺
+  if (level === 'friendly') return 150;    // 裏切り者のレクイエム
+  if (level === 'comeback') return 200;    // 殺
   if (level === 7) return 300;             // 火箭
   return 0;
 }
@@ -670,11 +887,11 @@ const SHAKE = {
 
 /* Tier → strength. Straight through, with the comeback one notch under the
    rocket: it borrows the legendary look but it is not the top of the ladder. */
-const SHAKE_FOR = { 0: 1, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, comeback: 6 };
+const SHAKE_FOR = { 0: 1, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, comeback: 6, friendly: 5 };
 
 /* ── Rack, grouped by computed tier ────────────────────────────────────── */
 const rack = document.getElementById('rack');
-for (const t of [0, 1, 2, 3, 4, 5, 6, 7, 'comeback']) {
+for (const t of [0, 1, 2, 3, 4, 5, 6, 7, 'comeback', 'friendly']) {
   const members = PLAYS.filter(p => p.tier === t);
   if (!members.length) continue;
   const info = TIERS[t];
@@ -683,7 +900,7 @@ for (const t of [0, 1, 2, 3, 4, 5, 6, 7, 'comeback']) {
   row.dataset.tier = t;
   const id = document.createElement('div');
   id.className = 'tier-id';
-  id.innerHTML = `<span class="tier-num">${t === 'comeback' ? '↺' : (t || '·')}</span>` +
+  id.innerHTML = `<span class="tier-num">${t === 'comeback' ? '↺' : t === 'friendly' ? '×' : (t || '·')}</span>` +
                  `<span class="tier-name">${info.name}</span>` +
                  `<span class="tier-note">${info.note}</span>` +
                  `<span class="tier-shake">SHAKE <b>${SHAKE_FOR[t]}</b> · ${SHAKE[SHAKE_FOR[t]].name}</span>`;
@@ -711,6 +928,7 @@ function fire(p) {
   curSpeed = sp;
   stage.style.setProperty('--speed', sp);
   fx.innerHTML = '';
+  cancelPreroll();                     // a newer play supersedes the wind-up
   fx.dataset.tier = tier;
   fx.style.setProperty('--accent', TIERS[tier].color);
   hush();
@@ -736,44 +954,186 @@ function fire(p) {
   }
 
   const t0 = slam ? 300 : 0;           // banner starts after the card lands
-  setTimeout(() => { if (fx.isConnected) build(p, tier, sp, ms, add); }, t0 * sp);
-  play(tier);
+  const launch = (delay) => {
+    setTimeout(() => { if (fx.isConnected) build(p, tier, sp, ms, add); }, delay * sp);
+    play(tier);
+    // The rocket lands on two channels at once: its track, and the impact,
+    // which is much the shorter of the two and is meant to be.
+    if (p.type === 'rocket') cue(AUDIO.godhand);
+  };
 
-  const total = Math.round((TIERS[tier].dur + t0) * stretch);
-  readout.innerHTML = `<b>${p.zh}</b> · tier ${tier} ${TIERS[tier].name} · ${total}ms` +
+  const total = Math.round((planOf(p).total + t0) * stretch);
+  const spec = `tier ${tier} ${TIERS[tier].name} · ${total}ms` +
     ` · shake ${SHAKE_FOR[tier]} ${SHAKE[SHAKE_FOR[tier]].name}` +
     (slowMo ? ' <span style="opacity:.6">(×4 slow)</span>' : '');
+
+  // Tier 7 is no longer the rocket alone — a four-group plane and 天堂製造
+  // live there too — and the cold open belongs to the rocket.
+  if (p.type === 'rocket' && godIntro) {
+    // The card has already hit the table by now, so the banner starts the
+    // instant the cue ends rather than waiting out the slam again.
+    readout.innerHTML = `<b>${p.zh}</b> · <span style="color:#fde047">cold open…</span> · ${spec}`;
+    preroll(() => { launch(0); readout.innerHTML = `<b>${p.zh}</b> · ${spec}`; updateMusicReadout(); });
+    return;
+  }
+
+  launch(t0);
+  readout.innerHTML = `<b>${p.zh}</b> · ${spec}`;
   updateMusicReadout();
+}
+
+/* ── 火箭 cold open ─────────────────────────────────────────────────────────
+   Nothing moves while the cue plays. 'ended' is what normally starts the
+   banner; the timer behind it is a safety net, because an audio element that
+   is muted or dies quietly still has to hand the round back. */
+const GOD_LINE = 'モンスターではない、神だ !!';
+const GOD_CUE_MS = 4600;             // kamida.mp3 is 4.2s, plus room to breathe
+let prerollPending = null;
+
+/** Play a one-shot cue, or null when there is no sound to play. */
+function cue(src) {
+  if (!soundOn || !src) return null;
+  const a = new Audio(src);
+  a.play().catch(() => {});
+  return a;
+}
+
+function cancelPreroll() {
+  if (!prerollPending) return;
+  prerollPending.cancel();
+  prerollPending = null;
+}
+
+function preroll(then) {
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = GOD_LINE;
+  stage.appendChild(bubble);
+
+  // Whatever a bomb or a comeback left running is over: the cold open is a
+  // silence with one voice in it, and tier 7's own track follows it anyway.
+  stopMusic();
+  const a = cue(AUDIO.kamida);
+  const go = () => {
+    prerollPending = null;
+    a?.removeEventListener('ended', go);
+    clearTimeout(timer);
+    bubble.classList.add('out');
+    setTimeout(() => bubble.remove(), 220);
+    then();
+  };
+  const wait = a && isFinite(a.duration) && a.duration > 0
+    ? Math.max(GOD_CUE_MS, a.duration * 1000 + 400)
+    : GOD_CUE_MS;
+  const timer = setTimeout(go, wait);
+  a?.addEventListener('ended', go, { once: true });
+  prerollPending = {
+    cancel: () => {
+      a?.removeEventListener('ended', go);
+      a?.pause();
+      clearTimeout(timer);
+      bubble.remove();
+    },
+  };
+}
+
+/**
+ * Everything about how one banner plays, in unscaled ms.
+ *
+ * fire() reads it for the readout and build() draws it, so there is one
+ * schedule rather than two that agree until somebody edits one of them.
+ */
+function planOf(p) {
+  const tier = p.tier;
+  const n = tier === 'comeback' ? 7 : tier === 'friendly' ? 6 : tier;
+  const stretch = STRETCH[tier] ?? 1;
+  const charge = CHARGE[tier] ?? 0;
+  const chars = [...(p.word ?? '')];
+  // Tier 5 and up are centrepieces: the word is the event, not a label on one.
+  const seq = n >= 5 && chars.length > 0;
+  /* The beat. Quoted here divided by the tier's stretch because every number
+     below is multiplied by `sp` on the way out — that is what makes the gap
+     land at 300ms on screen whether the tier plays at 1.5x or 2x, and still
+     stretch properly under slow motion. */
+  const gap = 300 / stretch;
+  const glyphIn = gap * 1.9;             // the entrance overlaps the next beat
+  const land = glyphIn * 0.2;            // glyphHit's 20% keyframe — contact
+
+  let total = TIERS[tier].dur;
+  let detonateAt = null;
+  if (seq) {
+    detonateAt = charge + (chars.length - 1) * gap + land + gap;
+    // A long word outruns the tier's stock length. Stretch the banner to fit
+    // rather than cutting the word off halfway through its own sequence.
+    total = Math.max(total, detonateAt + 1500 / stretch);
+  }
+  return { n, stretch, charge, chars, seq, gap, glyphIn, land, total, detonateAt };
+}
+
+/**
+ * Shrink a word that would run off the stage.
+ *
+ * Measured with offsetWidth rather than a rect, because the glyphs are already
+ * mid-animation at scale 5 by the time this runs and a bounding rect would
+ * report the transform instead of the layout.
+ */
+function fitWord(banner) {
+  const word = banner.querySelector('.word');
+  if (!word) return;
+  const size = parseFloat(getComputedStyle(word).fontSize);
+  const room = fx.clientWidth * 0.9;
+  // The layout box is not the ink: the outline bleeds .15em past it on each
+  // side, and both scale with the font size, so they divide out cleanly.
+  const ink = word.offsetWidth + size * 0.34;
+  if (!room || !size || ink <= room) return;
+  word.style.fontSize = Math.floor(size * (room / ink)) + 'px';
 }
 
 function build(p, tier, sp, ms, add) {
   // A comeback borrows the legendary layer set, minus the two effects that are
-  // the rocket's signature (the colliding jokers and the gold rain).
-  const n = tier === 'comeback' ? 7 : tier;
+  // the rocket's signature (the colliding jokers and the gold rain); friendly
+  // fire borrows the bomb's.
+  const plan = planOf(p);
+  const { n, chars, seq, gap, glyphIn, land, total } = plan;
   const accent = TIERS[tier].color;
   const big = n >= 6;
 
-  /* Phase offsets. Tiers 5+ charge up before the hit, so everything after the
-     impact is pushed back by that wind-up. */
-  const chargeMs = tier === 'comeback' ? 620 : n === 7 ? 1150 : n === 6 ? 700 : n === 5 ? 340 : 0;
-  const H = chargeMs;                  // moment of impact
+  const H = plan.charge;               // moment of impact
 
   if (n >= 5) {
-    add('charge', '', `--dur:${ms(chargeMs)}`);
-    add('curtain', '', `--dur:${ms(TIERS[tier].dur)}`);
+    add('charge', '', `--dur:${ms(H)}`);
+    add('curtain', '', `--dur:${ms(total)}`);
   }
-  if (tier === 7) {
+  // Two 王 flying in and colliding is the rocket's own gesture — 天堂製造
+  // shares its tier but is a plane, and would be claiming cards it never had.
+  if (p.type === 'rocket') {
     add('jk l', '王', `--d:${ms(H + 120)}`);
     add('jk r', '王', `--d:${ms(H + 120)}`);
   }
 
   const at = (fn, d) => setTimeout(() => { if (fx.isConnected) fn(); }, d * sp);
 
+  /* Radial spark burst. Shared, because the sequenced tiers throw a small one
+     off every glyph and a huge one at the end, and none of that should be a
+     second copy of the same maths. `origin` re-centres it on a glyph instead
+     of on the stage. */
+  const burst = (count, reach, heavy, origin = '') => {
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + (i % 3) * .28;
+      const d = reach + ((i * 137) % (heavy ? 420 : 230));
+      const sz = 4 + ((i * 53) % (heavy ? 12 : 8));
+      add('spark', '', origin + `width:${sz}px;height:${sz}px;margin:${-sz/2}px 0 0 ${-sz/2}px;` +
+        `background:${i % 3 ? '#fff' : accent};box-shadow:0 0 ${sz*2}px ${accent};` +
+        `--dx:${(Math.cos(a)*d).toFixed(1)}px;--dy:${(Math.sin(a)*d*.7+70).toFixed(1)}px;` +
+        `animation-delay:${ms((i % 5) * 24)}`);
+    }
+  };
+
   at(() => {
     add(big ? 'whiteout' : 'flash', '', `animation-delay:0ms`);
     if (n >= 2) add('beam', '<i></i><u></u>');
     if (n >= 3) add('rays');
-    if (n === 7) add('godray');
+    if (tier === 7 || tier === 'comeback') add('godray');
     if (n >= 4) {
       add('ring');
       add('ring', '', `animation-delay:${ms(90)}`);
@@ -783,24 +1143,13 @@ function build(p, tier, sp, ms, add) {
 
     if (n >= 4) {
       const h = n >= 6 ? '13%' : '9%';
-      add('bar top', '', `height:${h};animation:bar ${ms(TIERS[tier].dur)} cubic-bezier(.2,.9,.25,1) both`);
-      add('bar bottom', '', `height:${h};animation:bar ${ms(TIERS[tier].dur)} cubic-bezier(.2,.9,.25,1) both`);
+      add('bar top', '', `height:${h};animation:bar ${ms(total)} cubic-bezier(.2,.9,.25,1) both`);
+      add('bar bottom', '', `height:${h};animation:bar ${ms(total)} cubic-bezier(.2,.9,.25,1) both`);
     }
-    if (n >= 5) add('wash', '', `--dur:${ms(TIERS[tier].dur - H)}`);
+    if (n >= 5) add('wash', '', `--dur:${ms(total - H)}`);
 
     /* Sparks */
-    if (n >= 3) {
-      const count = n === 3 ? 16 : n === 4 ? 26 : n === 5 ? 40 : n === 6 ? 60 : 84;
-      for (let i = 0; i < count; i++) {
-        const a = (i / count) * Math.PI * 2 + (i % 3) * .28;
-        const d = 130 + ((i * 137) % (n >= 6 ? 420 : 230));
-        const s = 4 + ((i * 53) % (n >= 6 ? 12 : 8));
-        add('spark', '', `width:${s}px;height:${s}px;margin:${-s/2}px 0 0 ${-s/2}px;` +
-          `background:${i % 3 ? '#fff' : accent};box-shadow:0 0 ${s*2}px ${accent};` +
-          `--dx:${(Math.cos(a)*d).toFixed(1)}px;--dy:${(Math.sin(a)*d*.7+70).toFixed(1)}px;` +
-          `animation-delay:${ms((i % 5) * 24)}`);
-      }
-    }
+    if (n >= 3) burst(n === 3 ? 16 : n === 4 ? 26 : n === 5 ? 40 : n === 6 ? 60 : 84, 130, n >= 6);
 
     /* Cracks — tier 5 and up */
     if (n >= 5) {
@@ -833,30 +1182,87 @@ function build(p, tier, sp, ms, add) {
     }
 
     /* The word */
-    const dur = TIERS[tier].dur - H;
-    const ghosts = n >= 4
-      ? `<span class="ghost r">${p.word}</span><span class="ghost c">${p.word}</span>` : '';
-    let inner;
-    if (big) {
-      // Per-glyph: each character lands on its own beat.
-      const chars = [...p.word];
-      const per = Math.round(dur * 0.86);
-      inner = chars.map((ch, i) =>
-        `<span class="g" style="--gd:${ms(per)};animation-delay:${ms(i * 110)}">` +
-        `<span class="stroke" aria-hidden="true">${ch}</span><span class="fill">${ch}</span></span>`
-      ).join('');
+    const dur = total - H;
+    let inner, subDelay;
+
+    if (seq) {
+      /* One glyph per beat, each with its own chromatic split — the ghosts have
+         to carry the same delay as the glyph they sit under, or they play out
+         while their glyph is still invisible and the split is never seen. */
+      inner = chars.map((ch, i) => {
+        const d = ms(i * gap);
+        return `<span class="g" style="--gd:${ms(glyphIn)};animation-delay:${d}">` +
+          `<span class="ghost r" style="animation-delay:${d}">${ch}</span>` +
+          `<span class="ghost c" style="animation-delay:${d}">${ch}</span>` +
+          `<span class="stroke" aria-hidden="true">${ch}</span><span class="fill">${ch}</span></span>`;
+      }).join('');
+      subDelay = (chars.length - 1) * gap + land + 60;   // reads out under the finished word
     } else {
-      inner = `<span class="stroke" aria-hidden="true">${p.word}</span>` +
+      const ghosts = n >= 4
+        ? `<span class="ghost r">${p.word}</span><span class="ghost c">${p.word}</span>` : '';
+      inner = ghosts + `<span class="stroke" aria-hidden="true">${p.word}</span>` +
               `<span class="fill">${p.word}</span>`;
+      subDelay = 0;
     }
-    add('banner',
-      `<span class="word${big ? ' split' : ''}">${ghosts}${inner}</span>` +
-      `<span class="sub" style="--sd:${ms(dur)};animation-delay:${ms(big ? 260 : 0)}">${p.sub}</span>`);
+    const bannerEl = add(
+      seq ? 'banner outro' : 'banner',
+      `<span class="word${seq ? ' split seq' : ''}">${inner}</span>` +
+      `<span class="sub" style="--sd:${ms(dur - subDelay)};animation-delay:${ms(subDelay)}">${p.sub}</span>`,
+      seq ? `--od:${ms(dur)}` : '');
+    fitWord(bannerEl);
 
     const strength = SHAKE_FOR[tier];
-    kick(strength);
+    kick(seq ? Math.max(1, strength - 1) : strength);
     // A blast and up rings twice: the hit, then the room settling.
-    if (strength >= 5) at(() => kick(Math.ceil(strength / 2)), 950);
+    if (!seq && strength >= 5) at(() => kick(Math.ceil(strength / 2)), 950);
+
+    if (!seq) return;
+
+    /** The second blast, one beat after the last glyph lands. */
+    const detonate = () => {
+      bannerEl.classList.add('detonate');
+      add('whiteout');
+      add('rays');
+      if (tier === 7 || tier === 'comeback') add('godray', '', `animation-duration:${ms(1700)}`);
+      add('ring fat');
+      add('ring fat', '', `animation-delay:${ms(110)}`);
+      add('ring', '', `animation-delay:${ms(230)}`);
+      burst(n === 5 ? 46 : n === 6 ? 70 : 110, 170, true);
+      const cracks = n === 5 ? 7 : n === 6 ? 11 : 16;
+      for (let i = 0; i < cracks; i++) {
+        const ang = (i / cracks) * 360 + ((i * 61) % 27) - 13;
+        add('crack', '', `--a:${ang.toFixed(1)}deg;animation-delay:${ms((i % 4) * 40)}`);
+      }
+      if (tier === 7) {
+        for (let i = 0; i < 48; i++) {
+          const sz = 3 + ((i * 29) % 6);
+          add('goldfall', '', `--x:${((i * 149) % 100)}%;--s:${sz}px;` +
+            `--r:${((i * 197) % 900) + 360}deg;--d:${ms(1400 + ((i * 71) % 900))};` +
+            `animation-delay:${ms((i % 8) * 90)}`);
+        }
+      }
+      kick(strength);
+      at(() => kick(Math.ceil(strength / 2)), 900);
+    };
+
+    /* Each glyph lands with its own shockwave and sparks, thrown from where
+       that glyph actually sits. Positions are measured against .fx rather than
+       the viewport so the stage's own shake cancels out of the maths. */
+    const glyphs = bannerEl.querySelectorAll('.g');
+    chars.forEach((_, i) => at(() => {
+      const g = glyphs[i]?.getBoundingClientRect();
+      const box = fx.getBoundingClientRect();
+      const origin = g
+        ? `left:${(((g.left + g.width / 2) - box.left) / box.width * 100).toFixed(2)}%;` +
+          `top:${(((g.top + g.height / 2) - box.top) / box.height * 100).toFixed(2)}%;`
+        : '';
+      // Ramp to full strength on the last glyph, so four hits read as a climb.
+      kick(Math.min(strength, Math.max(3, strength - (chars.length - 1 - i))));
+      add('shock', '', origin + `--d:${ms(gap * 1.7)}`);
+      burst(14 + i * 6, 70, false, origin);
+    }, i * gap + land));
+
+    at(detonate, plan.detonateAt - H);
   }, H);
 }
 
@@ -943,6 +1349,12 @@ const slamBtn = document.getElementById('withSlam');
 slamBtn.addEventListener('click', () => { withSlam = !withSlam; slamBtn.setAttribute('aria-pressed', String(withSlam)); });
 
 document.getElementById('stopMusic').addEventListener('click', stopMusic);
+
+const godBtn = document.getElementById('godIntro');
+godBtn.addEventListener('click', () => {
+  godIntro = !godIntro;
+  godBtn.setAttribute('aria-pressed', String(godIntro));
+});
 
 const soundBtn = document.getElementById('sound');
 soundBtn.addEventListener('click', () => {

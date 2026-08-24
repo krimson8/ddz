@@ -11,6 +11,7 @@ import { RoleDrawPanel } from './RoleDrawPanel';
 import { PlayHistory } from './PlayHistory';
 import { DealingOverlay } from './effects/DealingOverlay';
 import { HitBanner, shakeLevel, type ShakeStrength } from './effects/HitBanner';
+import { GodBubble } from './effects/GodBubble';
 import { useHitEvents } from '@/features/ddz/useHitEvents';
 import { FLIGHT_IMPACT_MS } from '@/features/ddz/cardFlight';
 import { EmojiChatBox, type EmojiHistoryEntry } from '@/components/EmojiChatBox';
@@ -201,7 +202,18 @@ export function GameBoard({
   // and the banner can never disagree about which tier a play earned.
   const shake = useAnimationControls();
   const reduceMotion = useReducedMotion();
-  const { event: hitEvent, knock, clear: clearHit } = useHitEvents(gameState);
+  const { event: hitEvent, knock, preroll, clear: clearHit } = useHitEvents(gameState);
+
+  /** Which seat a play came from, as the layout shows it rather than as the
+   *  server numbers it. Same mapping playOrigin uses, by seat index. */
+  const seatOf = (playerIndex: number): PlayOrigin => {
+    const id = gameState.playerOrder[playerIndex];
+    if (!id) return null;
+    if (id === orderedPlayers[0]?.id) return 'self';
+    if (id === orderedPlayers[1]?.id) return 'left';
+    if (id === orderedPlayers[2]?.id) return 'right';
+    return null;
+  };
 
   useEffect(() => {
     if (!knock || reduceMotion) return;
@@ -227,16 +239,20 @@ export function GameBoard({
     // card still gets its own small knock as it lands — otherwise the two would
     // collide and the light one would cut the heavy one short.
     const hitAt = Math.max(LAND_MS, knock.impactAt);
-    if (strength > 1 && knock.impactAt > LAND_MS + 300) {
-      timers.push(setTimeout(() => jolt(1), LAND_MS));
-      timers.push(setTimeout(() => jolt(strength), knock.impactAt));
+    if (strength > 1 && knock.impactAt > LAND_MS + 300) timers.push(setTimeout(() => jolt(1), LAND_MS));
+
+    if (knock.beats.length) {
+      // Tier 5 and up land one glyph at a time and go off again at the end.
+      // The banner already worked out when each of those happens, so the table
+      // follows its schedule rather than keeping a second one of its own.
+      for (const beat of knock.beats) timers.push(setTimeout(() => jolt(beat.strength), beat.at));
     } else {
       timers.push(setTimeout(() => jolt(strength), hitAt));
-    }
-    // A blast and up rings twice: the hit, then the room settling.
-    if (strength >= 5) {
-      const after = Math.ceil(strength / 2) as ShakeStrength;
-      timers.push(setTimeout(() => jolt(after), hitAt + 950));
+      // A blast and up rings twice: the hit, then the room settling.
+      if (strength >= 5) {
+        const after = Math.ceil(strength / 2) as ShakeStrength;
+        timers.push(setTimeout(() => jolt(after), hitAt + 950));
+      }
     }
 
     return () => timers.forEach(clearTimeout);
@@ -389,7 +405,9 @@ export function GameBoard({
           <>
             {/* Row 1: player seat + surrender button */}
             <div className="flex items-center gap-2 mb-1 px-2">
-              <div className="flex items-end gap-2">
+              {/* data-ddz-seat: anchor for anything that has to speak from this
+                  seat, the way the top two are anchored for card flight. */}
+              <div className="flex items-end gap-2" data-ddz-seat="self">
                 {orderedPlayers[0] && (
                   <PlayerSeat
                     nickname={orderedPlayers[0].nickname}
@@ -460,6 +478,12 @@ export function GameBoard({
 
       {/* ── Full-screen effect layers ────────────────────────────────────── */}
       <AnimatePresence>{phase === 'dealing' && <DealingOverlay />}</AnimatePresence>
+      {/* A 火箭 opens cold: this is the only thing on screen until its cue ends. */}
+      <AnimatePresence>
+        {preroll && (
+          <GodBubble key={preroll.id} origin={seatOf(preroll.playerIndex)} text={preroll.line} />
+        )}
+      </AnimatePresence>
       <HitBanner event={hitEvent} onDone={clearHit} />
 
       {/* ── Disconnect overlay ───────────────────────────────────────────── */}
