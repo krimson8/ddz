@@ -200,7 +200,7 @@ export function hitLevel(input: ComebackInput): HitLevel {
 }
 
 /**
- * Priority for the long-music channel: 神拳震撼波 > 殺 > 裏切り者 > 炸彈.
+ * Priority for the long-music channel: 神拳震撼波 > 殺 > 对不起，我是警察 > 炸彈.
  *
  * A track is replaced when the incoming one ranks at least as high, so the same
  * level landing again restarts it — a second comeback should hit as hard as the
@@ -213,7 +213,7 @@ export function hitLevel(input: ComebackInput): HitLevel {
  */
 export function musicWeight(level: HitLevel): number {
   if (level === 6) return 100;          // 炸彈
-  if (level === 'friendly') return 150; // 裏切り者
+  if (level === 'friendly') return 150; // 对不起，我是警察
   if (level === 'comeback') return 200; // 殺
   if (level === 7) return 300;          // 火箭
   return 0;                              // no music
@@ -253,7 +253,7 @@ export const LEVEL_LABEL: Record<string, { word: string; sub: string }> = {
   bomb:             { word: '炸彈',     sub: 'BOMB' },
   rocket:           { word: '神拳震撼波', sub: 'GOD HAND IMPACT' },
   comeback:         { word: '殺',       sub: 'IM BIGGER THAN YOU' },
-  friendly:         { word: '裏切り者', sub: "TRAITOR'S REQUIEM" },
+  friendly:         { word: '对不起，我是警察', sub: "SORRY, I'M THE POLICE" },
 };
 
 /**
