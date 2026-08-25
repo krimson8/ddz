@@ -22,7 +22,7 @@ import { AnimatePresence } from 'framer-motion';
 import { HeavenFinale } from '@/features/ddz/components/effects/HeavenFinale';
 import { HitBanner } from '@/features/ddz/components/effects/HitBanner';
 import { GodBubble } from '@/features/ddz/components/effects/GodBubble';
-import { useHeavenFinale } from '@/features/ddz/heavenFinale';
+import { coldOpenFor, playSeq, useHeavenFinale } from '@/features/ddz/heavenFinale';
 import { useHitEvents } from '@/features/ddz/useHitEvents';
 import type { PlayOrigin } from '@/features/ddz/components/PlayArea';
 import { EmojiChatBox } from '@/components/EmojiChatBox';
@@ -110,7 +110,7 @@ function DdzPlayInner() {
   // does: the server resets the room five seconds into a banner that may run
   // for eleven, and the board goes with it. Only the table's shake is passed
   // back down.
-  const { event: hitEvent, knock, preroll, clear: clearHit } = useHitEvents(gameState);
+  const { event: hitEvent, knock, preroll, settledAt: hitSettledAt, clear: clearHit } = useHitEvents(gameState);
 
   // ── 天堂製造 ─────────────────────────────────────────────────────────────
   // A win inside six of that player's own plays opens with a line from their
@@ -134,6 +134,20 @@ function DdzPlayInner() {
 
   /** Anything still playing that the result screen must not cut off. */
   const banners = heaven.blocking || !!hitEvent || !!preroll;
+
+  /*
+   * Hold the table through a cold open.
+   *
+   * Whether this play opens cold is a pure question about the history, so it is
+   * answered during render and the cards are held on the very first frame. Only
+   * the release is a signal, and either hook can give it — whichever one owns
+   * the cue that just ended.
+   */
+  const thisPlay = playSeq(gameState.playHistory);
+  const holdTable =
+    !!coldOpenFor(gameState.playHistory, gameState.playerCardCounts) &&
+    hitSettledAt !== thisPlay &&
+    heaven.settledAt !== thisPlay;
 
   // Perform the create/join intent passed from the unified lobby exactly once.
   const actedRef = useRef(false);
@@ -247,6 +261,7 @@ function DdzPlayInner() {
           onSelectReaction={setSelectedReaction}
           onLeave={backToLobby}
           knock={knock}
+          holdTable={holdTable}
         />
       )}
 

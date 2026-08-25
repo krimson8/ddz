@@ -63,6 +63,35 @@ export function heavenWin(history: HistoryEntry[], cardCounts: number[]): Heaven
   return plays <= HEAVEN_TURNS ? { playerIndex: latest.playerIndex, plays } : null;
 }
 
+/**
+ * How many plays the round has seen — passes are not plays.
+ *
+ * This is what a cold open is keyed to, rather than the length of the history.
+ * The next player can pass while the dialog is still talking, and that pass
+ * must neither release the hold nor start a new one: it is not a play, so it
+ * does not move this number.
+ */
+export function playSeq(history: HistoryEntry[]): number {
+  return history.filter((h) => h.play?.cards?.length).length;
+}
+
+/**
+ * Does the newest play open cold — does the table wait before its cards land?
+ *
+ * Pure and synchronous, because the table has to hold on the very first render
+ * of the new play. Anything driven from an effect would let a frame of the card
+ * flight escape before the dialog had even appeared.
+ */
+export function coldOpenFor(history: HistoryEntry[], cardCounts: number[]): 'rocket' | 'heaven' | null {
+  let i = history.length - 1;
+  while (i >= 0 && !history[i].play?.cards?.length) i--;   // step back over passes
+  if (i < 0) return null;
+  if ((history[i].play.type as string) === 'rocket') return 'rocket';
+  // heavenWin reads the newest entry, so ask it about the history as it stood
+  // when that play landed.
+  return heavenWin(history.slice(0, i + 1), cardCounts) ? 'heaven' : null;
+}
+
 /** What the finale is showing right now. */
 export type HeavenPhase = 'idle' | 'waiting' | 'bubble' | 'banner';
 
@@ -71,9 +100,16 @@ export interface HeavenState {
   playerIndex: number;
   /** True while the result screen must stay out of the way. */
   blocking: boolean;
+  /**
+   * The history length whose cold open is over, and whose cards may land.
+   *
+   * Deliberately outside the phase machine: it must survive the finale
+   * returning to idle, or the table would freeze again the moment it ended.
+   */
+  settledAt: number;
 }
 
-const IDLE: HeavenState = { phase: 'idle', playerIndex: -1, blocking: false };
+const IDLE = { phase: 'idle', playerIndex: -1, blocking: false } as const;
 
 /**
  * A 火箭 keeps its own cold open and banner when it is also the winning play,
@@ -91,7 +127,8 @@ const rocketLead = () =>
  * resets the room, and this has to outlive that.
  */
 export function useHeavenFinale(gameState: GameState): HeavenState {
-  const [state, setState] = useState<HeavenState>(IDLE);
+  const [state, setState] = useState<Omit<HeavenState, 'settledAt'>>(IDLE);
+  const [settledAt, setSettledAt] = useState(-1);
   const prevLen = useRef(gameState.playHistory.length);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -125,6 +162,8 @@ export function useHeavenFinale(gameState: GameState): HeavenState {
         const toBanner = () => {
           cue?.removeEventListener('ended', toBanner);
           clearTimeout(cueTimer);
+          // The line has been said: the cards may land now.
+          setSettledAt(playSeq(history));
           sfx.playMusic(HEAVEN_TRACK, HEAVEN_WEIGHT);
           setState({ phase: 'banner', playerIndex: win.playerIndex, blocking: true });
           at(() => setState(IDLE), HEAVEN_BANNER_MS);
@@ -149,5 +188,5 @@ export function useHeavenFinale(gameState: GameState): HeavenState {
   // the component goes with it.
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
-  return state;
+  return { ...state, settledAt };
 }

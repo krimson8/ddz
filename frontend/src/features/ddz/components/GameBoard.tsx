@@ -12,6 +12,7 @@ import { PlayHistory } from './PlayHistory';
 import { DealingOverlay } from './effects/DealingOverlay';
 import { shakeLevel, type ShakeStrength } from './effects/HitBanner';
 import type { Knock } from '@/features/ddz/useHitEvents';
+import { beatenEntry } from '@/features/ddz/hitTier';
 import { FLIGHT_IMPACT_MS } from '@/features/ddz/cardFlight';
 import { EmojiChatBox, type EmojiHistoryEntry } from '@/components/EmojiChatBox';
 import type { Card, ClientMember, GameState } from '@/features/ddz/types';
@@ -96,6 +97,8 @@ interface GameBoardProps {
    * that has to live here, so the schedule is passed down instead.
    */
   knock: Knock | null;
+  /** Hold the played cards back while a cold open has the screen. */
+  holdTable: boolean;
 }
 
 export function GameBoard({
@@ -113,6 +116,7 @@ export function GameBoard({
   onSelectReaction,
   onLeave,
   knock,
+  holdTable,
 }: GameBoardProps) {
   const {
     members,
@@ -192,6 +196,16 @@ export function GameBoard({
     ? members.find((m) => m.id === lastPlayedBy)?.nickname
     : undefined;
 
+  /** Which seat a play came from, as the layout shows it. */
+  const seatOf = (playerIndex: number): PlayOrigin => {
+    const id = gameState.playerOrder[playerIndex];
+    if (!id) return null;
+    if (id === orderedPlayers[0]?.id) return 'self';
+    if (id === orderedPlayers[1]?.id) return 'left';
+    if (id === orderedPlayers[2]?.id) return 'right';
+    return null;
+  };
+
   // Which seat the cards should fly in from. 'self' is the seat shown at the
   // bottom, whose cards are measured out of the real hand rather than launched
   // from a synthesised off-screen point.
@@ -204,6 +218,31 @@ export function GameBoard({
         : lastPlayedBy === orderedPlayers[2]?.id
           ? 'right'
           : null;
+
+  /*
+   * What the table shows, which is not always the newest play.
+   *
+   * 火箭 and 天堂製造 open cold — a line from the player's seat over a cue,
+   * with the table still — so their cards must not come flying out from under
+   * the dialog. Rather than remember what was on the table, derive it: while
+   * the hold is on, the table is showing the play this one is beating, which is
+   * exactly what beatenEntry() names. A play that opened a fresh trick has
+   * beaten nothing, and the table is bare until its cards land.
+   *
+   * The name and the origin travel with it. A stale origin would be worse than
+   * cosmetic: the flight re-aims whenever it changes, so leaving it on the new
+   * play would fly the old cards in a second time.
+   */
+  const beaten = holdTable ? beatenEntry(gameState.playHistory) : null;
+  const table = holdTable
+    ? {
+        play: beaten?.play ?? null,
+        name: beaten
+          ? members.find((m) => m.id === gameState.playerOrder[beaten.playerIndex])?.nickname
+          : undefined,
+        origin: beaten ? seatOf(beaten.playerIndex) : null,
+      }
+    : { play: lastPlay, name: lastPlayedByName, origin: playOrigin };
 
   // ── Hit banners ───────────────────────────────────────────────────────────
   // The table's share of a hit: everything visual is drawn a level up.
@@ -339,7 +378,11 @@ export function GameBoard({
               onRevealForFun={onRevealRoleForFun}
             />
           ) : (
-            <PlayArea lastPlay={lastPlay} playerName={lastPlayedByName} origin={playOrigin} />
+            <PlayArea
+              lastPlay={table.play}
+              playerName={table.name}
+              origin={table.origin}
+            />
           )}
         </div>
         <div className="flex-[1] flex items-end min-h-0">

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { sfx, type SfxKey } from '@/features/ddz/sfx';
 import { hitLevel, labelFor, musicTrack, musicWeight, type HitLevel } from '@/features/ddz/hitTier';
 import { bannerPlan, type Beat, type HitEvent } from '@/features/ddz/components/effects/HitBanner';
-import { heavenWin } from '@/features/ddz/heavenFinale';
+import { heavenWin, playSeq } from '@/features/ddz/heavenFinale';
 import type { GameState } from '@/features/ddz/types';
 
 /**
@@ -66,6 +66,16 @@ export function useHitEvents(gameState: GameState) {
   const [event, setEvent] = useState<HitEvent | null>(null);
   const [knock, setKnock] = useState<Knock | null>(null);
   const [preroll, setPreroll] = useState<Preroll | null>(null);
+  /**
+   * The history length this hook has finished deciding about.
+   *
+   * Counted in plays rather than entries, so a pass landing mid-cue neither
+   * releases the table nor re-holds it. The table reads it: a 火箭 holds its
+   * cards back until the cue is over, and a history that arrives all at once —
+   * a reconnect replaying the round — settles immediately, or a replayed rocket
+   * would freeze the table for good.
+   */
+  const [settledAt, setSettledAt] = useState(-1);
   const seq = useRef(0);
   const prevLen = useRef(gameState.playHistory.length);
 
@@ -84,13 +94,14 @@ export function useHitEvents(gameState: GameState) {
   useEffect(() => {
     const prev = prevLen.current;
     prevLen.current = history.length;
+    const settle = () => setSettledAt(playSeq(history));
 
     // Shrank (new round) or jumped by more than one entry (a reconnect sync
     // replaying the whole history) — neither is a live play, so stay quiet.
-    if (history.length <= prev || history.length - prev > 1) return;
+    if (history.length <= prev || history.length - prev > 1) { settle(); return; }
 
     const latest = history[history.length - 1];
-    if (!latest?.play?.cards?.length) return;      // a pass
+    if (!latest?.play?.cards?.length) { settle(); return; }   // a pass
 
     const level = hitLevel({
       curr: latest.play,
@@ -108,6 +119,8 @@ export function useHitEvents(gameState: GameState) {
     const isRocket = type === 'rocket';
 
     const launch = () => {
+      // Whatever was holding the table can let go: the cards land with the hit.
+      settle();
       // The knock fires for every play — a single 3 still thumps the table, it
       // just doesn't earn a banner. It reads the banner's own plan so the table
       // shakes on exactly the beats the word lands on.
@@ -178,5 +191,5 @@ export function useHitEvents(gameState: GameState) {
   useEffect(() => () => pending.current?.cancel(), []);
 
   const clear = useCallback(() => setEvent(null), []);
-  return { event, knock, preroll, clear };
+  return { event, knock, preroll, settledAt, clear };
 }
