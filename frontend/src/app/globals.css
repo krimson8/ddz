@@ -132,7 +132,10 @@ body {
      the tier climbs; the tier itself is computed in hitTier.ts from the play,
      so this file only ever reads --hb (accent) and --sp (speed). */
 
-  .hb { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 72; }
+  /* Fixed, not absolute: this layer is mounted at page level so it outlives the
+     board — the server resets the room while a banner may still be playing —
+     and fixed keeps it pinned to the viewport rather than to the document. */
+  .hb { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 72; }
 
   .hb-flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 46%, #fff 0%, rgba(255,255,255,0) 62%); animation: hb-flash calc(420ms * var(--sp,1)) ease-out both; }
   @keyframes hb-flash { 0%{opacity:0} 6%{opacity:.92} 100%{opacity:0} }

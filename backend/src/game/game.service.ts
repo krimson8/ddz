@@ -353,6 +353,11 @@ export class GameService {
     if (member.hand.length === 0) {
       const winner =
         playerIndex === room.landlordIndex ? 'landlord' : 'peasants';
+      // Announce the play before ending the game. handleWin tears the round
+      // down and never emits game_state, so without this the winning play is
+      // the one play clients never receive: no banner, no music, no finale —
+      // just the result screen appearing out of nowhere.
+      this.emitGameState(room);
       this.handleWin(room, winner);
       return;
     }

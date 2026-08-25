@@ -10,9 +10,8 @@ import { BiddingPanel } from './BiddingPanel';
 import { RoleDrawPanel } from './RoleDrawPanel';
 import { PlayHistory } from './PlayHistory';
 import { DealingOverlay } from './effects/DealingOverlay';
-import { HitBanner, shakeLevel, type ShakeStrength } from './effects/HitBanner';
-import { GodBubble } from './effects/GodBubble';
-import { useHitEvents } from '@/features/ddz/useHitEvents';
+import { shakeLevel, type ShakeStrength } from './effects/HitBanner';
+import type { Knock } from '@/features/ddz/useHitEvents';
 import { FLIGHT_IMPACT_MS } from '@/features/ddz/cardFlight';
 import { EmojiChatBox, type EmojiHistoryEntry } from '@/components/EmojiChatBox';
 import type { Card, ClientMember, GameState } from '@/features/ddz/types';
@@ -88,6 +87,15 @@ interface GameBoardProps {
   onSelectReaction: (value: string) => void;
   /** Leave the room and return to the lobby (shown to spectators). */
   onLeave: () => void;
+  /**
+   * The jolts the newest play earns.
+   *
+   * The banner that schedules these is mounted at page level, above this
+   * component: the server resets the room — unmounting the board — while a
+   * banner or a finale may still be playing. The table is the one part of it
+   * that has to live here, so the schedule is passed down instead.
+   */
+  knock: Knock | null;
 }
 
 export function GameBoard({
@@ -104,6 +112,7 @@ export function GameBoard({
   selectedReaction,
   onSelectReaction,
   onLeave,
+  knock,
 }: GameBoardProps) {
   const {
     members,
@@ -197,23 +206,9 @@ export function GameBoard({
           : null;
 
   // ── Hit banners ───────────────────────────────────────────────────────────
-  // Tier (and comeback) is computed from the play itself in hitTier.ts, off
-  // data the server already sends. The hook owns the audio too, so the sting
-  // and the banner can never disagree about which tier a play earned.
+  // The table's share of a hit: everything visual is drawn a level up.
   const shake = useAnimationControls();
   const reduceMotion = useReducedMotion();
-  const { event: hitEvent, knock, preroll, clear: clearHit } = useHitEvents(gameState);
-
-  /** Which seat a play came from, as the layout shows it rather than as the
-   *  server numbers it. Same mapping playOrigin uses, by seat index. */
-  const seatOf = (playerIndex: number): PlayOrigin => {
-    const id = gameState.playerOrder[playerIndex];
-    if (!id) return null;
-    if (id === orderedPlayers[0]?.id) return 'self';
-    if (id === orderedPlayers[1]?.id) return 'left';
-    if (id === orderedPlayers[2]?.id) return 'right';
-    return null;
-  };
 
   useEffect(() => {
     if (!knock || reduceMotion) return;
@@ -478,13 +473,6 @@ export function GameBoard({
 
       {/* ── Full-screen effect layers ────────────────────────────────────── */}
       <AnimatePresence>{phase === 'dealing' && <DealingOverlay />}</AnimatePresence>
-      {/* A 火箭 opens cold: this is the only thing on screen until its cue ends. */}
-      <AnimatePresence>
-        {preroll && (
-          <GodBubble key={preroll.id} origin={seatOf(preroll.playerIndex)} text={preroll.line} />
-        )}
-      </AnimatePresence>
-      <HitBanner event={hitEvent} onDone={clearHit} />
 
       {/* ── Disconnect overlay ───────────────────────────────────────────── */}
       <AnimatePresence>

@@ -150,19 +150,14 @@ export function useSoundEffects(gameState: GameState, mySocketId: string) {
       sfx.stopLoop('surrenderPending');
     }
 
-    // Game over
+    // Game over. The win sting is deliberately not here: game_over lands the
+    // instant the last card does, and a round that ends on a 火箭 or a 天堂製造
+    // is still mid-cold-open at that point. It belongs to the screen it
+    // announces, and plays when that screen appears — see RoundOverScreen.
     if (curr.winner !== null && prev.winner === null) {
       sfx.stopLoop('surrenderPending');
       sfx.stop(yourTurnAudioRef.current);
       yourTurnAudioRef.current = null;
-      // A round that ended on a bomb or a comeback still has its music running,
-      // and that track is the point of the end screen — don't stomp on it with
-      // a win sting.
-      if (!sfx.isMusicPlaying()) {
-        const iAmLandlord = curr.playerOrder[curr.landlordIndex ?? -1] === mySocketId;
-        const landlordWon = curr.winner === 'landlord';
-        sfx.play(iAmLandlord === landlordWon ? 'win' : 'lose');
-      }
     }
 
     prevStateRef.current = curr;

@@ -18,8 +18,12 @@ import {
 import { RoomLobby } from '@/features/ddz/components/RoomLobby';
 import { GameBoard } from '@/features/ddz/components/GameBoard';
 import { RoundOverScreen } from '@/features/ddz/components/RoundOverScreen';
+import { AnimatePresence } from 'framer-motion';
 import { HeavenFinale } from '@/features/ddz/components/effects/HeavenFinale';
+import { HitBanner } from '@/features/ddz/components/effects/HitBanner';
+import { GodBubble } from '@/features/ddz/components/effects/GodBubble';
 import { useHeavenFinale } from '@/features/ddz/heavenFinale';
+import { useHitEvents } from '@/features/ddz/useHitEvents';
 import type { PlayOrigin } from '@/features/ddz/components/PlayArea';
 import { EmojiChatBox } from '@/components/EmojiChatBox';
 import { SettingsMenu, type SliderSetting } from '@/components/SettingsMenu';
@@ -97,6 +101,17 @@ function DdzPlayInner() {
       ? gameState.lastResult
       : null;
 
+  // ── Hit banners ─────────────────────────────────────────────────────────
+  // Tier (and every contest) is computed from the play itself in hitTier.ts,
+  // off data the server already sends. The hook owns the audio too, so the
+  // sting and the banner can never disagree about which tier a play earned.
+  //
+  // It lives up here rather than in the board for the same reason the finale
+  // does: the server resets the room five seconds into a banner that may run
+  // for eleven, and the board goes with it. Only the table's shake is passed
+  // back down.
+  const { event: hitEvent, knock, preroll, clear: clearHit } = useHitEvents(gameState);
+
   // ── 天堂製造 ─────────────────────────────────────────────────────────────
   // A win inside six of that player's own plays opens with a line from their
   // seat and a banner of its own, and the result screen waits behind it. It
@@ -110,12 +125,15 @@ function DdzPlayInner() {
    * seat is the answer. A spectator has no seat of their own to measure from;
    * null sends the bubble to the table instead of to somebody else's chair.
    */
-  const heavenSeat = (playerIndex: number): PlayOrigin => {
+  const seatOf = (playerIndex: number): PlayOrigin => {
     const mine = gameState.playerOrder.indexOf(user?.uid ?? '');
     if (mine < 0) return null;
     const offset = (playerIndex - mine + 3) % 3;
     return offset === 0 ? 'self' : offset === 1 ? 'left' : 'right';
   };
+
+  /** Anything still playing that the result screen must not cut off. */
+  const banners = heaven.blocking || !!hitEvent || !!preroll;
 
   // Perform the create/join intent passed from the unified lobby exactly once.
   const actedRef = useRef(false);
@@ -228,16 +246,25 @@ function DdzPlayInner() {
           selectedReaction={selectedReaction}
           onSelectReaction={setSelectedReaction}
           onLeave={backToLobby}
+          knock={knock}
         />
       )}
 
-      <HeavenFinale state={heaven} seatOf={heavenSeat} />
+      {/* A 火箭 opens cold: this is the only thing on screen until its cue ends. */}
+      <AnimatePresence>
+        {preroll && (
+          <GodBubble key={preroll.id} origin={seatOf(preroll.playerIndex)} text={preroll.line} />
+        )}
+      </AnimatePresence>
+      <HitBanner event={hitEvent} onDone={clearHit} />
+      <HeavenFinale state={heaven} seatOf={seatOf} />
 
       {/* Sits above both the board and the in-room lobby, so it survives the
-          server's return_to_lobby without blocking it. The finale holds it back
-          until the words have been and gone. */}
+          server's return_to_lobby without blocking it. It also waits its turn:
+          the winning play earns its banner, and 天堂製造 its finale, before the
+          round is allowed to announce itself. */}
       <RoundOverScreen
-        result={heaven.blocking ? null : showResult}
+        result={banners ? null : showResult}
         myId={user.uid}
         onDismiss={dismissResult}
       />

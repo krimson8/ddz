@@ -32,6 +32,21 @@ export function RoundOverScreen({
   const [musicLeft, setMusicLeft] = useState(0);
   const iWon = !!result && result.winnerIds.includes(myId);
 
+  /**
+   * The win sting, on arrival rather than on game over.
+   *
+   * The round can end on a play that is still being narrated — a 火箭 cold
+   * open, a 天堂製造 finale — and this screen waits for that to finish. The
+   * sting waits with it, or it would land under someone else's music.
+   *
+   * A round that ended on a bomb or a comeback still has its track running, and
+   * that track is the point of the end screen: don't stomp on it.
+   */
+  useEffect(() => {
+    if (!result || sfx.isMusicPlaying()) return;
+    sfx.play(iWon ? 'win' : 'lose');
+  }, [result, iWon]);
+
   // Poll the music channel so the button can say whether a track is still
   // running — otherwise "stay and listen" is an invisible affordance.
   useEffect(() => {
