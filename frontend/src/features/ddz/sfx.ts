@@ -324,6 +324,18 @@ class SfxBus {
     }
   }
 
+  /**
+   * Duck the cues by hand, for audio that is not a track.
+   *
+   * A cold open is a one-shot cue, so it never takes the music channel and
+   * nothing ducks for it — but it is a spoken line, and a 30-second turn alert
+   * runs straight over the top of it. The track that follows the cue holds the
+   * duck on, and stopMusic lifts it at the end of the round.
+   */
+  duckCues(on: boolean): void {
+    this.setDuck(on);
+  }
+
   /** True while a tier track is holding the channel. */
   isDucked(): boolean {
     return this.ducked;

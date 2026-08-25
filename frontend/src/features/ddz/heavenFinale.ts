@@ -154,8 +154,10 @@ export function useHeavenFinale(gameState: GameState): HeavenState {
 
       at(() => {
         // Whatever the round left running is over. The cold open is a silence
-        // with one line in it.
+        // with one line in it — including whoever's turn alert is mid-sentence.
+        // Ducking after stopping, not before: stopMusic lifts the duck.
         sfx.stopMusic();
+        sfx.duckCues(true);
         setState({ phase: 'bubble', playerIndex: win.playerIndex, blocking: true });
 
         const cue = sfx.playFile(HEAVEN_CUE);
@@ -165,6 +167,9 @@ export function useHeavenFinale(gameState: GameState): HeavenState {
           // The line has been said: the cards may land now.
           setSettledAt(playSeq(history));
           sfx.playMusic(HEAVEN_TRACK, HEAVEN_WEIGHT);
+          // The track normally inherits the duck. If it could not start —
+          // muted, or blocked — nothing is going to lift it, so lift it here.
+          if (!sfx.isMusicPlaying()) sfx.duckCues(false);
           setState({ phase: 'banner', playerIndex: win.playerIndex, blocking: true });
           at(() => setState(IDLE), HEAVEN_BANNER_MS);
         };

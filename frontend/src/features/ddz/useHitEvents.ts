@@ -154,7 +154,9 @@ export function useHitEvents(gameState: GameState) {
     setPreroll({ id, playerIndex: latest.playerIndex, line: GOD_LINE });
     // Whatever a bomb or a comeback left running is over: the cold open is a
     // silence with one voice in it, and tier 7's own track follows it anyway.
+    // Ducking after stopping, not before — stopMusic lifts the duck.
     sfx.stopMusic();
+    sfx.duckCues(true);
     const cue = sfx.playFile(GOD_CUE);
     const go = () => {
       pending.current = null;
@@ -162,6 +164,9 @@ export function useHitEvents(gameState: GameState) {
       clearTimeout(timer);
       setPreroll(null);
       launch();
+      // The track normally inherits the duck. If it could not start — muted,
+      // or blocked — nothing is going to lift it, so lift it here.
+      if (!sfx.isMusicPlaying()) sfx.duckCues(false);
     };
     // The timer is a safety net, not the schedule: 'ended' is what normally
     // starts the banner, and an audio element that dies quietly still has to
