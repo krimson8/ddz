@@ -361,6 +361,64 @@ body {
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
+  /* ══ 黑棺 ══════════════════════════════════════════════════════════════
+     The finish taken off an enemy: a video plate and a blackout. Fixed rather
+     than absolute for the same reason the hit banners are — mounted at page
+     level so it outlives the board when the server resets the room.
+
+     The clip is white-and-violet calligraphy on a pure black field and has no
+     alpha channel, so the black has to be taken out here.
+
+     The lab does it with `mix-blend-mode: screen`, which cannot work at this
+     z-index: mix-blend-mode blends with the backdrop of the nearest ancestor
+     stacking context, and this layer IS one — it has to be, to sit above the
+     board. Its own backdrop is empty, so screen would have nothing to blend
+     against and the black would simply stay. Dropping the z-index would fix
+     the blend and lose the layering, since the board's own positioned children
+     would then paint over the clip.
+
+     So the alpha comes out of the pixels instead. #kuro-luma sets alpha from
+     brightness — true black goes to zero, the strokes keep their weight — and
+     the contrast ahead of it in the chain crushes the compression noise floor
+     back to real black before the key reads it. Chain order is left to right,
+     so the clean-up genuinely happens first.
+
+     The source is square and the viewport is not, so `contain` meets the top
+     and bottom edges and leaves the sides to the table, which costs nothing
+     when the black there is being dropped anyway. */
+  .kuro-plate { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 75; }
+  .kuro-plate video {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: contain;
+    filter: contrast(1.18) brightness(1.04) saturate(1.08) url(#kuro-luma);
+  }
+
+  /* Two black leaves driven in from the edges, held shut, then drawn back out.
+     Each is a full-height half that translates by its own width, so the panels
+     are only ever moved, never resized — a width or clip animation would
+     relayout every frame. 51% each: the overlap at the seam is what stops a
+     subpixel hairline of table showing through where they meet.
+
+     Above the result screen (z 90) on purpose. The screen mounts as the leaves
+     meet and does its arriving underneath the black, so the shutter opens on
+     something that has already finished appearing.
+
+     One element, two animations. The second carries `forwards` rather than
+     `both` — with `both` its backwards fill would paint the closed state
+     during the delay and clobber the close it is waiting on. */
+  .kuro-shutter { position: fixed; inset: 0; pointer-events: none; z-index: 95; }
+  .kuro-leaf {
+    position: absolute; top: 0; bottom: 0; width: 51%; background: #000;
+    animation:
+      kuro-shut var(--close) cubic-bezier(.3,.7,.2,1) both,
+      kuro-open var(--open) cubic-bezier(.55,0,.35,1) calc(var(--close) + var(--hold)) forwards;
+  }
+  .kuro-leaf.l { left: 0;  --from: -100%; }
+  .kuro-leaf.r { right: 0; --from: 100%; }
+  @keyframes kuro-shut { from { transform: translateX(var(--from)) } to { transform: translateX(0) } }
+  @keyframes kuro-open { from { transform: translateX(0) } to { transform: translateX(var(--from)) } }
 }
 
 /* Anyone who has asked the OS for less motion gets the state changes without

@@ -268,7 +268,7 @@ class SfxBus {
    * is ignored and the running track plays out. Returns true if it took the
    * channel.
    */
-  playMusic(src: string, weight: number): boolean {
+  playMusic(src: string, weight: number, fadeMs = 0): boolean {
     if (typeof window === 'undefined') return false;
     this.init();
     if (this.volume === 0) return false;
@@ -280,6 +280,7 @@ class SfxBus {
     audio.preload = 'auto';
     audio.volume = this.volume;
     this.music = audio;
+    if (fadeMs > 0) this.fadeIn(audio, fadeMs);
     this.musicWeight = weight;
     audio.addEventListener('ended', () => {
       if (this.music === audio) {
@@ -291,6 +292,31 @@ class SfxBus {
     audio.play().catch(() => {});
     this.setDuck(true);
     return true;
+  }
+
+  /**
+   * Ride a track up from silence over `ms`.
+   *
+   * Driven off the track's own currentTime rather than a wall clock, so a late
+   * start — autoplay policy holding the first play() back, or a slow fetch —
+   * fades from where the audio actually is instead of arriving already part way
+   * up. The curve is squared because loudness follows roughly the square root
+   * of amplitude: a straight line on `volume` reads as "already there" within a
+   * second and then flat.
+   *
+   * The interval stops itself as soon as the channel moves on, so a fade cut
+   * off mid-swell leaves nothing running.
+   */
+  private fadeIn(audio: HTMLAudioElement, ms: number): void {
+    audio.volume = 0;
+    const step = () => {
+      if (this.music !== audio || audio.ended) { clearInterval(id); return; }
+      const t = Math.min(1, (audio.currentTime * 1000) / ms);
+      audio.volume = this.volume * t * t;
+      if (t >= 1) clearInterval(id);
+    };
+    const id = setInterval(step, 40);
+    step();
   }
 
   stopMusic(): void {

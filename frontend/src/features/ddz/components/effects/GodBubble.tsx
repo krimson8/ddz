@@ -27,7 +27,7 @@ const HALF = 170;
  * be. The bubble is keyed by event id and remounts per rocket, so there is
  * nothing to re-measure over its lifetime.
  */
-function anchorFor(origin: PlayOrigin): Anchor | null {
+function anchorFor(origin: PlayOrigin, half: number): Anchor | null {
   if (typeof document === 'undefined') return null;
   const el = document.querySelector(`[data-ddz-seat="${origin ?? 'self'}"]`);
   const vw = window.innerWidth;
@@ -35,7 +35,7 @@ function anchorFor(origin: PlayOrigin): Anchor | null {
     const r = el.getBoundingClientRect();
     const below = origin === 'left' || origin === 'right';
     return {
-      x: Math.min(Math.max(r.left + r.width / 2, HALF + 8), vw - HALF - 8),
+      x: Math.min(Math.max(r.left + r.width / 2, half + 8), vw - half - 8),
       y: below ? r.bottom + 12 : r.top - 12,
       side: below ? 'below' : 'above',
     };
@@ -51,8 +51,13 @@ function anchorFor(origin: PlayOrigin): Anchor | null {
  * transformed element while the table is shaking, and a transformed ancestor
  * would become this thing's containing block.
  */
-export function GodBubble({ origin, text }: { origin: PlayOrigin; text: string }) {
-  const [at] = useState<Anchor | null>(() => anchorFor(origin));
+export function GodBubble({ origin, text, half = HALF }: {
+  origin: PlayOrigin;
+  text: string;
+  /** Half the widest this line may get. 黑棺's is three times the rocket's. */
+  half?: number;
+}) {
+  const [at] = useState<Anchor | null>(() => anchorFor(origin, half));
   const reduce = useReducedMotion();
 
   if (!at) return null;
@@ -66,7 +71,7 @@ export function GodBubble({ origin, text }: { origin: PlayOrigin; text: string }
         left: at.x,
         top: at.y,
         transform: `translate(-50%, ${above ? '-100%' : '0'})`,
-        maxWidth: `${HALF * 2}px`,
+        maxWidth: `${half * 2}px`,
       }}
       initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.55, y: above ? 14 : -14 }}
       animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}

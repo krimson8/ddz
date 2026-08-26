@@ -20,9 +20,11 @@ import { GameBoard } from '@/features/ddz/components/GameBoard';
 import { RoundOverScreen } from '@/features/ddz/components/RoundOverScreen';
 import { AnimatePresence } from 'framer-motion';
 import { HeavenFinale } from '@/features/ddz/components/effects/HeavenFinale';
+import { KuroFinale } from '@/features/ddz/components/effects/KuroFinale';
 import { HitBanner } from '@/features/ddz/components/effects/HitBanner';
 import { GodBubble } from '@/features/ddz/components/effects/GodBubble';
 import { coldOpenFor, playSeq, useHeavenFinale } from '@/features/ddz/heavenFinale';
+import { useKuroFinale } from '@/features/ddz/kuroFinale';
 import { useHitEvents } from '@/features/ddz/useHitEvents';
 import type { PlayOrigin } from '@/features/ddz/components/PlayArea';
 import { EmojiChatBox } from '@/components/EmojiChatBox';
@@ -118,6 +120,13 @@ function DdzPlayInner() {
   // lives up here rather than in the board because the server resets the room
   // — unmounting the board — while it is still playing.
   const heaven = useHeavenFinale(gameState);
+
+  // ── 黑棺 ────────────────────────────────────────────────────────────────
+  // Winning the round on a play taken off the other side. It outranks the two
+  // above and replaces them, and it is the only effect that hands the result
+  // screen on rather than merely getting out of its way: the screen mounts
+  // behind the closed shutter and is revealed already settled.
+  const { state: kuro, closeShutter, plateMaxMs } = useKuroFinale(gameState);
   /**
    * Seat index → where that player sits on this screen.
    *
@@ -133,7 +142,7 @@ function DdzPlayInner() {
   };
 
   /** Anything still playing that the result screen must not cut off. */
-  const banners = heaven.blocking || !!hitEvent || !!preroll;
+  const banners = kuro.blocking || heaven.blocking || !!hitEvent || !!preroll;
 
   /*
    * Hold the table through a cold open.
@@ -145,9 +154,14 @@ function DdzPlayInner() {
    */
   const thisPlay = playSeq(gameState.playHistory);
   const holdTable =
-    !!coldOpenFor(gameState.playHistory, gameState.playerCardCounts) &&
+    !!coldOpenFor(
+      gameState.playHistory,
+      gameState.playerCardCounts,
+      gameState.landlordIndex,
+    ) &&
     hitSettledAt !== thisPlay &&
-    heaven.settledAt !== thisPlay;
+    heaven.settledAt !== thisPlay &&
+    kuro.settledAt !== thisPlay;
 
   // Perform the create/join intent passed from the unified lobby exactly once.
   const actedRef = useRef(false);
@@ -273,6 +287,12 @@ function DdzPlayInner() {
       </AnimatePresence>
       <HitBanner event={hitEvent} onDone={clearHit} />
       <HeavenFinale state={heaven} seatOf={seatOf} />
+      <KuroFinale
+        state={kuro}
+        seatOf={seatOf}
+        onPlateEnd={closeShutter}
+        plateMaxMs={plateMaxMs}
+      />
 
       {/* Sits above both the board and the in-room lobby, so it survives the
           server's return_to_lobby without blocking it. It also waits its turn:

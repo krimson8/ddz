@@ -91,6 +91,22 @@ export function partyOf(playerIndex: number, landlordIndex: number | null): 'lan
 }
 
 /**
+ * How many plays the round has seen — passes are not plays.
+ *
+ * This is what a cold open is keyed to, rather than the length of the history.
+ * The next player can pass while the dialog is still talking, and that pass
+ * must neither release the hold nor start a new one: it is not a play, so it
+ * does not move this number.
+ *
+ * It lives here rather than with either finale because both of them need it,
+ * and they need each other — 黑棺 stands 天堂製造 down. A pure helper in the
+ * layer underneath is what keeps that from being a cycle.
+ */
+export function playSeq(history: HistoryEntry[]): number {
+  return history.filter((h) => h.play?.cards?.length).length;
+}
+
+/**
  * The play the newest entry is beating, or null if it is a fresh lead.
  *
  * A trick clears after two consecutive passes, so a play that follows two

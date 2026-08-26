@@ -240,6 +240,55 @@ h1 { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: c
   100%{opacity:0;transform:translate(0,0) rotate(0) scale(2.3)}
 }
 
+/* ── 黑棺 — video plate ─────────────────────────────────────────────────────
+   The clip is white-and-violet calligraphy painted on a pure black field and
+   carries no alpha channel, so the black is taken out here.
+
+   This used to be `mix-blend-mode: screen`, which works on this page and does
+   NOT work in the game: blending reads the backdrop of the nearest ancestor
+   stacking context, and the game's plate has to be one to sit above the board,
+   leaving screen with nothing to blend against. #kuro-luma writes alpha from
+   brightness instead, which is independent of where the layer sits — and the
+   contrast ahead of it in the chain crushes the compression noise floor back
+   to real black before the key reads it. Kept identical to the game so this
+   page previews what actually ships.
+
+   The source is square (720×720) and the stage is 16:9, so the two fits pull
+   opposite ways: `contain` meets the top and bottom edges and leaves the sides
+   to the felt — which costs nothing, since the black there is being dropped
+   anyway — while `cover` would fill the width by cropping the head and foot
+   off a vertical column of characters. Hence contain, exposed as a property so
+   the trade is one word to flip. */
+.kuro { position: absolute; inset: 0; overflow: hidden; --kuro-fit: contain; }
+.kuro video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: var(--kuro-fit);
+  filter: contrast(1.18) brightness(1.04) saturate(1.08) url(#kuro-luma);
+}
+
+/* ── Shutter ───────────────────────────────────────────────────────────────
+   Two black leaves driven in from the edges, held shut, then drawn back out.
+   Each leaf is a full-height half that translates by its own width, so the
+   panels are only ever moved, never resized — a width or clip animation would
+   relayout every frame. 51% each: the overlap at the seam is what stops a
+   subpixel hairline of table showing through at the meeting point.
+
+   One element, two animations. The second carries `forwards` rather than
+   `both` on purpose — with `both` its backwards fill would paint the closed
+   state during the delay and clobber the close it is waiting on. */
+.shutter { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
+.shutter .leaf {
+  position: absolute; top: 0; bottom: 0; width: 51%; background: #000;
+  animation:
+    leafShut var(--close) cubic-bezier(.3,.7,.2,1) both,
+    leafOpen var(--open) cubic-bezier(.55,0,.35,1) calc(var(--close) + var(--hold)) forwards;
+}
+.shutter .leaf.l { left: 0;  --from: -100%; }
+.shutter .leaf.r { right: 0; --from: 100%; }
+@keyframes leafShut { from { transform: translateX(var(--from)) } to { transform: translateX(0) } }
+@keyframes leafOpen { from { transform: translateX(0) } to { transform: translateX(var(--from)) } }
+
 /* ── 火箭 cold open ─────────────────────────────────────────────────────────
    The rocket does not cut straight to its banner: the table holds still while
    the player's own avatar says its line over kamida.mp3, and only when that cue
@@ -269,6 +318,8 @@ h1 { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: c
   60%  { opacity: 1; transform: scale(1.06) translateY(0) }
   100% { opacity: 1; transform: scale(1) }
 }
+/* 鏡花水月 is three times the rocket line; it needs the room. */
+.bubble.long { max-width: 430px; font-size: 15.5px; }
 .bubble.out { animation: bubbleOut 220ms ease-in both; }
 @keyframes bubbleOut { 0%{opacity:1;transform:scale(1)} 100%{opacity:0;transform:scale(.9)} }
 
@@ -528,6 +579,20 @@ input[type=range]:focus-visible { outline: 2px solid var(--c2); outline-offset: 
     </div>
   </div>
 
+  <!-- Alpha from brightness for 黑棺: 0.5R + 0.8G + 0.5B, clamped. True luma
+       (.30/.60/.10) measures right but leaves the violet ghost strokes at a
+       third of their opacity. sRGB, not the linearRGB default, or every colour
+       shifts on the way through. Mirrored in KuroFinale.tsx. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="kuro-luma" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0.5 0.8 0.5 0 0"/>
+    </filter>
+  </svg>
+
   <div class="toolbar">
     <button id="replay">↻ Replay last</button>
     <button id="rapid">Rapid fire ×6</button>
@@ -536,6 +601,7 @@ input[type=range]:focus-visible { outline: 2px solid var(--c2); outline-offset: 
     <button id="sound" aria-pressed="true">Sound on</button>
     <button id="godIntro" aria-pressed="true">火箭 cold open</button>
     <button id="heaven">天堂製造 finale</button>
+    <button id="kuro">黑棺 video</button>
     <button id="stopMusic">■ Stop music</button>
 
     <span class="bench">
@@ -832,7 +898,7 @@ PLAYS.forEach(p => {
 });
 
 /* Base64 tier stingers, injected at build time. */
-const AUDIO = {"tier-1":"sounds/tier-1.wav","tier-2":"sounds/tier-2.wav","tier-3":"sounds/tier-3.wav","tier-4":"sounds/tier-4.wav","tier-5":"sounds/tier-5.wav","tier-6":"sounds/tier6.mp3","tier-7":"sounds/tier7.mp3","tier-comeback":"sounds/tier-comeback.mp3","tier-friendly":"sounds/traitor.mp3","kamida":"sounds/kamida.mp3","godhand":"sounds/god_hand_impact.mp3","heavencue":"sounds/made_in_heaven.mp3","heaventrack":"sounds/crucified_full.mp3"};
+const AUDIO = {"tier-1":"sounds/tier-1.wav","tier-2":"sounds/tier-2.wav","tier-3":"sounds/tier-3.wav","tier-4":"sounds/tier-4.wav","tier-5":"sounds/tier-5.wav","tier-6":"sounds/tier6.mp3","tier-7":"sounds/tier7.mp3","tier-comeback":"sounds/tier-comeback.mp3","tier-friendly":"sounds/traitor.mp3","kamida":"sounds/kamida.mp3","godhand":"sounds/god_hand_impact.mp3","heavencue":"sounds/made_in_heaven.mp3","heaventrack":"sounds/crucified_full.mp3","kyoka":"sounds/kyoka.mp3","voissur":"sounds/vois_sur.mp3"};
 
 const stage   = document.getElementById('stage');
 const fx      = document.getElementById('fx');
@@ -900,6 +966,31 @@ function musicLeft() {
   return Math.ceil(musicEl.duration - musicEl.currentTime);
 }
 
+/**
+ * Ride a track up from silence over `ms`.
+ *
+ * Driven off the track's own currentTime rather than a wall clock, so a late
+ * start — autoplay policy holding the first play() back, or a slow fetch —
+ * fades from where the audio actually is instead of arriving already part way
+ * up. The curve is squared because loudness follows roughly the square root of
+ * amplitude: a straight line on `volume` reads as "already there" within a
+ * second and then flat. Swap `t * t` for `t` for the literal ramp.
+ *
+ * The interval stops itself as soon as the channel moves on, so a fade that is
+ * cut off mid-swell by 停 or by the next play leaves nothing running.
+ */
+function fadeInMusic(a, ms) {
+  a.volume = 0;
+  const step = () => {
+    if (musicEl !== a || a.ended) return clearInterval(id);
+    const t = Math.min(1, (a.currentTime * 1000) / ms);
+    a.volume = t * t;
+    if (t >= 1) clearInterval(id);
+  };
+  const id = setInterval(step, 40);
+  step();
+}
+
 /* ── Shake ─────────────────────────────────────────────────────────────────
    Seven strengths, not three. The old 1/2/3 collapsed tiers 3-5 into one jolt
    and 6/7/comeback into another, so half the ladder felt identical — which is
@@ -956,6 +1047,7 @@ function fire(p) {
 
   curSpeed = sp;
   stage.style.setProperty('--speed', sp);
+  stopKuro();
   fx.innerHTML = '';
   cancelPreroll();                     // a newer play supersedes the wind-up
   fx.dataset.tier = tier;
@@ -1392,7 +1484,7 @@ slowBtn.addEventListener('click', () => { slowMo = !slowMo; slowBtn.setAttribute
 const slamBtn = document.getElementById('withSlam');
 slamBtn.addEventListener('click', () => { withSlam = !withSlam; slamBtn.setAttribute('aria-pressed', String(withSlam)); });
 
-document.getElementById('stopMusic').addEventListener('click', stopMusic);
+document.getElementById('stopMusic').addEventListener('click', () => { stopMusic(); stopKuro(); });
 
 
 /* ── 天堂製造 ──────────────────────────────────────────────────────────────
@@ -1448,6 +1540,7 @@ function fireHeaven() {
   cancelPreroll();
   hush();
   stopMusic();
+  stopKuro();
   fx.innerHTML = '';
   stage.style.setProperty('--speed', 1);
   curSpeed = 1;
@@ -1484,6 +1577,227 @@ function fireHeaven() {
 
 document.getElementById('heaven').addEventListener('click', fireHeaven);
 
+/* ── 黑棺 ──────────────────────────────────────────────────────────────────
+   A video plate, not a CSS build: the calligraphy is baked into
+   kuro_hitsugi.mp4 and the only thing this page contributes is the blend mode
+   that drops its black field. Filed at the top of the ladder for now — it
+   cancels whatever is running the way the rocket does. Where it actually
+   belongs among the tiers is still open.
+
+   Same two-part shape as 火箭 and 天堂製造: the table holds still while the
+   line is said, and the plate starts on the cue's own 'ended', with a timer
+   behind it as the safety net for a cue that is muted or never loads.
+
+   The clip runs silent — kyoka.mp3 owns the audio, and the video's own track
+   would land on top of the tail of it. Muted is also what guarantees the plate
+   can start at all: a muted video is exempt from autoplay policy. */
+const KURO_SRC = 'video/kuro_hitsugi.mp4';
+const KYOKA_LINE = '一体 いつから鏡花水月を使っていないと錯覚していた';
+const KYOKA_CUE_MS = 4800;         // kyoka.mp3 is 4.4s, plus room to breathe
+
+/* ── The two knobs ────────────────────────────────────────────────────────
+   KURO_TARGET_MS sets how hard the head is compressed: it is what the whole
+   22.1s clip would take if it ran fast the whole way, so the rate is simply
+   duration ÷ target. KURO_UNMUTE_AT_MS is a mark on the CLIP'S OWN timeline —
+   not on the wall clock — and everything from there runs at 1× with sound.
+   The real runtime is therefore mark ÷ rate + (duration − mark), which the
+   readout prints back so both knobs can be dialled by feel. */
+const KURO_TARGET_MS = 2000;       // compression of the head
+const KURO_UNMUTE_AT_MS = 18000;   // ← unmute here, in the clip's own time
+const VOIS_FADE_MS = 5000;         // the bed swells 0 → full across this
+let kuroEl = null;
+
+function stopKuro() {
+  stopShutter();
+  if (!kuroEl) return;
+  // A detached <video> keeps playing, so pause before dropping it.
+  kuroEl.pause();
+  kuroEl.parentElement?.remove();
+  kuroEl = null;
+}
+
+/**
+ * Hand the clip over to real time at the mark.
+ *
+ * Two independent ways of hitting it, because each covers the other's blind
+ * spot. requestVideoFrameCallback reports the mediaTime of every presented
+ * frame, so on a visible tab the switch lands on the first frame at or past
+ * the mark — as exact as the source's frame rate allows. It is also silent on
+ * a tab that is not compositing, which is why a self-correcting timer chain
+ * runs alongside it: each tick converts the remaining SOURCE time into wall
+ * time at the current rate, sleeps just short of it, and closes the last
+ * stretch in ~0ms hops. Recomputing from currentTime every tick is what keeps
+ * a slow decode from accumulating drift.
+ */
+function armKuroUnmute(v) {
+  let done = false;
+
+  const flip = () => {
+    if (done || kuroEl !== v) return;
+    done = true;
+    v.playbackRate = 1;
+    if (!soundOn) return;            // the toolbar toggle still wins
+    v.muted = false;
+    // Chrome pauses a video that is unmuted without user activation. The click
+    // that fired this counts as activation, so this is a belt-and-braces
+    // resume — and if the audio really is refused, carry on silent rather than
+    // freeze on the mark.
+    if (v.paused) v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+  };
+
+  if ('requestVideoFrameCallback' in v) {
+    const onFrame = (now, meta) => {
+      if (done || kuroEl !== v) return;
+      if (meta.mediaTime * 1000 >= KURO_UNMUTE_AT_MS) return flip();
+      v.requestVideoFrameCallback(onFrame);
+    };
+    v.requestVideoFrameCallback(onFrame);
+  }
+
+  const tick = () => {
+    if (done || kuroEl !== v) return;
+    // Chrome pauses muted video-only playback on a backgrounded tab, and the
+    // closing hops below are ~0ms apart. Idle instead of spinning through a
+    // stall — currentTime is not moving, so there is nothing to converge on.
+    if (v.paused) { setTimeout(tick, 100); return; }
+    const leftMs = KURO_UNMUTE_AT_MS - v.currentTime * 1000;
+    if (leftMs <= 0) return flip();
+    const wall = leftMs / (v.playbackRate || 1);
+    setTimeout(tick, wall > 30 ? wall - 20 : 0);
+  };
+  tick();
+}
+
+/* ── The shutter at the end ────────────────────────────────────────────────
+   The blackout is over the picture only: the bed plays straight through it,
+   so the leaves close on a piece that is still running rather than on
+   silence. */
+const SHUTTER = { close: 500, hold: 1000, open: 500 };
+let shutterEl = null, shutterTimer = 0;
+
+function stopShutter() {
+  clearTimeout(shutterTimer);
+  shutterTimer = 0;
+  shutterEl?.remove();
+  shutterEl = null;
+}
+
+/** Close, hold, open — then hand back, if anything is waiting on it. */
+function runShutter(then) {
+  stopShutter();
+  const el = document.createElement('div');
+  el.className = 'shutter';
+  el.style.setProperty('--close', SHUTTER.close + 'ms');
+  el.style.setProperty('--hold', SHUTTER.hold + 'ms');
+  el.style.setProperty('--open', SHUTTER.open + 'ms');
+  el.innerHTML = '<div class="leaf l"></div><div class="leaf r"></div>';
+  stage.appendChild(el);
+  shutterEl = el;
+
+  shutterTimer = setTimeout(() => {
+    if (shutterEl !== el) return;      // superseded by a newer play
+    stopShutter();
+    then?.();
+  }, SHUTTER.close + SHUTTER.hold + SHUTTER.open);
+}
+
+/** The plate itself, once the line has been said. */
+function kuroPlate() {
+  fx.innerHTML = '';
+  fx.dataset.tier = 'kuro';
+
+  const layer = document.createElement('div');
+  layer.className = 'kuro';
+  const v = document.createElement('video');
+  v.src = KURO_SRC;
+  v.autoplay = true;
+  v.playsInline = true;            // iOS would otherwise yank it fullscreen
+  v.muted = true;
+  layer.appendChild(v);
+  fx.appendChild(layer);
+  kuroEl = v;
+
+  v.addEventListener('loadedmetadata', () => {
+    if (kuroEl !== v || !isFinite(v.duration) || v.duration <= 0) return;
+    // Time-stretched rather than cut, so the whole piece still reads.
+    const rate = (v.duration * 1000) / KURO_TARGET_MS;
+    v.playbackRate = rate;
+    armKuroUnmute(v);
+
+    const durMs = v.duration * 1000;
+    const mark = Math.min(KURO_UNMUTE_AT_MS, durMs);
+    const total = mark / rate + (durMs - mark);
+    readout.innerHTML = `<b>黑棺</b> · video plate · ${(total / 1000).toFixed(2)}s` +
+      ` <span style="opacity:.6">(${rate.toFixed(2)}× silent, then 1× with sound` +
+      ` from ${(mark / 1000).toFixed(3)}s)</span> · screen blend · no shake`;
+  }, { once: true });
+
+  v.addEventListener('ended', () => {
+    if (kuroEl !== v) return;
+    stopKuro();
+    if (fx.dataset.tier === 'kuro') fx.innerHTML = '';
+    runShutter();
+  }, { once: true });
+
+  v.play().catch(() => {});
+  updateMusicReadout();
+}
+
+function fireKuro() {
+  cancelPreroll();
+  hush();
+  stopMusic();
+  stopKuro();
+  fx.innerHTML = '';
+  stage.style.setProperty('--speed', 1);
+  curSpeed = 1;
+  readout.innerHTML = `<b>黑棺</b> · <span style="color:#a78bfa">鏡花水月…</span>`;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble long';
+  bubble.textContent = KYOKA_LINE;
+  stage.appendChild(bubble);
+
+  // The bed comes up with the line and keeps running underneath, so kyoka, the
+  // silent head and the clip's own audio at the mark all land on top of one
+  // piece rather than three separate cues. It goes on the music channel, which
+  // is what makes ■ Stop music reach it and what puts its remaining time in the
+  // readout; the weight is above every tier, since nothing outranks 黑棺 yet.
+  if (soundOn) {
+    musicEl = new Audio(AUDIO.voissur);
+    musicWeight = 400;
+    musicEl.addEventListener('ended', () => { musicEl = null; musicWeight = -1; }, { once: true });
+    fadeInMusic(musicEl, VOIS_FADE_MS);   // armed before play(), so it starts silent
+    musicEl.play().catch(() => {});
+  }
+
+  const a = cue(AUDIO.kyoka);
+  const go = () => {
+    prerollPending = null;
+    a?.removeEventListener('ended', go);
+    clearTimeout(timer);
+    bubble.classList.add('out');
+    setTimeout(() => bubble.remove(), 220);
+    kuroPlate();
+  };
+  const wait = a && isFinite(a.duration) && a.duration > 0
+    ? Math.max(KYOKA_CUE_MS, a.duration * 1000 + 300)
+    : KYOKA_CUE_MS;
+  const timer = setTimeout(go, wait);
+  a?.addEventListener('ended', go, { once: true });
+  prerollPending = {
+    cancel: () => {
+      a?.removeEventListener('ended', go);
+      a?.pause();
+      clearTimeout(timer);
+      bubble.remove();
+      stopMusic();
+    },
+  };
+}
+
+document.getElementById('kuro').addEventListener('click', fireKuro);
+
 const godBtn = document.getElementById('godIntro');
 godBtn.addEventListener('click', () => {
   godIntro = !godIntro;
@@ -1511,7 +1825,6 @@ function updateMusicReadout() {
 }
 setInterval(updateMusicReadout, 500);
 
-// Open on the ceiling. Audio stays silent until the first interaction — that's
-// the browser's autoplay policy, not a bug.
-setTimeout(() => fire(PLAYS.find(p => p.type === 'rocket')), 600);
+// The page opens quiet. Nothing fires until a chip or a button is clicked —
+// autoplaying tier 7 at load meant sitting through 火箭 every refresh.
 </script>

@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { sfx } from '@/features/ddz/sfx';
-import { LEVEL_LABEL } from '@/features/ddz/hitTier';
+import { LEVEL_LABEL, playSeq } from '@/features/ddz/hitTier';
+import { kuroWin } from '@/features/ddz/kuroFinale';
 import { bannerPlan } from '@/features/ddz/components/effects/HitBanner';
 import { GOD_CUE_MS } from '@/features/ddz/useHitEvents';
 import type { GameState, HistoryEntry } from '@/features/ddz/types';
@@ -14,6 +15,8 @@ import type { GameState, HistoryEntry } from '@/features/ddz/types';
  * your own plays earns a cold open and a banner of its own, and the round's
  * result screen waits for it.
  */
+
+export { playSeq };
 
 /** How few plays it takes. The winning play is one of them. */
 export const HEAVEN_TURNS = 6;
@@ -64,32 +67,28 @@ export function heavenWin(history: HistoryEntry[], cardCounts: number[]): Heaven
 }
 
 /**
- * How many plays the round has seen — passes are not plays.
- *
- * This is what a cold open is keyed to, rather than the length of the history.
- * The next player can pass while the dialog is still talking, and that pass
- * must neither release the hold nor start a new one: it is not a play, so it
- * does not move this number.
- */
-export function playSeq(history: HistoryEntry[]): number {
-  return history.filter((h) => h.play?.cards?.length).length;
-}
-
-/**
  * Does the newest play open cold — does the table wait before its cards land?
  *
  * Pure and synchronous, because the table has to hold on the very first render
  * of the new play. Anything driven from an effect would let a frame of the card
  * flight escape before the dialog had even appeared.
  */
-export function coldOpenFor(history: HistoryEntry[], cardCounts: number[]): 'rocket' | 'heaven' | null {
+export function coldOpenFor(
+  history: HistoryEntry[],
+  cardCounts: number[],
+  landlordIndex: number | null = null,
+): 'rocket' | 'heaven' | 'kuro' | null {
   let i = history.length - 1;
   while (i >= 0 && !history[i].play?.cards?.length) i--;   // step back over passes
   if (i < 0) return null;
+  const upto = history.slice(0, i + 1);
+  // 黑棺 first: it replaces both of the others when it answers, so asking in
+  // any other order would hold the table for a cold open that never comes.
+  if (kuroWin(upto, cardCounts, landlordIndex)) return 'kuro';
   if ((history[i].play.type as string) === 'rocket') return 'rocket';
   // heavenWin reads the newest entry, so ask it about the history as it stood
   // when that play landed.
-  return heavenWin(history.slice(0, i + 1), cardCounts) ? 'heaven' : null;
+  return heavenWin(upto, cardCounts) ? 'heaven' : null;
 }
 
 /** What the finale is showing right now. */
@@ -142,6 +141,10 @@ export function useHeavenFinale(gameState: GameState): HeavenState {
     // neither is a live play.
     if (history.length <= prev || history.length - prev > 1) return;
 
+    // 黑棺 outranks this and replaces it outright — a win taken off an enemy
+    // is not also a 天堂製造, however few turns it took.
+    if (kuroWin(history, counts, gameState.landlordIndex)) return;
+
     const win = heavenWin(history, counts);
     if (!win) return;
 
@@ -185,7 +188,7 @@ export function useHeavenFinale(gameState: GameState): HeavenState {
 
     const latest = history[history.length - 1];
     begin(win, (latest.play.type as string) === 'rocket' ? rocketLead() : 0);
-  }, [history, counts]);
+  }, [history, counts, gameState.landlordIndex]);
 
   // No reset for "a new round started mid-finale": the sequence clears itself
   // after ~6s, the server holds the room for 8, and three players cannot vote a

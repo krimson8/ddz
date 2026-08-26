@@ -1024,14 +1024,18 @@ export class GameService {
 
     room.state = 'waiting';
 
-    // Eight seconds, not five: a 天堂製造 finish spends 2.4s on its cold open
-    // and 3.6s on its banner before the result screen is allowed to appear.
+    // Twelve seconds, not five: the longest finish is 黑棺, which spends ~4.4s
+    // on its line, ~5.3s on its clip and 2s on the shutter before the result
+    // screen is revealed. 天堂製造 needs 6s of that, and a plain round none.
+    // The client no longer depends on this — the result screen is a snapshot
+    // that outlives the reset — but the room genuinely moving on mid-sequence
+    // is still visible to everyone else in it.
     setTimeout(() => {
       room.resultPending = false;
       this.emitToRoom(room, 'return_to_lobby', { phase: 'lobby' });
       this.emitMembersUpdate(room);
       this.broadcastRoomList();
-    }, 8_000);
+    }, 12_000);
   }
 
   /**
