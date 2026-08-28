@@ -21,10 +21,13 @@ import { RoundOverScreen } from '@/features/ddz/components/RoundOverScreen';
 import { AnimatePresence } from 'framer-motion';
 import { HeavenFinale } from '@/features/ddz/components/effects/HeavenFinale';
 import { KuroFinale } from '@/features/ddz/components/effects/KuroFinale';
+import { VergilFinale } from '@/features/ddz/components/effects/VergilFinale';
 import { HitBanner } from '@/features/ddz/components/effects/HitBanner';
 import { GodBubble } from '@/features/ddz/components/effects/GodBubble';
 import { coldOpenFor, playSeq, useHeavenFinale } from '@/features/ddz/heavenFinale';
 import { useKuroFinale } from '@/features/ddz/kuroFinale';
+import { useVergilFinale } from '@/features/ddz/vergilFinale';
+import { warmFinaleClips } from '@/features/ddz/warmFinale';
 import { useHitEvents } from '@/features/ddz/useHitEvents';
 import type { PlayOrigin } from '@/features/ddz/components/PlayArea';
 import { EmojiChatBox } from '@/components/EmojiChatBox';
@@ -121,12 +124,32 @@ function DdzPlayInner() {
   // — unmounting the board — while it is still playing.
   const heaven = useHeavenFinale(gameState);
 
+  // Both finales begin on the winning play with nothing in front of them, so
+  // the clips are fetched at the start of the round instead — minutes before
+  // anything could want them, once per session rather than once per round.
+  useEffect(() => {
+    if (phase === 'lobby') return;
+    warmFinaleClips();
+  }, [phase]);
+
   // ── 黑棺 ────────────────────────────────────────────────────────────────
   // Winning the round on a play taken off the other side. It outranks the two
   // above and replaces them, and it is the only effect that hands the result
   // screen on rather than merely getting out of its way: the screen mounts
   // behind the closed shutter and is revealed already settled.
   const { state: kuro, closeShutter, plateMaxMs } = useKuroFinale(gameState);
+
+  // ── 閻魔刀 ───────────────────────────────────────────────────────────────
+  // The other way a round can be taken outright: everyone passed, the winner
+  // led again and was out, and nobody was ever given a turn that mattered. It
+  // ranks with 黑棺 and can never collide with it — 黑棺 needs the winning play
+  // to have beaten an enemy, this one needs it to have beaten nobody.
+  //
+  // Unlike every other finale it outlives its own blocking window: the result
+  // screen goes up over the clip at eleven seconds, the server resets the room
+  // at twelve, and the clip plays on — hidden once the room is a lobby again,
+  // audible until it ends or the end screen is dismissed.
+  const { state: vergil, end: endVergil, plateMaxMs: vergilMaxMs } = useVergilFinale(gameState);
   /**
    * Seat index → where that player sits on this screen.
    *
@@ -142,7 +165,7 @@ function DdzPlayInner() {
   };
 
   /** Anything still playing that the result screen must not cut off. */
-  const banners = kuro.blocking || heaven.blocking || !!hitEvent || !!preroll;
+  const banners = kuro.blocking || vergil.blocking || heaven.blocking || !!hitEvent || !!preroll;
 
   /*
    * Hold the table through a cold open.
@@ -292,6 +315,13 @@ function DdzPlayInner() {
         seatOf={seatOf}
         onPlateEnd={closeShutter}
         plateMaxMs={plateMaxMs}
+      />
+      {/* The picture goes when the room does; the sound plays on. */}
+      <VergilFinale
+        state={vergil}
+        hidden={phase === 'lobby'}
+        onEnd={endVergil}
+        plateMaxMs={vergilMaxMs}
       />
 
       {/* Sits above both the board and the in-room lobby, so it survives the

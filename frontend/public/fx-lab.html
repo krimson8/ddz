@@ -267,6 +267,64 @@ h1 { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: c
   filter: contrast(1.18) brightness(1.04) saturate(1.08) url(#kuro-luma);
 }
 
+/* ── 無量空処 — domain plate ────────────────────────────────────────────────
+   The clip's black is dropped for its whole length; its white is dropped for
+   the head alone. Two different problems, which is why they get two different
+   spans. Black is the clip's own field — it is there in every frame and always
+   wants to be the felt, so #black-key wears the whole 13.2s. White is one
+   event: domain_gojo.mp4 opens on a held flash that would blow out a dark
+   table, and it is over by 1.9s. Past that the white is the piece — the strokes
+   and the blown highlights in the back half — so #void-key, which cuts both
+   ends, comes off at DOMAIN_KEY_MS and hands over to the black-only curve.
+
+   Nothing is laid under the clip either, so what the keyed-out ends resolve to
+   is the table. The plate is a hologram over the board rather than a picture in
+   front of it — the flash costs the page nothing, the domain's black field
+   takes the felt rather than covering it, and the cards stay readable
+   throughout. An earlier pass backed the plate with black, which honoured the
+   key but read as a blackout.
+
+   contrast() runs ahead of both keys for the same reason 黑棺 does it: a knee
+   is cut where real black or real white is, and compression noise sits just
+   inside both. Pushing the ends out first is what keeps the floor from
+   speckling and the flash from ghosting.
+
+   16:9 into a 16:9 stage, so cover fits edge to edge with nothing cropped —
+   unlike 黑棺, which is square and has to be contained. */
+.domain { position: absolute; inset: 0; overflow: hidden; animation: domainIn 420ms ease-out both; }
+.domain video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  filter: contrast(1.16) saturate(1.15) url(#black-key);
+}
+/* Worn over the head, dropped at the mark — see armDomainKeyOff. */
+.domain.keyed video { filter: contrast(1.16) saturate(1.15) url(#void-key); }
+.domain.out { animation: domainOut var(--od, 700ms) ease-in both; }
+@keyframes domainIn  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes domainOut { from { opacity: 1 } to { opacity: 0 } }
+
+/* ── 閻魔刀 — vergil plate ──────────────────────────────────────────────────
+   Two clips joined into one file, and the join is the whole design. The first
+   3.15s were shot on a green screen, so they are keyed and Vergil stands on
+   the table itself; from 3.15s on it is real footage with no green in it at
+   all — 0% by measurement — so the key comes off and the picture takes the
+   whole stage. One <video>, one plate, and a switch at VERGIL_KEY_MS.
+
+   Nothing sits under it, as with 無量空処: the keyed-out green resolves to the
+   felt, not to a backdrop of ours. The fades are 無量空処's, reused rather than
+   restated — a plate coming or going is the same motion whichever clip is in
+   it. */
+.vergil { position: absolute; inset: 0; overflow: hidden; animation: domainIn 420ms ease-out both; }
+.vergil video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+/* Worn over the green half only — see armKeyOff. */
+.vergil.keyed video { filter: saturate(1.06) url(#green-key); }
+.vergil.out { animation: domainOut var(--od, 700ms) ease-in both; }
+
 /* ── Shutter ───────────────────────────────────────────────────────────────
    Two black leaves driven in from the edges, held shut, then drawn back out.
    Each leaf is a full-height half that translates by its own width, so the
@@ -593,6 +651,74 @@ input[type=range]:focus-visible { outline: 2px solid var(--c2); outline-offset: 
     </filter>
   </svg>
 
+  <!-- The two keys 無量空処 wears, in the order it wears them. Both are the
+       same two passes — brightness into alpha, then a curve over it — and both
+       use equal weights, unlike 黑棺's: that one keys black only, so it can
+       afford to over-weight green and keep faint violet strokes solid. #void-key
+       cuts at both ends, and a knee has to sit where it says it does, which
+       only true luminance manages.
+
+       17 stops each, one per sixteenth of luma. They share a low end — 0 at
+       black, full by 0.25 — and differ only above 0.8125, where #void-key falls
+       back to 0 at white and #black-key stays flat. So the swap at DOMAIN_KEY_MS
+       gives the white back and touches nothing else. The rises are gradual on
+       purpose: a hard step would tear the edge of every stroke into a jagged
+       matte. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="void-key" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0.34 0.34 0.34 0 0"/>
+      <feComponentTransfer>
+        <feFuncA type="table"
+          tableValues="0 0.18 0.45 0.7 0.88 0.97 1 1 1 1 1 1 1 1 0.7 0.3 0"/>
+      </feComponentTransfer>
+    </filter>
+    <filter id="black-key" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0.34 0.34 0.34 0 0"/>
+      <feComponentTransfer>
+        <feFuncA type="table"
+          tableValues="0 0.18 0.45 0.7 0.88 0.97 1 1 1 1 1 1 1 1 1 1 1"/>
+      </feComponentTransfer>
+    </filter>
+  </svg>
+
+  <!-- Green screen → transparent for 閻魔刀. The other two keys measure
+       brightness; this one measures GREEN DOMINANCE, which is what actually
+       separates a backdrop from a subject: alpha = 1 + 0.7R − 1.4G + 0.7B, so
+       a pixel disappears only when green outruns both other channels. The
+       backdrop measures a flat (0,205,3) — every pixel of frame one identical,
+       a rendered green rather than a lit one — which lands at −0.12 and clamps
+       to nothing, while Vergil's blue coat, white hair and black leather all
+       sit at or above 1. A luma key could not tell any of that apart.
+
+       The green row of the matrix is the despill: G is pulled back to 0.85 and
+       the missing 0.15 is made up from R and B, which kills the green rim that
+       a matte leaves on hair and shoulders. It tints the whole frame slightly,
+       which costs nothing on a palette with no green in it.
+
+       The table then firms the matte up — the shoulders of the curve are where
+       edge softness lives, so raise the middle stops for a harder cut, lower
+       them for a softer one. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="green-key" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix"
+        values="1 0 0 0 0
+                0.075 0.85 0.075 0 0
+                0 0 1 0 0
+                0.7 -1.4 0.7 0 1"/>
+      <feComponentTransfer>
+        <feFuncA type="table" tableValues="0 0.05 0.3 0.7 0.95 1 1 1 1"/>
+      </feComponentTransfer>
+    </filter>
+  </svg>
+
   <div class="toolbar">
     <button id="replay">↻ Replay last</button>
     <button id="rapid">Rapid fire ×6</button>
@@ -602,6 +728,8 @@ input[type=range]:focus-visible { outline: 2px solid var(--c2); outline-offset: 
     <button id="godIntro" aria-pressed="true">火箭 cold open</button>
     <button id="heaven">天堂製造 finale</button>
     <button id="kuro">黑棺 video</button>
+    <button id="domain">無量空処 domain</button>
+    <button id="vergil">閻魔刀 vergil</button>
     <button id="stopMusic">■ Stop music</button>
 
     <span class="bench">
@@ -898,7 +1026,7 @@ PLAYS.forEach(p => {
 });
 
 /* Base64 tier stingers, injected at build time. */
-const AUDIO = {"tier-1":"sounds/tier-1.wav","tier-2":"sounds/tier-2.wav","tier-3":"sounds/tier-3.wav","tier-4":"sounds/tier-4.wav","tier-5":"sounds/tier-5.wav","tier-6":"sounds/tier6.mp3","tier-7":"sounds/tier7.mp3","tier-comeback":"sounds/tier-comeback.mp3","tier-friendly":"sounds/traitor.mp3","kamida":"sounds/kamida.mp3","godhand":"sounds/god_hand_impact.mp3","heavencue":"sounds/made_in_heaven.mp3","heaventrack":"sounds/crucified_full.mp3","kyoka":"sounds/kyoka.mp3","voissur":"sounds/vois_sur.mp3"};
+const AUDIO = {"tier-1":"sounds/tier-1.wav","tier-2":"sounds/tier-2.wav","tier-3":"sounds/tier-3.wav","tier-4":"sounds/tier-4.wav","tier-5":"sounds/tier-5.wav","tier-6":"sounds/tier6.mp3","tier-7":"sounds/tier7.mp3","tier-comeback":"sounds/tier-comeback.mp3","tier-friendly":"sounds/traitor.mp3","kamida":"sounds/kamida.mp3","godhand":"sounds/god_hand_impact.mp3","heavencue":"sounds/made_in_heaven.mp3","heaventrack":"sounds/crucified_full.mp3","kyoka":"sounds/kyoka.mp3","voissur":"sounds/vois_sur.mp3","saikyo":"sounds/saikyo.mp3"};
 
 const stage   = document.getElementById('stage');
 const fx      = document.getElementById('fx');
@@ -1048,6 +1176,8 @@ function fire(p) {
   curSpeed = sp;
   stage.style.setProperty('--speed', sp);
   stopKuro();
+  stopDomain();
+  stopVergil();
   fx.innerHTML = '';
   cancelPreroll();                     // a newer play supersedes the wind-up
   fx.dataset.tier = tier;
@@ -1484,7 +1614,7 @@ slowBtn.addEventListener('click', () => { slowMo = !slowMo; slowBtn.setAttribute
 const slamBtn = document.getElementById('withSlam');
 slamBtn.addEventListener('click', () => { withSlam = !withSlam; slamBtn.setAttribute('aria-pressed', String(withSlam)); });
 
-document.getElementById('stopMusic').addEventListener('click', () => { stopMusic(); stopKuro(); });
+document.getElementById('stopMusic').addEventListener('click', () => { stopMusic(); stopKuro(); stopDomain(); stopVergil(); });
 
 
 /* ── 天堂製造 ──────────────────────────────────────────────────────────────
@@ -1541,6 +1671,8 @@ function fireHeaven() {
   hush();
   stopMusic();
   stopKuro();
+  stopDomain();
+  stopVergil();
   fx.innerHTML = '';
   stage.style.setProperty('--speed', 1);
   curSpeed = 1;
@@ -1748,6 +1880,8 @@ function fireKuro() {
   hush();
   stopMusic();
   stopKuro();
+  stopDomain();
+  stopVergil();
   fx.innerHTML = '';
   stage.style.setProperty('--speed', 1);
   curSpeed = 1;
@@ -1797,6 +1931,240 @@ function fireKuro() {
 }
 
 document.getElementById('kuro').addEventListener('click', fireKuro);
+
+/* ── 無量空処 ──────────────────────────────────────────────────────────────
+   The third of the video finales, and the plainest of the three: no banner, no
+   shake, no bed running underneath. Two beats and nothing else.
+
+     1. the seat says 大丈夫、僕最強だから over saikyo.mp3, table held still
+     2. saikyo ends → the domain opens, and the clip's own audio carries it
+
+   The join is the cue's own 'ended' with a timer behind it, the same shape 火箭
+   and 黑棺 use: an <audio> that was refused, muted or never loaded still has to
+   hand the round on. And unlike 黑棺 the clip is NOT silenced — its track is
+   the piece, so it plays out loud and the finale is over when it stops. */
+const DOMAIN_SRC = 'video/domain_gojo.mp4';
+const SAIKYO_LINE = '大丈夫、僕最強だから';
+const SAIKYO_CUE_MS = 3900;        // saikyo.mp3 is 3.6s, plus room to breathe
+const DOMAIN_FADE_MS = 700;        // the way back to the table
+
+/* How long the WHITE half of the key is worn, on the CLIP'S OWN timeline. The
+   flash holds flat to 1.3s and has broken up by 1.9s, where the frame measures
+   99.6% fully opaque through the key — so 2.0s clears it with margin. The black
+   half is not on a clock; it runs to the end. */
+const DOMAIN_KEY_MS = 2000;
+let domainEl = null;
+
+function stopDomain() {
+  if (!domainEl) return;
+  // A detached <video> keeps playing, so pause before dropping it.
+  domainEl.pause();
+  domainEl.parentElement?.remove();
+  domainEl = null;
+}
+
+/**
+ * Take a plate's `keyed` class off at a mark on the CLIP'S OWN timeline.
+ *
+ * Shared by the two plates that only wear a key for part of their run: 無量空処
+ * drops the white half of its key at 2.0s, 閻魔刀 drops the green screen at
+ * 3.15s. `isLive` is how each one says whether the video handed in is still the
+ * one on screen, since a newer play must not be able to strip a later plate.
+ *
+ * Same two-track shape as 黑棺's unmute, and for the same reason: the frame
+ * callback lands the switch on the first frame at or past the mark while the
+ * tab is compositing, and is silent when it is not — so a self-correcting
+ * timer runs alongside it, converting the source time still to go into wall
+ * time on every tick rather than counting down from one reading.
+ */
+function armKeyOff(v, layer, atMs, isLive) {
+  let done = false;
+
+  const off = () => {
+    if (done || !isLive()) return;
+    done = true;
+    layer.classList.remove('keyed');
+  };
+
+  if ('requestVideoFrameCallback' in v) {
+    const onFrame = (now, meta) => {
+      if (done || !isLive()) return;
+      if (meta.mediaTime * 1000 >= atMs) return off();
+      v.requestVideoFrameCallback(onFrame);
+    };
+    v.requestVideoFrameCallback(onFrame);
+  }
+
+  const tick = () => {
+    if (done || !isLive()) return;
+    if (v.paused) { setTimeout(tick, 100); return; }   // stalled; nothing to converge on
+    const leftMs = atMs - v.currentTime * 1000;
+    if (leftMs <= 0) return off();
+    setTimeout(tick, leftMs > 30 ? leftMs - 20 : 0);
+  };
+  tick();
+}
+
+/** The plate itself, once the line has been said. */
+function domainPlate() {
+  fx.innerHTML = '';
+  fx.dataset.tier = 'domain';
+
+  const layer = document.createElement('div');
+  layer.className = 'domain keyed';
+  const v = document.createElement('video');
+  v.src = DOMAIN_SRC;
+  v.playsInline = true;            // iOS would otherwise yank it fullscreen
+  // Loud by default: this clip's audio is the finale's second half, which is
+  // the one difference from 黑棺, where the video runs silent under kyoka.
+  v.muted = !soundOn;
+  layer.appendChild(v);
+  fx.appendChild(layer);
+  domainEl = v;
+
+  v.addEventListener('loadedmetadata', () => {
+    if (domainEl !== v || !isFinite(v.duration) || v.duration <= 0) return;
+    readout.innerHTML = `<b>無量空処</b> · video plate · ${v.duration.toFixed(2)}s` +
+      ` <span style="opacity:.6">(black keyed out throughout, white to` +
+      ` ${(DOMAIN_KEY_MS / 1000).toFixed(1)}s, clip audio 1×)</span> · no shake`;
+  }, { once: true });
+  // The white half comes off at the mark; the black half runs to the end.
+  armKeyOff(v, layer, DOMAIN_KEY_MS, () => domainEl === v);
+
+  // Ends when the clip ends — which is when its audio ends. One fade back
+  // rather than the shutter 黑棺 closes on: there is nothing still running
+  // underneath for leaves to close over.
+  v.addEventListener('ended', () => {
+    if (domainEl !== v) return;
+    layer.style.setProperty('--od', DOMAIN_FADE_MS + 'ms');
+    layer.classList.add('out');
+    setTimeout(() => {
+      if (domainEl !== v) return;    // superseded by a newer play
+      stopDomain();
+      if (fx.dataset.tier === 'domain') fx.innerHTML = '';
+      readout.innerHTML = '<b>無量空処</b> · done';
+    }, DOMAIN_FADE_MS);
+  }, { once: true });
+
+  // Sound without a gesture is refused on some browsers even after a click;
+  // carry on silent rather than freeze on a black plate.
+  v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+}
+
+function fireDomain() {
+  cancelPreroll();
+  hush();
+  stopMusic();
+  stopKuro();
+  stopDomain();
+  stopVergil();
+  fx.innerHTML = '';
+  stage.style.setProperty('--speed', 1);
+  curSpeed = 1;
+  readout.innerHTML = `<b>無量空処</b> · <span style="color:#a5b4fc">僕最強だから…</span>`;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = SAIKYO_LINE;
+  stage.appendChild(bubble);
+
+  const a = cue(AUDIO.saikyo);
+  const go = () => {
+    prerollPending = null;
+    a?.removeEventListener('ended', go);
+    clearTimeout(timer);
+    bubble.classList.add('out');
+    setTimeout(() => bubble.remove(), 220);
+    domainPlate();
+  };
+  const wait = a && isFinite(a.duration) && a.duration > 0
+    ? Math.max(SAIKYO_CUE_MS, a.duration * 1000 + 300)
+    : SAIKYO_CUE_MS;
+  const timer = setTimeout(go, wait);
+  a?.addEventListener('ended', go, { once: true });
+  prerollPending = {
+    cancel: () => {
+      a?.removeEventListener('ended', go);
+      a?.pause();
+      clearTimeout(timer);
+      bubble.remove();
+    },
+  };
+}
+
+document.getElementById('domain').addEventListener('click', fireDomain);
+
+/* ── 閻魔刀 ──────────────────────────────────────────────────────────────────
+   The bluntest of the video finales: no line, no cue, no bed — the clip is the
+   whole piece. It carries its own audio and its own two halves, and the only
+   thing this page decides is when to stop keying.
+
+   vergil.bury.mp4 is two cuts joined by scripts in public/video: 3.15s of green
+   screen, then 2.97s of footage. Keyed, the first half is Vergil standing on
+   the table; unkeyed, the second takes the stage whole. Re-cutting either half
+   means re-running make-clips.mjs and moving the mark below to match. */
+const VERGIL_SRC = 'video/vergil.bury.mp4';
+const VERGIL_KEY_MS = 3150;        // end of the green-screen half, in clip time
+const VERGIL_FADE_MS = 700;        // the way back to the table
+let vergilEl = null;
+
+function stopVergil() {
+  if (!vergilEl) return;
+  // A detached <video> keeps playing, so pause before dropping it.
+  vergilEl.pause();
+  vergilEl.parentElement?.remove();
+  vergilEl = null;
+}
+
+function fireVergil() {
+  cancelPreroll();
+  hush();
+  stopMusic();
+  stopKuro();
+  stopDomain();
+  stopVergil();
+  fx.innerHTML = '';
+  stage.style.setProperty('--speed', 1);
+  curSpeed = 1;
+
+  const layer = document.createElement('div');
+  layer.className = 'vergil keyed';
+  const v = document.createElement('video');
+  v.src = VERGIL_SRC;
+  v.playsInline = true;            // iOS would otherwise yank it fullscreen
+  v.muted = !soundOn;              // the clip's own track is the piece
+  layer.appendChild(v);
+  fx.dataset.tier = 'vergil';
+  fx.appendChild(layer);
+  vergilEl = v;
+
+  v.addEventListener('loadedmetadata', () => {
+    if (vergilEl !== v || !isFinite(v.duration) || v.duration <= 0) return;
+    readout.innerHTML = `<b>閻魔刀</b> · video plate · ${v.duration.toFixed(2)}s` +
+      ` <span style="opacity:.6">(green keyed to ${(VERGIL_KEY_MS / 1000).toFixed(2)}s,` +
+      ` clip audio 1×)</span> · no shake`;
+  }, { once: true });
+  armKeyOff(v, layer, VERGIL_KEY_MS, () => vergilEl === v);
+
+  v.addEventListener('ended', () => {
+    if (vergilEl !== v) return;
+    layer.style.setProperty('--od', VERGIL_FADE_MS + 'ms');
+    layer.classList.add('out');
+    setTimeout(() => {
+      if (vergilEl !== v) return;    // superseded by a newer play
+      stopVergil();
+      if (fx.dataset.tier === 'vergil') fx.innerHTML = '';
+      readout.innerHTML = '<b>閻魔刀</b> · done';
+    }, VERGIL_FADE_MS);
+  }, { once: true });
+
+  // Sound without a gesture is refused on some browsers even after a click;
+  // carry on silent rather than freeze on the first frame.
+  v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+  readout.innerHTML = `<b>閻魔刀</b> · <span style="color:#93c5fd">…</span>`;
+}
+
+document.getElementById('vergil').addEventListener('click', fireVergil);
 
 const godBtn = document.getElementById('godIntro');
 godBtn.addEventListener('click', () => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
+import { sfx } from '@/features/ddz/sfx';
 import { GodBubble } from './GodBubble';
 import {
   KURO_TARGET_MS,
@@ -114,7 +115,12 @@ function KuroPlate({ onEnd, maxMs }: { onEnd: () => void; maxMs: number }) {
       // of cards is activation, so this is belt and braces — and if the audio
       // really is refused, carry on silent rather than freeze on the mark.
       if (v.paused) {
-        v.play().catch(() => {
+        v.play().catch((err: DOMException) => {
+          // Only NotAllowedError is the policy refusing sound. An interrupted
+          // play — AbortError, raised by any pause() that lands on top of it —
+          // would otherwise mute the clip for the rest of its run. See the
+          // same guard in VergilFinale.tsx, where StrictMode made it bite.
+          if (err?.name !== 'NotAllowedError') return;
           v.muted = true;
           v.play().catch(() => {});
         });
@@ -148,6 +154,11 @@ function KuroPlate({ onEnd, maxMs }: { onEnd: () => void; maxMs: number }) {
       tick();
     };
 
+    // The clip's own track is the loudest thing in the game and was the one
+    // sound the settings slider never reached. It follows the master volume
+    // from here; muted is still muted until the mark flips it.
+    const detach = sfx.attachMedia(v);
+
     v.addEventListener('loadedmetadata', onMeta, { once: true });
     v.addEventListener('ended', finish, { once: true });
     // A clip that cannot play at all still has to hand the round back.
@@ -158,6 +169,7 @@ function KuroPlate({ onEnd, maxMs }: { onEnd: () => void; maxMs: number }) {
     return () => {
       clearTimeout(ceiling);
       if (hop) clearTimeout(hop);
+      detach();
       v.removeEventListener('loadedmetadata', onMeta);
       v.removeEventListener('ended', finish);
       v.removeEventListener('error', finish);

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { sfx } from '@/features/ddz/sfx';
 import { LEVEL_LABEL, playSeq } from '@/features/ddz/hitTier';
 import { kuroWin } from '@/features/ddz/kuroFinale';
+import { vergilWin } from '@/features/ddz/vergilFinale';
 import { bannerPlan } from '@/features/ddz/components/effects/HitBanner';
 import { GOD_CUE_MS } from '@/features/ddz/useHitEvents';
 import type { GameState, HistoryEntry } from '@/features/ddz/types';
@@ -85,6 +86,13 @@ export function coldOpenFor(
   // 黑棺 first: it replaces both of the others when it answers, so asking in
   // any other order would hold the table for a cold open that never comes.
   if (kuroWin(upto, cardCounts, landlordIndex)) return 'kuro';
+  // 閻魔刀 replaces the two below on the same terms — but it is not a cold open
+  // and must answer null, not 'kuro'. It has no line to wait through: the clip
+  // starts on the winning play and covers the table a frame later. Answering
+  // anything else here would hold the winning cards for a cue that never comes,
+  // and the rocket check below would claim a winning 火箭 that has already
+  // stood down. See vergilFinale.ts.
+  if (vergilWin(upto, cardCounts)) return null;
   if ((history[i].play.type as string) === 'rocket') return 'rocket';
   // heavenWin reads the newest entry, so ask it about the history as it stood
   // when that play landed.
@@ -144,6 +152,8 @@ export function useHeavenFinale(gameState: GameState): HeavenState {
     // 黑棺 outranks this and replaces it outright — a win taken off an enemy
     // is not also a 天堂製造, however few turns it took.
     if (kuroWin(history, counts, gameState.landlordIndex)) return;
+    // Nor is an unanswerable win a 天堂製造, however few turns it took.
+    if (vergilWin(history, counts)) return;
 
     const win = heavenWin(history, counts);
     if (!win) return;

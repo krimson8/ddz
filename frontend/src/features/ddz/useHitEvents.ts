@@ -6,6 +6,7 @@ import { hitLevel, labelFor, musicTrack, musicWeight, type HitLevel } from '@/fe
 import { bannerPlan, type Beat, type HitEvent } from '@/features/ddz/components/effects/HitBanner';
 import { heavenWin, playSeq } from '@/features/ddz/heavenFinale';
 import { kuroWin } from '@/features/ddz/kuroFinale';
+import { vergilWin } from '@/features/ddz/vergilFinale';
 import type { GameState } from '@/features/ddz/types';
 
 /**
@@ -145,6 +146,9 @@ export function useHitEvents(gameState: GameState) {
     // takes the whole moment, so nothing here fires — no banner, no knock, no
     // tier music, and no cold open either. See kuroFinale.ts.
     if (kuroWin(history, gameState.playerCardCounts, landlordIndex)) return;
+    // 閻魔刀 takes the moment on the same terms: a win nobody was given the
+    // chance to answer. See vergilFinale.ts.
+    if (vergilWin(history, gameState.playerCardCounts)) return;
 
     // A six-turn win takes the moment for itself: no banner, no tier music, no
     // knock — the table goes quiet and 天堂製造 opens. A 火箭 is the exception,

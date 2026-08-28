@@ -120,6 +120,7 @@ class SfxBus {
     }
     for (const a of this.oneShots.values()) a.volume = clamped;
     if (this.music) this.music.volume = clamped;
+    for (const [el, gain] of this.medias) el.volume = clamped * gain;
     try {
       localStorage.setItem(VOLUME_KEY, String(clamped));
     } catch {
@@ -259,7 +260,7 @@ class SfxBus {
   // keeps going straight through the end of the round. Only something that
   // outranks it can cut it off, which is what makes "a bigger bomb restarts it"
   // and "a rocket answers a bomb" fall out of one comparison.
-  private music: HTMLAudioElement | null = null;
+  private music: HTMLMediaElement | null = null;
   private musicWeight = -1;
 
   /**
@@ -376,6 +377,50 @@ class SfxBus {
     const m = this.music;
     if (!m || m.paused || m.ended || !Number.isFinite(m.duration)) return 0;
     return Math.max(0, m.duration - m.currentTime);
+  }
+
+  // ── Video plates ──────────────────────────────────────────────────────────
+  // A finale's clip carries its own audio, and that audio never came through
+  // this bus — so the settings slider moved every sound in the game except the
+  // loudest one in it. An attached element follows the master volume like any
+  // pooled cue, for as long as it is mounted.
+  private medias = new Map<HTMLMediaElement, number>();
+
+  /**
+   * Put a media element under the master volume. Returns the detach function,
+   * which a component's cleanup must call — a <video> that has been unmounted
+   * is not garbage until this map lets go of it.
+   */
+  attachMedia(el: HTMLMediaElement, gain = 1): () => void {
+    this.init();
+    this.medias.set(el, gain);
+    el.volume = this.volume * gain;
+    return () => { this.medias.delete(el); };
+  }
+
+  /**
+   * Hand the music slot to a clip that carries its own track.
+   *
+   * The long tier pieces are files this bus opens itself, but 閻魔刀's music is
+   * inside its video, and the end of the round asks the same three questions
+   * about it: is something still playing, how much is left, and stop it. Giving
+   * the element the slot answers all three without a second channel — the end
+   * screen's dismiss already calls stopMusic(), which now reaches a video too.
+   */
+  adoptMedia(el: HTMLMediaElement, weight: number): void {
+    this.init();
+    this.stopMusic();
+    this.music = el;
+    this.musicWeight = weight;
+    el.volume = this.volume;
+    el.addEventListener('ended', () => {
+      if (this.music === el) {
+        this.music = null;
+        this.musicWeight = -1;
+        this.setDuck(false);
+      }
+    }, { once: true });
+    this.setDuck(true);
   }
 
   /** Warm the cache for files that are not SOUNDS keys (emoji clips). */

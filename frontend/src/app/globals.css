@@ -408,6 +408,31 @@ body {
      One element, two animations. The second carries `forwards` rather than
      `both` — with `both` its backwards fill would paint the closed state
      during the delay and clobber the close it is waiting on. */
+  /* ── 閻魔刀 ───────────────────────────────────────────────────────────────
+     Above every part of the game and below the result screen (z-90), which is
+     the one thing allowed to sit on top of it. Same z as the 黑棺 plate: the
+     two finales are mutually exclusive and never share a screen.
+
+     16:9 into whatever shape the window is, so `cover` rather than 黑棺's
+     `contain` — that clip is square and would be cropped to nothing.
+
+     `is-hidden` is the room moving on without the sound moving on with it: the
+     element stays mounted and playing, and only the picture goes. Opacity, not
+     display or visibility — a display:none video is free to stop decoding, and
+     the audio is the half being kept. */
+  .vergil-plate {
+    position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 75;
+    transition: opacity 420ms ease;
+  }
+  .vergil-plate video {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  /* Worn over the green-screen half only — see VergilFinale.tsx. */
+  .vergil-plate.keyed video { filter: saturate(1.06) url(#vergil-green-key); }
+  .vergil-plate.is-hidden { opacity: 0; }
+
   .kuro-shutter { position: fixed; inset: 0; pointer-events: none; z-index: 95; }
   .kuro-leaf {
     position: absolute; top: 0; bottom: 0; width: 51%; background: #000;
