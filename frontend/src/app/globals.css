@@ -416,13 +416,11 @@ body {
      16:9 into whatever shape the window is, so `cover` rather than 黑棺's
      `contain` — that clip is square and would be cropped to nothing.
 
-     `is-hidden` is the room moving on without the sound moving on with it: the
-     element stays mounted and playing, and only the picture goes. Opacity, not
-     display or visibility — a display:none video is free to stop decoding, and
-     the audio is the half being kept. */
+     It stays up through the server's reset and over the lobby behind it. The
+     result screen is what covers it, and dismissing that is what ends it — so
+     nothing here has to know the room has moved on. */
   .vergil-plate {
     position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 75;
-    transition: opacity 420ms ease;
   }
   .vergil-plate video {
     position: absolute; inset: 0;
@@ -431,7 +429,6 @@ body {
   }
   /* Worn over the green-screen half only — see VergilFinale.tsx. */
   .vergil-plate.keyed video { filter: saturate(1.06) url(#vergil-green-key); }
-  .vergil-plate.is-hidden { opacity: 0; }
 
   .kuro-shutter { position: fixed; inset: 0; pointer-events: none; z-index: 95; }
   .kuro-leaf {

@@ -147,8 +147,9 @@ function DdzPlayInner() {
   //
   // Unlike every other finale it outlives its own blocking window: the result
   // screen goes up over the clip at eleven seconds, the server resets the room
-  // at twelve, and the clip plays on — hidden once the room is a lobby again,
-  // audible until it ends or the end screen is dismissed.
+  // at twelve, and the clip plays straight through both. The lobby is behind it
+  // the whole time and is not seen until the result screen is dismissed, which
+  // is also what stops the clip.
   const { state: vergil, end: endVergil, plateMaxMs: vergilMaxMs } = useVergilFinale(gameState);
   /**
    * Seat index → where that player sits on this screen.
@@ -316,13 +317,7 @@ function DdzPlayInner() {
         onPlateEnd={closeShutter}
         plateMaxMs={plateMaxMs}
       />
-      {/* The picture goes when the room does; the sound plays on. */}
-      <VergilFinale
-        state={vergil}
-        hidden={phase === 'lobby'}
-        onEnd={endVergil}
-        plateMaxMs={vergilMaxMs}
-      />
+      <VergilFinale state={vergil} onEnd={endVergil} plateMaxMs={vergilMaxMs} />
 
       {/* Sits above both the board and the in-room lobby, so it survives the
           server's return_to_lobby without blocking it. It also waits its turn:

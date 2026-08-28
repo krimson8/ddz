@@ -19,25 +19,22 @@ import {
  * Rendered at page level beside the result screen rather than inside the board,
  * because the server resets the room — and unmounts the board — twelve seconds
  * into a clip that runs for thirty.
+ *
+ * It does not get out of the way when that happens. The room going back to a
+ * lobby is not the player being done with the round: the clip stays up over the
+ * top of it, and the first thing they actually see of the lobby is whatever is
+ * there after they dismiss the result screen. The button is the ending, not the
+ * server's timer.
  */
-export function VergilFinale({ state, hidden, onEnd, plateMaxMs }: {
+export function VergilFinale({ state, onEnd, plateMaxMs }: {
   state: VergilState;
-  /**
-   * The room has moved on. The picture goes; the sound stays.
-   *
-   * Lobby is a different screen, and a video finale hanging over it would be
-   * nonsense — but its music is the same music a tier track leaves running,
-   * and that is allowed to play out. So the plate keeps playing, invisibly,
-   * until it ends or the end screen's button stops it.
-   */
-  hidden: boolean;
   /** The clip is done with — finished, stopped, or given up on. */
   onEnd: () => void;
   /** Ceiling for a clip that never reports itself finished. */
   plateMaxMs: number;
 }) {
   if (state.phase !== 'plate') return null;
-  return <VergilPlate hidden={hidden} onEnd={onEnd} maxMs={plateMaxMs} />;
+  return <VergilPlate onEnd={onEnd} maxMs={plateMaxMs} />;
 }
 
 /**
@@ -47,8 +44,7 @@ export function VergilFinale({ state, hidden, onEnd, plateMaxMs }: {
  * under a spoken line. Autoplay policy is satisfied because a round of cards is
  * user activation, and the catch below covers the case where it is not.
  */
-function VergilPlate({ hidden, onEnd, maxMs }: {
-  hidden: boolean;
+function VergilPlate({ onEnd, maxMs }: {
   onEnd: () => void;
   maxMs: number;
 }) {
@@ -166,10 +162,7 @@ function VergilPlate({ hidden, onEnd, maxMs }: {
   }, [onEnd, maxMs]);
 
   return (
-    <div
-      className={`vergil-plate${keyed ? ' keyed' : ''}${hidden ? ' is-hidden' : ''}`}
-      aria-hidden="true"
-    >
+    <div className={`vergil-plate${keyed ? ' keyed' : ''}`} aria-hidden="true">
       {/*
         Green screen → transparent. The other keys in this game measure
         brightness; this one measures GREEN DOMINANCE, which is what actually
