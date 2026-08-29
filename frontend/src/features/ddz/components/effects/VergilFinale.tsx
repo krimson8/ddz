@@ -122,9 +122,15 @@ function VergilPlate({ onEnd, maxMs }: {
      * the slot — this clip. A pause that is not the clip finishing is therefore
      * the signal to take the plate down. Buffering does not come through here;
      * it raises 'waiting', not 'pause'.
+     *
+     * Nothing about currentTime is asked, and that matters: pause() QUEUES this
+     * event rather than firing it, so anything the stopper does on its next
+     * line — stopMusic used to rewind to zero — has already happened by the
+     * time we look. Guarding on currentTime > 0 therefore read 0, decided this
+     * was not a real stop, and left the plate up showing frame one.
      */
     const onPause = () => {
-      if (!v.ended && v.currentTime > 0) finish();
+      if (!v.ended) finish();
     };
 
     v.addEventListener('ended', finish, { once: true });

@@ -262,6 +262,8 @@ class SfxBus {
   // and "a rocket answers a bomb" fall out of one comparison.
   private music: HTMLMediaElement | null = null;
   private musicWeight = -1;
+  /** True when the slot holds someone else's element rather than one of ours. */
+  private musicAdopted = false;
 
   /**
    * Start a track. Replaces whatever is running when the incoming weight is at
@@ -323,10 +325,16 @@ class SfxBus {
   stopMusic(): void {
     if (this.music) {
       this.music.pause();
-      this.music.currentTime = 0;
+      // Rewind only what this bus opened. An adopted element is a video plate
+      // that is ON SCREEN, and currentTime = 0 repaints its first frame — for
+      // 閻魔刀 that is the flat green screen, unkeyed by then, painted over the
+      // whole game. Its owner is already unmounting it; leave it on its last
+      // frame for the frame or two that takes.
+      if (!this.musicAdopted) this.music.currentTime = 0;
     }
     this.music = null;
     this.musicWeight = -1;
+    this.musicAdopted = false;
     this.setDuck(false);
   }
 
@@ -412,6 +420,7 @@ class SfxBus {
     this.stopMusic();
     this.music = el;
     this.musicWeight = weight;
+    this.musicAdopted = true;
     el.volume = this.volume;
     el.addEventListener('ended', () => {
       if (this.music === el) {
