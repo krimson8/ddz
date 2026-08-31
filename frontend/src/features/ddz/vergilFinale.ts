@@ -11,8 +11,8 @@ import type { GameState, HistoryEntry } from '@/features/ddz/types';
  *
  * The other bookend to 黑棺. That one is the round taken off an enemy's play;
  * this is the round taken while the table could only watch — you led, both of
- * them passed, and it happened again, and again, the last of it your hand
- * emptied. A → 2 → K, and no one ever got a turn that mattered.
+ * them passed, and it happened again, and again, and again, the last of it your
+ * hand emptied. Four leads, and no one ever got a turn that mattered.
  *
  * 天堂製造 is the one thing that outranks it. A six-turn win is a 天堂製造 even
  * when nobody was given the chance to answer it, so where both would fire the
@@ -51,14 +51,14 @@ export const VERGIL_WEIGHT = 500;
 /**
  * How long the unanswered run has to be, the winning play included.
  *
- * A → 2 → K: three leads by one player with nothing but passes between them.
+ * 2 → A → K → 對10: four leads by one player, nothing but passes between them.
  *
  * Two is not this. Win a trick, lead your last cards — that is the ordinary way
  * a round ends, close to half of all wins, and asking only for that put the
- * clip in front of most of them. The run is what the moment is named for, so
- * the run is what it asks for.
+ * clip in front of most of them. Three was still catching ordinary rounds. The
+ * run is what the moment is named for, so the run is what it asks for.
  */
-export const VERGIL_RUN = 3;
+export const VERGIL_RUN = 4;
 
 /**
  * When the result screen is allowed through, measured from the first frame.
