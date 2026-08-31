@@ -146,15 +146,17 @@ export function useHitEvents(gameState: GameState) {
     // takes the whole moment, so nothing here fires — no banner, no knock, no
     // tier music, and no cold open either. See kuroFinale.ts.
     if (kuroWin(history, gameState.playerCardCounts, landlordIndex)) return;
-    // 閻魔刀 takes the moment on the same terms: a win nobody was given the
-    // chance to answer. See vergilFinale.ts.
-    if (vergilWin(history, gameState.playerCardCounts)) return;
 
     // A six-turn win takes the moment for itself: no banner, no tier music, no
-    // knock — the table goes quiet and 天堂製造 opens. A 火箭 is the exception,
-    // because it has a cold open of its own that is worth hearing first; the
-    // finale queues behind it. See heavenFinale.ts.
-    if (heavenWin(history, gameState.playerCardCounts) && !isRocket) return;
+    // knock — the table goes quiet and 天堂製造 opens. Settled before 閻魔刀
+    // below, which stands down for it. See heavenFinale.ts.
+    const heaven = heavenWin(history, gameState.playerCardCounts);
+    // 閻魔刀 takes the moment on the same terms, where 天堂製造 left it the win:
+    // a win nobody was given the chance to answer. See vergilFinale.ts.
+    if (!heaven && vergilWin(history, gameState.playerCardCounts)) return;
+    // A 火箭 is 天堂製造's exception, because it has a cold open of its own that
+    // is worth hearing first; the finale queues behind it.
+    if (heaven && !isRocket) return;
 
     if (!isRocket) {
       launch();

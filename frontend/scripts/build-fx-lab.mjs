@@ -46,15 +46,23 @@ const CANDIDATES = {
 };
 
 /**
- * Cues the page loads by name rather than by tier: the 火箭 cold open and the
- * impact that rides on top of the tier-7 track. Keyed bare in the audio map,
- * where the tiers are keyed `tier-N`.
+ * Cues the page loads by name rather than by tier: the 火箭 cold open, the
+ * impact that rides on top of the tier-7 track, and the table sounds the round
+ * itself makes — a card hitting the felt, a deal, the win and lose stings the
+ * result screen plays. Keyed bare in the audio map, where tiers are `tier-N`.
  */
 const EXTRA = {
   kamida: ['kamida.mp3'],
   godhand: ['god_hand_impact.mp3'],
   heavencue: ['made_in_heaven.mp3'],
   heaventrack: ['crucified_full.mp3'],
+  kyoka: ['kyoka.mp3'],
+  voissur: ['vois_sur.mp3'],
+  saikyo: ['saikyo.mp3'],
+  cardplay: ['card-play.wav'],
+  deal: ['deal.wav'],
+  win: ['win.wav'],
+  lose: ['lose.wav'],
 };
 
 /** Levels whose audio is a full music track, not a stinger. */

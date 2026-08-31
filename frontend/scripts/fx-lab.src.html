@@ -100,20 +100,92 @@ h1 { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: c
 
 .seat { position: absolute; top: 14px; display: flex; align-items: center; gap: 7px; font-size: 11px; color: rgba(255,255,255,.62); }
 .seat.left { left: 18px; } .seat.right { right: 18px; }
+.seat.self { left: 18px; top: auto; bottom: 84px; }
+.seat b { font-weight: 600; color: rgba(255,255,255,.85); font-variant-numeric: tabular-nums; }
 .pip { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: #fff; }
-.hand { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; }
-.pcard {
-  width: 42px; height: 61px; border-radius: 4px;
+/* ── Cards, hand, table ────────────────────────────────────────────────────
+   One card face, three sizes of it: in the hand, in the air, and resting on
+   the table. The game draws all three from one component too. */
+.card {
+  position: relative; flex: none;
+  width: 44px; height: 64px; border-radius: 5px; padding: 4px 4px 0;
   background: linear-gradient(160deg,#fff 0%,#fdfdfb 55%,#e9ebe4 100%);
   box-shadow: 0 3px 7px rgba(0,0,0,.45); color: #16202b;
-  font-weight: 700; font-size: 13px; padding: 3px 4px; flex: none;
+  font-family: var(--font-ui); font-weight: 700; font-size: 13px; line-height: 1;
+  overflow: hidden;
 }
-.pcard + .pcard { margin-left: -13px; }
-.pcard .suit { display: block; font-weight: 400; font-size: 11px; }
-.pcard.red { color: #d13b3b; }
+.card.red { color: #d13b3b; }
+.card .s { display: block; font-weight: 400; font-size: 11px; opacity: .85; }
+.card .pip { position: absolute; left: 0; right: 0; bottom: 5px; text-align: center; font-size: 17px; opacity: .42; }
+.card.large { width: 58px; height: 84px; border-radius: 6px; font-size: 16px; box-shadow: 0 10px 22px rgba(0,0,0,.55); }
+.card.large .s { font-size: 13px; }
+.card.large .pip { font-size: 23px; bottom: 7px; }
+.card.joker { font-family: var(--font-display); }
+/* Bombs and rockets carry a sheen across the face, as they do in game. */
+.card.sheen::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(115deg, transparent 34%, rgba(255,255,255,.9) 48%, transparent 62%);
+  background-size: 280% 100%; animation: sheen 900ms ease-out both;
+}
+@keyframes sheen { 0%{background-position:130% 0} 100%{background-position:-50% 0} }
+
+/* The hand fans about a pivot 230px below the row — CardHand's own numbers.
+   Cards are flown out of it, so they are measurable elements, not decoration. */
+.hand { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); display: flex; align-items: flex-end; z-index: 2; }
+.hand .slot { flex: none; }
+.hand.dealing .slot { animation: dealIn 340ms cubic-bezier(.2,.9,.3,1) both; animation-delay: var(--dd,0ms); }
+@keyframes dealIn { 0%{opacity:0;transform:translateY(64px) rotate(-14deg)} 100%{opacity:1;transform:none} }
+
+/* Where the cards land: the play area, tilted back into the table. */
+.pa {
+  position: absolute; left: 50%; top: 42%; transform: translate(-50%,-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  max-width: 90%; perspective: 1400px; z-index: 1;
+}
+.pa-name { font-size: 11px; color: rgba(255,255,255,.72); background: rgba(0,0,0,.32); padding: 2px 10px; border-radius: 99px; }
+.pa-type { font-size: 15px; font-weight: 700; color: #fde047; }
+.pa-type.big {
+  font-family: var(--font-display); font-size: 24px; font-weight: 900; letter-spacing: .1em;
+  background: linear-gradient(180deg,#fef08a,#fdba74 46%,#ef4444);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.65));
+  animation: typeIn 420ms cubic-bezier(.2,.9,.3,1) both;
+}
+@keyframes typeIn { 0%{opacity:0;transform:scale(.4)} 100%{opacity:1;transform:scale(1)} }
+.pa-stack { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; transform: rotateX(14deg); transform-origin: center top; }
+.pa-empty { font-size: 12px; color: rgba(255,255,255,.5); }
+
+/* Clones in flight, drawn inside the stage — the element the shake is applied
+   to — exactly as the game portals them into the shaking board, so a card in
+   the air and the table it is about to hit move together. */
+.flight { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.fly { position: absolute; top: 0; left: 0; perspective: 1400px; }
+.fly > div { width: 100%; height: 100%; }
+
+/* Thrown out from under a card as it hits the felt. Two rings at different
+   rates read as dust rather than as one expanding circle. */
+.ddz-dust {
+  position: absolute; width: 140px; height: 140px; margin: -70px 0 0 -70px;
+  border-radius: 50%; border: 2px solid rgba(255,255,255,.5);
+  box-shadow: 0 0 22px rgba(255,255,255,.16); opacity: 0;
+  animation: ddz-dust var(--dd,520ms) cubic-bezier(.1,.8,.3,1) both;
+}
+.ddz-dust::after {
+  content: ''; position: absolute; inset: 18%; border-radius: 50%;
+  border: 1px solid rgba(250,204,21,.32);
+  animation: ddz-dust calc(var(--dd,520ms) * 1.27) cubic-bezier(.1,.8,.3,1) both;
+}
+@keyframes ddz-dust {
+  0%   { opacity: 0; transform: scale(.18) scaleY(.38) }
+  12%  { opacity: .55 }
+  100% { opacity: 0; transform: scale(2.6) scaleY(.38) }
+}
 
 /* ── FX layers ─────────────────────────────────────────────────────────── */
-.fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+/* Above the lobby (z 14) and below the shutter and the result screen (20): a
+   finale outlives the room being reset underneath it, exactly as in game, where
+   the plates are mounted at page level and the board is not. */
+.fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 16; }
 
 .flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 46%, #fff 0%, rgba(255,255,255,0) 62%); animation: flash calc(420ms*var(--speed)) ease-out both; }
 @keyframes flash { 0%{opacity:0} 6%{opacity:.92} 100%{opacity:0} }
@@ -240,6 +312,114 @@ h1 { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: c
   100%{opacity:0;transform:translate(0,0) rotate(0) scale(2.3)}
 }
 
+/* ── 黑棺 — video plate ─────────────────────────────────────────────────────
+   The clip is white-and-violet calligraphy painted on a pure black field and
+   carries no alpha channel, so the black is taken out here.
+
+   This used to be `mix-blend-mode: screen`, which works on this page and does
+   NOT work in the game: blending reads the backdrop of the nearest ancestor
+   stacking context, and the game's plate has to be one to sit above the board,
+   leaving screen with nothing to blend against. #kuro-luma writes alpha from
+   brightness instead, which is independent of where the layer sits — and the
+   contrast ahead of it in the chain crushes the compression noise floor back
+   to real black before the key reads it. Kept identical to the game so this
+   page previews what actually ships.
+
+   The source is square (720×720) and the stage is 16:9, so the two fits pull
+   opposite ways: `contain` meets the top and bottom edges and leaves the sides
+   to the felt — which costs nothing, since the black there is being dropped
+   anyway — while `cover` would fill the width by cropping the head and foot
+   off a vertical column of characters. Hence contain, exposed as a property so
+   the trade is one word to flip. */
+.kuro { position: absolute; inset: 0; overflow: hidden; --kuro-fit: contain; }
+.kuro video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: var(--kuro-fit);
+  filter: contrast(1.18) brightness(1.04) saturate(1.08) url(#kuro-luma);
+}
+
+/* ── 無量空処 — domain plate ────────────────────────────────────────────────
+   The clip's black is dropped for its whole length; its white is dropped for
+   the head alone. Two different problems, which is why they get two different
+   spans. Black is the clip's own field — it is there in every frame and always
+   wants to be the felt, so #black-key wears the whole 13.2s. White is one
+   event: domain_gojo.mp4 opens on a held flash that would blow out a dark
+   table, and it is over by 1.9s. Past that the white is the piece — the strokes
+   and the blown highlights in the back half — so #void-key, which cuts both
+   ends, comes off at DOMAIN_KEY_MS and hands over to the black-only curve.
+
+   Nothing is laid under the clip either, so what the keyed-out ends resolve to
+   is the table. The plate is a hologram over the board rather than a picture in
+   front of it — the flash costs the page nothing, the domain's black field
+   takes the felt rather than covering it, and the cards stay readable
+   throughout. An earlier pass backed the plate with black, which honoured the
+   key but read as a blackout.
+
+   contrast() runs ahead of both keys for the same reason 黑棺 does it: a knee
+   is cut where real black or real white is, and compression noise sits just
+   inside both. Pushing the ends out first is what keeps the floor from
+   speckling and the flash from ghosting.
+
+   16:9 into a 16:9 stage, so cover fits edge to edge with nothing cropped —
+   unlike 黑棺, which is square and has to be contained. */
+.domain { position: absolute; inset: 0; overflow: hidden; animation: domainIn 420ms ease-out both; }
+.domain video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  filter: contrast(1.16) saturate(1.15) url(#black-key);
+}
+/* Worn over the head, dropped at the mark — see armDomainKeyOff. */
+.domain.keyed video { filter: contrast(1.16) saturate(1.15) url(#void-key); }
+.domain.out { animation: domainOut var(--od, 700ms) ease-in both; }
+@keyframes domainIn  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes domainOut { from { opacity: 1 } to { opacity: 0 } }
+
+/* ── 閻魔刀 — vergil plate ──────────────────────────────────────────────────
+   Two clips joined into one file, and the join is the whole design. The first
+   3.15s were shot on a green screen, so they are keyed and Vergil stands on
+   the table itself; from 3.15s on it is real footage with no green in it at
+   all — 0% by measurement — so the key comes off and the picture takes the
+   whole stage. One <video>, one plate, and a switch at VERGIL_KEY_MS.
+
+   Nothing sits under it, as with 無量空処: the keyed-out green resolves to the
+   felt, not to a backdrop of ours. The fades are 無量空処's, reused rather than
+   restated — a plate coming or going is the same motion whichever clip is in
+   it. */
+.vergil { position: absolute; inset: 0; overflow: hidden; animation: domainIn 420ms ease-out both; }
+.vergil video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+/* Worn over the green half only — see armKeyOff. */
+.vergil.keyed video { filter: saturate(1.06) url(#green-key); }
+.vergil.out { animation: domainOut var(--od, 700ms) ease-in both; }
+
+/* ── Shutter ───────────────────────────────────────────────────────────────
+   Two black leaves driven in from the edges, held shut, then drawn back out.
+   Each leaf is a full-height half that translates by its own width, so the
+   panels are only ever moved, never resized — a width or clip animation would
+   relayout every frame. 51% each: the overlap at the seam is what stops a
+   subpixel hairline of table showing through at the meeting point.
+
+   One element, two animations. The second carries `forwards` rather than
+   `both` on purpose — with `both` its backwards fill would paint the closed
+   state during the delay and clobber the close it is waiting on. */
+.shutter { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
+.shutter .leaf {
+  position: absolute; top: 0; bottom: 0; width: 51%; background: #000;
+  animation:
+    leafShut var(--close) cubic-bezier(.3,.7,.2,1) both,
+    leafOpen var(--open) cubic-bezier(.55,0,.35,1) calc(var(--close) + var(--hold)) forwards;
+}
+.shutter .leaf.l { left: 0;  --from: -100%; }
+.shutter .leaf.r { right: 0; --from: 100%; }
+@keyframes leafShut { from { transform: translateX(var(--from)) } to { transform: translateX(0) } }
+@keyframes leafOpen { from { transform: translateX(0) } to { transform: translateX(var(--from)) } }
+
+
 /* ── 火箭 cold open ─────────────────────────────────────────────────────────
    The rocket does not cut straight to its banner: the table holds still while
    the player's own avatar says its line over kamida.mp3, and only when that cue
@@ -269,6 +449,9 @@ h1 { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: c
   60%  { opacity: 1; transform: scale(1.06) translateY(0) }
   100% { opacity: 1; transform: scale(1) }
 }
+/* 鏡花水月 is three times the rocket line; it needs the room. */
+.bubble.long { max-width: 430px; font-size: 15.5px; }
+
 .bubble.out { animation: bubbleOut 220ms ease-in both; }
 @keyframes bubbleOut { 0%{opacity:1;transform:scale(1)} 100%{opacity:0;transform:scale(.9)} }
 
@@ -403,26 +586,67 @@ h1 { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: c
 .fx[data-tier="comeback"] .sub { font-size: 19px; }
 .fx[data-tier="friendly"] .sub { font-size: 14px; --ls: .2em; }
 
-/* ── Card slam ─────────────────────────────────────────────────────────── */
-.slammer {
-  position: absolute; left: 50%; top: 46%; width: 76px; height: 110px; margin: -55px 0 0 -38px;
-  border-radius: 7px; background: linear-gradient(160deg,#fff 0%,#fdfdfb 55%,#e9ebe4 100%);
-  box-shadow: 0 18px 34px rgba(0,0,0,.6); color: #16202b;
-  display: grid; place-items: center; font-weight: 700; font-size: 30px;
-  animation: slamCard calc(420ms*var(--speed)) cubic-bezier(.4,0,.28,1) both;
+/* ── End of round ──────────────────────────────────────────────────────────
+   RoundOverScreen, in miniature. A snapshot of the result that goes up only
+   once the banners are finished and stays until it is dismissed — the server's
+   reset happens underneath it, not to it. */
+.overlay { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; padding: 14px;
+  background: rgba(0,0,0,.78); backdrop-filter: blur(3px); animation: fadeIn 240ms ease-out both; }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+.panel { position: relative; z-index: 1; width: 100%; max-width: 420px; display: flex; flex-direction: column;
+  align-items: center; gap: 13px; padding: 22px 20px; border-radius: 16px;
+  border: 1px solid rgba(250,204,21,.3); background: rgba(5,46,22,.96); box-shadow: 0 24px 60px rgba(0,0,0,.6);
+  animation: panelIn 460ms cubic-bezier(.2,.9,.3,1) both; }
+@keyframes panelIn { 0%{opacity:0;transform:translateY(24px) scale(.82)} 100%{opacity:1;transform:none} }
+.panel h2 { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: 22px; display: flex; align-items: center; gap: 10px; }
+.who { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.who span { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 99px; background: rgba(255,255,255,.1); color: rgba(255,255,255,.42); }
+.who span.won { color: #fff; background: #7c3aed; box-shadow: inset 0 0 0 1px rgba(250,204,21,.9); }
+.who span.won.p1 { background: #db2777; }
+.who span.won.p2 { background: #2563eb; }
+.cap { font-family: var(--font-mono); font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: rgba(255,255,255,.4); }
+.winning { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
+.winning .card { box-shadow: 0 0 13px rgba(250,204,21,.55), 0 3px 7px rgba(0,0,0,.45); animation: flipIn 420ms cubic-bezier(.2,.9,.3,1) both; animation-delay: var(--dd,0ms); }
+@keyframes flipIn { 0%{opacity:0;transform:translateY(14px) rotateY(90deg)} 100%{opacity:1;transform:none} }
+.panel .home { width: 100%; min-height: 42px; border-radius: 11px; background: #facc15; color: #052e16; font-weight: 700; border: none; font-size: 14px; }
+.panel .home:hover { background: #fde047; border: none; }
+.panel .note { margin: -6px 0 0; font-size: 11px; color: rgba(255,255,255,.45); text-align: center; }
+
+.confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+/* The fall is driven by top, not by a percentage transform: a percentage in
+   translate resolves against the piece, which is 7px tall, so the pieces would
+   shuffle in place instead of crossing the screen. Confetti.tsx gets away with
+   108vh because it is fixed to the viewport; this one lives inside the stage. */
+.confetti i { position: absolute; top: -12%; display: block; animation: confetti var(--d) linear var(--delay) infinite; }
+@keyframes confetti {
+  0%   { top: -12%; transform: translateX(0) rotate(0); opacity: 0 }
+  6%   { opacity: 1 }
+  90%  { opacity: 1 }
+  100% { top: 108%; transform: translateX(var(--dx)) rotate(var(--spin)); opacity: 0 }
 }
-/* The squash at the end is what sells the weight — a card that merely stops
-   reads as a slideshow; one that deforms reads as mass hitting a table. */
-@keyframes slamCard {
-  0%{opacity:0;transform:translate(0,300px) scale(.55) rotate(-16deg)}
-  22%{opacity:1}
-  58%{transform:translate(0,-34px) scale(2.15) rotate(7deg)}
-  84%{transform:translate(0,0) scale(1) rotate(0)}
-  92%{transform:translate(0,6px) scaleX(1.22) scaleY(.8)}
-  100%{opacity:1;transform:translate(0,0) scale(1)}
-}
-.dust { position: absolute; left: 50%; top: 52%; width: 180px; height: 40px; margin: -20px 0 0 -90px; border-radius: 50%; border: 2px solid rgba(255,255,255,.5); animation: dust calc(560ms*var(--speed)) cubic-bezier(.1,.8,.3,1) both; }
-@keyframes dust { 0%{opacity:.8;transform:scale(.2)} 100%{opacity:0;transform:scale(2.8)} }
+
+/* The room after return_to_lobby: same felt, no game on it. */
+.lobby { position: absolute; inset: 0; z-index: 14; display: grid; place-items: center; background: rgba(4,18,11,.88); animation: fadeIn 320ms ease-out both; }
+.lobby[hidden] { display: none; }
+.lobby .box { display: flex; flex-direction: column; align-items: center; gap: 9px; text-align: center; }
+.lobby h3 { margin: 0; font-family: var(--font-display); font-size: 21px; font-weight: 900; }
+.lobby p { margin: 0; font-size: 12px; color: var(--muted); max-width: 34ch; }
+.lobby button { background: #14532d; border-color: #22c55e; color: #dcfce7; font-weight: 600; }
+.lobby button:hover { background: #166534; }
+
+/* ── The wire ──────────────────────────────────────────────────────────────
+   What the socket would be carrying. The end-game flow is a real sequence —
+   game_over lands with the play, the result screen waits for the banner, and
+   the room resets twelve seconds later whether anyone is watching or not — so
+   the lab shows the traffic rather than asking you to take it on trust. */
+.wirebar { display: flex; gap: 10px; align-items: stretch; }
+.wirelog { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 1px;
+  font-family: var(--font-mono); font-size: 11px; line-height: 1.6; color: var(--muted);
+  background: #0a1410; border: 1px solid var(--line); border-radius: 3px; padding: 7px 11px; }
+.wirelog div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wirelog .out { color: #86efac; }
+.wirelog .in { color: #7dd3fc; }
+.wirelog .t { color: #4b5b54; }
 
 /* ── Controls ──────────────────────────────────────────────────────────── */
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
@@ -496,12 +720,14 @@ input[type=range]:focus-visible { outline: 2px solid var(--c2); outline-offset: 
 
 <div class="wrap">
   <header class="masthead">
-    <span class="eyebrow">VFX preview · 7 tiers + 2 contests · CSS + synthesized audio</span>
+    <span class="eyebrow">VFX preview · 7 tiers + 2 contests · 3 video finales · end of round</span>
     <h1>鬥地主 Hit Banners</h1>
     <p class="lede">
       Fighting-game hit banners for every 牌型. Tier is computed from the play itself —
       hand type, base rank and card count — so 對子 of 9 and 對子 of A land in different
-      places. Fire any example below and watch it hit a mock table.
+      places. Fire any example below: the cards fly out of the hand, whack the table, and the
+      banner lands on top of them. 終局模式 plays the whole ending — result screen, the
+      server's back-to-lobby signal, and all.
     </p>
   </header>
 
@@ -512,30 +738,135 @@ input[type=range]:focus-visible { outline: 2px solid var(--c2); outline-offset: 
 
   <div class="stage-frame">
     <div class="stage" id="stage">
-      <div class="seat left"><span class="pip" style="background:#7c3aed">明</span><span>阿明 · 7張</span></div>
-      <div class="seat right"><span>小華 · 2張</span><span class="pip" style="background:#db2777">華</span></div>
-      <div class="hand" aria-hidden="true">
-        <div class="pcard">3<span class="suit">♠</span></div>
-        <div class="pcard red">5<span class="suit">♥</span></div>
-        <div class="pcard">7<span class="suit">♣</span></div>
-        <div class="pcard red">9<span class="suit">♦</span></div>
-        <div class="pcard">J<span class="suit">♠</span></div>
-        <div class="pcard red">Q<span class="suit">♥</span></div>
-        <div class="pcard">K<span class="suit">♣</span></div>
-        <div class="pcard red">A<span class="suit">♦</span></div>
-      </div>
+      <!-- data-seat: where an opponent's cards fly from. Measured off the seat
+           itself, exactly as PlayArea does — an opponent's hand is only ever a
+           face-down count, so their chair is the only real launch point. -->
+      <div class="seat left" data-seat="left"><span class="pip" style="background:#7c3aed">明</span><span>阿明 · <b id="ct-left">9</b>張</span></div>
+      <div class="seat right" data-seat="right"><span>小華 · <b id="ct-right">7</b>張</span><span class="pip" style="background:#db2777">華</span></div>
+      <div class="seat self"><span class="pip" style="background:#2563eb">你</span><span>你 · 地主 👑 · <b id="ct-self">0</b>張</span></div>
+
+      <!-- Where the cards land, and the label the game lays over them. -->
+      <div class="pa" id="playArea"><span class="pa-empty">等待出牌…</span></div>
+
+      <!-- The local hand. Real elements, because a play is measured out of it. -->
+      <div class="hand" id="hand" data-seat="self" aria-hidden="true"></div>
+
+      <!-- Clones in flight. -->
+      <div class="flight" id="flight" aria-hidden="true"></div>
+
       <div class="fx" id="fx"></div>
+
+      <div class="lobby" id="lobby" hidden>
+        <div class="box">
+          <h3>房間 4F2A</h3>
+          <p>房間已重置。上一局的結算畫面是快照，它活過了重置，還在你手上。</p>
+          <button type="button" id="deal">開始遊戲</button>
+        </div>
+      </div>
     </div>
+
+    <!-- Outside the stage, so the result screen does not shake with the table.
+         Mounted above the board in game for the same reason. -->
+    <div id="overlay"></div>
   </div>
+
+  <!-- Alpha from brightness for 黑棺: 0.5R + 0.8G + 0.5B, clamped. True luma
+       (.30/.60/.10) measures right but leaves the violet ghost strokes at a
+       third of their opacity. sRGB, not the linearRGB default, or every colour
+       shifts on the way through. Mirrored in KuroFinale.tsx. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="kuro-luma" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0.5 0.8 0.5 0 0"/>
+    </filter>
+  </svg>
+
+  <!-- The two keys 無量空処 wears, in the order it wears them. Both are the
+       same two passes — brightness into alpha, then a curve over it — and both
+       use equal weights, unlike 黑棺's: that one keys black only, so it can
+       afford to over-weight green and keep faint violet strokes solid. #void-key
+       cuts at both ends, and a knee has to sit where it says it does, which
+       only true luminance manages.
+
+       17 stops each, one per sixteenth of luma. They share a low end — 0 at
+       black, full by 0.25 — and differ only above 0.8125, where #void-key falls
+       back to 0 at white and #black-key stays flat. So the swap at DOMAIN_KEY_MS
+       gives the white back and touches nothing else. The rises are gradual on
+       purpose: a hard step would tear the edge of every stroke into a jagged
+       matte. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="void-key" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0.34 0.34 0.34 0 0"/>
+      <feComponentTransfer>
+        <feFuncA type="table"
+          tableValues="0 0.18 0.45 0.7 0.88 0.97 1 1 1 1 1 1 1 1 0.7 0.3 0"/>
+      </feComponentTransfer>
+    </filter>
+    <filter id="black-key" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0.34 0.34 0.34 0 0"/>
+      <feComponentTransfer>
+        <feFuncA type="table"
+          tableValues="0 0.18 0.45 0.7 0.88 0.97 1 1 1 1 1 1 1 1 1 1 1"/>
+      </feComponentTransfer>
+    </filter>
+  </svg>
+
+  <!-- Green screen → transparent for 閻魔刀. The other two keys measure
+       brightness; this one measures GREEN DOMINANCE, which is what actually
+       separates a backdrop from a subject: alpha = 1 + 0.7R − 1.4G + 0.7B, so
+       a pixel disappears only when green outruns both other channels. The
+       backdrop measures a flat (0,205,3) — every pixel of frame one identical,
+       a rendered green rather than a lit one — which lands at −0.12 and clamps
+       to nothing, while Vergil's blue coat, white hair and black leather all
+       sit at or above 1. A luma key could not tell any of that apart.
+
+       The green row of the matrix is the despill: G is pulled back to 0.85 and
+       the missing 0.15 is made up from R and B, which kills the green rim that
+       a matte leaves on hair and shoulders. It tints the whole frame slightly,
+       which costs nothing on a palette with no green in it.
+
+       The table then firms the matte up — the shoulders of the curve are where
+       edge softness lives, so raise the middle stops for a harder cut, lower
+       them for a softer one. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="green-key" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix"
+        values="1 0 0 0 0
+                0.075 0.85 0.075 0 0
+                0 0 1 0 0
+                0.7 -1.4 0.7 0 1"/>
+      <feComponentTransfer>
+        <feFuncA type="table" tableValues="0 0.05 0.3 0.7 0.95 1 1 1 1"/>
+      </feComponentTransfer>
+    </filter>
+  </svg>
+
 
   <div class="toolbar">
     <button id="replay">↻ Replay last</button>
     <button id="rapid">Rapid fire ×6</button>
     <button id="slow" aria-pressed="false">Slow motion 0.25×</button>
-    <button id="withSlam" aria-pressed="true">Card slam first</button>
+    <button id="flightBtn" aria-pressed="true">牌飛出 Card flight</button>
+    <button id="seatBtn">出牌：我（地主）</button>
+    <button id="endgameBtn" aria-pressed="false">終局模式 End game</button>
     <button id="sound" aria-pressed="true">Sound on</button>
     <button id="godIntro" aria-pressed="true">火箭 cold open</button>
     <button id="heaven">天堂製造 finale</button>
+    <button id="kuro">黑棺 video</button>
+    <button id="domain">無量空処 domain</button>
+    <button id="vergil">閻魔刀 vergil</button>
+
     <button id="stopMusic">■ Stop music</button>
 
     <span class="bench">
@@ -550,6 +881,11 @@ input[type=range]:focus-visible { outline: 2px solid var(--c2); outline-offset: 
 
     <span class="spacer"></span>
     <span class="readout" id="readout">ready</span>
+  </div>
+
+  <div class="wirebar">
+    <div class="wirelog" id="wire"></div>
+    <button type="button" id="sendLobby">⇠ return_to_lobby</button>
   </div>
 
   <div class="rack" id="rack"></div>
@@ -568,6 +904,37 @@ input[type=range]:focus-visible { outline: 2px solid var(--c2); outline-offset: 
       to the slider value so you can judge one strength against the whole banner. The px and
       ms readout is the real spec — <code>GameBoard.tsx</code> runs the same seven numbers
       through framer-motion that this page runs through CSS.
+    </p>
+    <p style="margin:0">
+      <strong>The banner sits on top of a real play.</strong> Every fire deals the cards into
+      the hand and flies them out of it — 420ms each, 45ms apart, landing 80% of the way in,
+      arcing over the line and squashing on contact, with dust thrown out from under each one.
+      Those are <code>cardFlight.ts</code>'s four numbers, and the table takes its first knock
+      the frame the card lands, exactly as <code>GameBoard.tsx</code> schedules it. Switch the
+      seat to 左家 or 右家 and the cards launch from that chair instead, the way an opponent's
+      do — they are only ever a face-down count, so the seat is the only real origin.
+    </p>
+    <p style="margin:0">
+      <strong>終局模式 plays the whole ending.</strong> The winning play empties the hand and
+      <code>game_over</code> rides in with it, which is why the result screen has to wait: it
+      goes up only once the banner, the cold open and the finale are finished. The room resets
+      on the server's own clock twelve seconds later — watch <code>return_to_lobby</code> land
+      on the wire and the table go back to a lobby <em>underneath</em> a result screen that is a
+      snapshot and outlives it. Dismissing is the player's call, not the server's, so a 46-second
+      track can finish.
+    </p>
+    <p style="margin:0">
+      <strong>The video finales are endings too.</strong> 黑棺 and 閻魔刀 are the two ways a
+      round can be taken outright, and both play here the way they play in game, on whichever
+      chip you fired last. 黑棺 holds the table through 鏡花水月, lands the winning cards when
+      the line ends, runs its plate, and closes the shutter — the result screen mounts
+      <em>behind</em> the shut leaves and is revealed by them opening. 閻魔刀 has no line: the
+      cards go down with the first frame, and the result screen goes up over the clip at 11s,
+      one second before the room resets, with the clip playing straight through both until it
+      is dismissed. 無量空処 has no place in the game yet, so it stays what it is here — a plate
+      preview, no cards and no result. All three are keyed rather than composited: the black,
+      the white flash and the green screen are dropped by the SVG filters above, which is why
+      the felt shows through them.
     </p>
   </div>
 </div>
@@ -839,7 +1206,7 @@ const fx      = document.getElementById('fx');
 const readout = document.getElementById('readout');
 
 let last = PLAYS.find(p => p.type === 'rocket');
-let slowMo = false, withSlam = true, soundOn = true, godIntro = true;
+let slowMo = false, flightOn = true, soundOn = true, godIntro = true;
 let rapidTimers = [];
 let curSpeed = 1, forceShake = false;
 const audioCache = {};
@@ -899,6 +1266,32 @@ function musicLeft() {
   if (!musicEl || musicEl.paused || musicEl.ended || !isFinite(musicEl.duration)) return 0;
   return Math.ceil(musicEl.duration - musicEl.currentTime);
 }
+/**
+ * Ride a track up from silence over `ms`.
+ *
+ * Driven off the track's own currentTime rather than a wall clock, so a late
+ * start — autoplay policy holding the first play() back, or a slow fetch —
+ * fades from where the audio actually is instead of arriving already part way
+ * up. The curve is squared because loudness follows roughly the square root of
+ * amplitude: a straight line on `volume` reads as "already there" within a
+ * second and then flat. Swap `t * t` for `t` for the literal ramp.
+ *
+ * The interval stops itself as soon as the channel moves on, so a fade that is
+ * cut off mid-swell by 停 or by the next play leaves nothing running.
+ */
+function fadeInMusic(a, ms) {
+  a.volume = 0;
+  const step = () => {
+    if (musicEl !== a || a.ended) return clearInterval(id);
+    const t = Math.min(1, (a.currentTime * 1000) / ms);
+    a.volume = t * t;
+    if (t >= 1) clearInterval(id);
+  };
+  const id = setInterval(step, 40);
+  step();
+}
+
+
 
 /* ── Shake ─────────────────────────────────────────────────────────────────
    Seven strengths, not three. The old 1/2/3 collapsed tiers 3-5 into one jolt
@@ -946,21 +1339,539 @@ for (const t of [0, 1, 2, 3, 4, 5, 6, 7, 'comeback', 'friendly']) {
   rack.appendChild(row);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   The table: hand, play area, card flight
+
+   This page used to slam one anonymous card into the middle of the screen. The
+   game does something else entirely — it flies the actual cards out of the hand
+   and onto the table — and a banner previewed on top of the wrong motion is a
+   banner previewed against nothing. Everything below is cardFlight.ts,
+   CardFlight.tsx and PlayArea.tsx, run off the same numbers.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Total flight, ms. */
+const FLIGHT_MS = 420;
+/** Fraction of it spent in the air, before the card hits the table. */
+const FLIGHT_IMPACT_AT = 0.8;
+/** When a card actually lands. Every jolt is scheduled off this. */
+const FLIGHT_IMPACT_MS = Math.round(FLIGHT_MS * FLIGHT_IMPACT_AT);
+/** Per-card delay, so a five-card run arrives as a burst and not a slab. */
+const FLIGHT_STAGGER_MS = 45;
+/** Degrees of X-tilt the played stack lies at, matching the table perspective. */
+const TABLE_TILT = 14;
+
+const playArea = document.getElementById('playArea');
+const handEl   = document.getElementById('hand');
+const flightEl = document.getElementById('flight');
+
+/* ── Cards ─────────────────────────────────────────────────────────────── */
+const SUITS = [['♠', false], ['♥', true], ['♣', false], ['♦', true]];
+const RANK_LABEL = { 11: 'J', 12: 'Q', 13: 'K', 14: 'A', 15: '2', 16: '小王', 17: '大王' };
+
+/** One card. `id` is rank+suit — the identity the game keys a flight by. */
+function mk(rank, i) {
+  const joker = rank >= 16;
+  return {
+    rank, joker,
+    id: joker ? 'j' + rank : rank + '-' + (i % 4),
+    label: RANK_LABEL[rank] ?? String(rank),
+    suit: joker ? '王' : SUITS[i % 4][0],
+    red: joker ? rank === 17 : SUITS[i % 4][1],
+  };
+}
+
+function cardHTML(c, extra = '', style = '') {
+  const r = c.joker ? c.label[0] : c.label;
+  return `<div class="card${c.red ? ' red' : ''}${c.joker ? ' joker' : ''}${extra ? ' ' + extra : ''}"` +
+    (style ? ` style="${style}"` : '') + '>' +
+    `<span class="r">${r}</span><span class="s">${c.suit}</span>` +
+    `<span class="pip">${c.suit}</span></div>`;
+}
+
+/**
+ * The cards a play is actually made of.
+ *
+ * Derived from the same three values the tier is, so the hand that flies out is
+ * the hand the chip claims: a four-group 飛機帶對 really does put twenty cards
+ * on the table, which is the entire reason 天堂製造 is a thing that can happen.
+ */
+function cardsFor(p) {
+  const out = [], used = new Set();
+  const take = (rank, n) => { used.add(rank); for (let i = 0; i < n; i++) out.push(mk(rank, i)); };
+  const run = (top, len, per) => { for (let i = len - 1; i >= 0; i--) take(top - i, per); };
+  /** Kickers, from the bottom of the deck up, never doubling a rank in play. */
+  const pad = (groups, per) => { for (let r = 3; groups > 0 && r < 15; r++) if (!used.has(r)) { take(r, per); groups--; } };
+  const t = p.type, r = p.rank, n = p.count;
+  switch (t) {
+    case 'single': take(r, 1); break;
+    case 'pair':   take(r, 2); break;
+    case 'trio':   take(r, 3); break;
+    case 'trio_single': take(r, 3); pad(1, 1); break;
+    case 'trio_pair':   take(r, 3); pad(1, 2); break;
+    case 'sequence':      run(r, n, 1); break;
+    case 'pair_sequence': run(r, n / 2, 2); break;
+    case 'trio_sequence': run(r, n / 3, 3); break;
+    case 'trio_seq_singles': run(r, n / 4, 3); pad(n / 4, 1); break;
+    case 'trio_seq_pairs':   run(r, n / 5, 3); pad(n / 5, 2); break;
+    case 'quad_singles': take(r, 4); pad(2, 1); break;
+    case 'quad_pairs':   take(r, 4); pad(2, 2); break;
+    case 'bomb':   take(r, 4); break;
+    case 'rocket': out.push(mk(16, 0), mk(17, 0)); break;
+    default: take(r, Math.max(1, n));
+  }
+  return out;
+}
+
+/** What the hand holds when nothing has been played out of it. */
+const FILLER = [mk(14, 1), mk(13, 3), mk(11, 2), mk(10, 2), mk(8, 3), mk(6, 1), mk(4, 0)];
+const byRank = (a, b) => b.rank - a.rank;
+
+/* ── Hand ──────────────────────────────────────────────────────────────── */
+/* CardHand's fan: a pivot 230px below the row, so the ends splay outward. */
+const MAX_ARC_DEG = 18;
+const arcOf = (n) => Math.min(MAX_ARC_DEG, n * 1.4);
+const fanAngle = (i, n) => (n < 2 ? 0 : -arcOf(n) / 2 + (i / (n - 1)) * arcOf(n));
+const fanLift = (i, n) => { if (n < 3) return 0; const p = (i / (n - 1)) * 2 - 1; return (1 - p * p) * -4; };
+
+/** What the local player is holding. Played cards leave it, as they should. */
+let hand = [];
+
+function renderHand(cards, opts = {}) {
+  hand = cards;
+  const n = cards.length;
+  // The game's hand never overlaps and scrolls sideways instead. This stage is
+  // a fixed 16:9 and cannot scroll, so a twenty-card hand closes up rather than
+  // running off the felt.
+  const room = (stage.clientWidth || 720) * 0.9;
+  const gap = n > 1 ? Math.max(-27, Math.min(6, (room - 44 * n) / (n - 1))) : 6;
+  handEl.className = 'hand' + (opts.deal ? ' dealing' : '');
+  handEl.innerHTML = cards.map((c, i) =>
+    `<div class="slot" data-cid="${c.id}" style="${i ? `margin-left:${gap.toFixed(1)}px;` : ''}` +
+    `${opts.deal ? `--dd:${i * 32}ms` : ''}">` +
+    `<div class="fan" style="transform:rotate(${fanAngle(i, n).toFixed(2)}deg) translateY(${fanLift(i, n).toFixed(1)}px)">` +
+    cardHTML(c) + '</div></div>').join('');
+  seatCount('self', n);
+}
+
+/* Seat card counts, so a hand that is played out visibly empties. */
+const SEAT_EL = {
+  left: document.getElementById('ct-left'),
+  right: document.getElementById('ct-right'),
+  self: document.getElementById('ct-self'),
+};
+const SEAT_NAME = { left: '阿明', right: '小華', self: '你' };
+function seatCount(seat, n) { const el = SEAT_EL[seat]; if (el) el.textContent = String(Math.max(0, n)); }
+function seatSub(seat, n) { const el = SEAT_EL[seat]; if (el) seatCount(seat, (+el.textContent || 0) - n); }
+
+/* ── Play area ─────────────────────────────────────────────────────────── */
+const HAND_LABEL = {
+  single: '單張', pair: '對子', trio: '三張', trio_single: '三帶一', trio_pair: '三帶對',
+  sequence: '順子', pair_sequence: '連對', trio_sequence: '飛機', trio_seq_singles: '飛機帶單',
+  trio_seq_pairs: '飛機帶對', quad_singles: '四帶二單', quad_pairs: '四帶二對',
+  bomb: '炸彈', rocket: '火箭',
+};
+
+function clearTable() { playArea.innerHTML = '<span class="pa-empty">等待出牌…</span>'; }
+
+/**
+ * The resting stack.
+ *
+ * Built first even when a flight is about to hide it: the destinations have to
+ * be measured where the cards will actually sit, in the same frame, before the
+ * browser has painted them.
+ */
+function renderTable(p, origin, cards, hidden) {
+  const big = p.type === 'bomb' || p.type === 'rocket';
+  const mark = p.type === 'rocket' ? ' 🚀' : big ? ' 💣' : '';
+  playArea.innerHTML =
+    `<span class="pa-name">${SEAT_NAME[origin] ?? ''}</span>` +
+    `<span class="pa-type${big ? ' big' : ''}">${HAND_LABEL[p.type] ?? p.type}${mark}</span>` +
+    '<div class="pa-stack">' +
+    cards.map((c) => cardHTML(c, 'large' + (big ? ' sheen' : ''), hidden ? 'visibility:hidden' : '')).join('') +
+    '</div>';
+  return [...playArea.querySelectorAll('.card')];
+}
+
+/** No flight: the reduced-motion path, where the cards are simply there. */
+function placeCards(p, origin, cards) {
+  renderTable(p, origin, cards, false);
+  if (origin === 'self') renderHand(hand.filter((c) => !cards.includes(c)));
+}
+
+/**
+ * Fly the played cards out of the hand and onto the table.
+ *
+ * Measured in stage coordinates rather than viewport ones, so a shake the
+ * previous play may still be running cancels out of the arithmetic — the same
+ * reason the game portals its flight into the element it shakes.
+ */
+function flyCards(p, origin, cards) {
+  const fsp = slowMo ? 4 : 1;
+  const big = p.type === 'bomb' || p.type === 'rocket';
+  const rest = renderTable(p, origin, cards, true);
+  const box = stage.getBoundingClientRect();
+  const slotOf = new Map([...handEl.querySelectorAll('.slot')].map((el, i) => [el.dataset.cid, { el, i }]));
+
+  flightEl.innerHTML = '';
+  const dur = FLIGHT_MS * fsp;
+  const E = ['cubic-bezier(.25,.6,.3,1)', 'cubic-bezier(.55,0,.95,.5)', 'cubic-bezier(.2,.9,.3,1)'];
+  let landed = 0;
+
+  cards.forEach((c, i) => {
+    const dest = rest[i];
+    if (!dest) return;
+    const r = dest.getBoundingClientRect();
+    // Centre and layout size, not the raw rect: the stack is tilted, so the
+    // rect is the transformed box — but its centre is not moved by the tilt.
+    const to = {
+      cx: r.left + r.width / 2 - box.left, cy: r.top + r.height / 2 - box.top,
+      w: dest.offsetWidth, h: dest.offsetHeight,
+    };
+
+    const held = origin === 'self' ? slotOf.get(c.id) : null;
+    let from;
+    if (held) {
+      const face = held.el.querySelector('.card').getBoundingClientRect();
+      from = {
+        cx: face.left + face.width / 2 - box.left, cy: face.top + face.height / 2 - box.top,
+        w: face.width, rot: fanAngle(held.i, hand.length),
+      };
+      held.el.style.visibility = 'hidden';
+    } else {
+      // An opponent's cards are only ever drawn as a face-down count, so there
+      // is no card to measure — but their seat is on screen, and that is where
+      // the cards should appear to come from.
+      const seat = stage.querySelector('[data-seat="' + origin + '"]');
+      const s = seat && seat.getBoundingClientRect();
+      from = s
+        ? { cx: s.left + s.width / 2 - box.left, cy: s.top + s.height / 2 - box.top,
+            w: to.w * 0.6, rot: origin === 'left' ? -16 : 16 }
+        : { cx: to.cx, cy: to.cy + 260, w: to.w * 0.6, rot: 0 };
+    }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'fly';
+    wrap.style.cssText = `width:${to.w}px;height:${to.h}px;margin-left:${-to.w / 2}px;margin-top:${-to.h / 2}px`;
+    wrap.innerHTML = `<div>${cardHTML(c, 'large' + (big ? ' sheen' : ''))}</div>`;
+    flightEl.appendChild(wrap);
+
+    const s0 = from.w / to.w;
+    // Apex of the arc: most of the way across, and lifted off the line.
+    const mx = from.cx + (to.cx - from.cx) * 0.62;
+    const my = from.cy + (to.cy - from.cy) * 0.62 - 54;
+    const delay = i * FLIGHT_STAGGER_MS * fsp;
+    const timing = { duration: dur, delay, fill: 'both' };
+
+    wrap.animate([
+      { transform: `translate(${from.cx}px,${from.cy}px)`, easing: E[0] },
+      { transform: `translate(${mx}px,${my}px)`, offset: 0.62, easing: E[1] },
+      { transform: `translate(${to.cx}px,${to.cy}px)`, offset: FLIGHT_IMPACT_AT, easing: E[2] },
+      { transform: `translate(${to.cx}px,${to.cy}px)` },
+    ], timing);
+
+    // The squash is what sells the weight: a card that merely stops reads as a
+    // slideshow, one that deforms reads as mass hitting a table.
+    wrap.firstElementChild.animate([
+      { transform: `scale(${s0.toFixed(3)},${s0.toFixed(3)}) rotate(${from.rot.toFixed(1)}deg) rotateX(0deg)`, easing: E[0] },
+      { transform: `scale(1.22,1.22) rotate(${(from.rot * 0.3).toFixed(1)}deg) rotateX(0deg)`, offset: 0.62, easing: E[1] },
+      { transform: `scale(1.14,.85) rotate(0deg) rotateX(${TABLE_TILT}deg)`, offset: FLIGHT_IMPACT_AT, easing: E[2] },
+      { transform: `scale(1,1) rotate(0deg) rotateX(${TABLE_TILT}deg)` },
+    ], timing);
+
+    const dust = document.createElement('div');
+    dust.className = 'ddz-dust';
+    dust.style.cssText = `left:${to.cx}px;top:${to.cy + to.h / 2}px;--dd:${520 * fsp}ms;` +
+      `animation-delay:${delay + FLIGHT_IMPACT_MS * fsp}ms`;
+    flightEl.appendChild(dust);
+
+    // The real card is held invisible until the clone lands on top of it, so
+    // the swap from one to the other is never seen.
+    flightTimers.push(setTimeout(() => { dest.style.visibility = 'visible'; }, delay + FLIGHT_IMPACT_MS * fsp));
+    flightTimers.push(setTimeout(() => {
+      wrap.remove();
+      if (++landed < cards.length) return;
+      flightEl.innerHTML = '';
+      if (origin === 'self') renderHand(hand.filter((h) => !cards.includes(h)));
+    }, delay + dur + 30));
+  });
+}
+
+/**
+ * Put the play into the hand it is about to leave.
+ *
+ * The lab has no game holding cards for it, so the hand is composed on the spot:
+ * the played cards, plus whatever filler still fits. In 終局模式 there is no
+ * filler at all — the winning play is the whole hand, which is what makes it
+ * the winning play.
+ */
+function dealForPlay(cards, win) {
+  const ids = new Set(cards.map((c) => c.id));
+  const room = win ? 0 : Math.max(0, 14 - cards.length);
+  renderHand([...cards, ...FILLER.filter((c) => !ids.has(c.id)).slice(0, room)].sort(byRank));
+}
+
+/* ── The knock ─────────────────────────────────────────────────────────────
+   GameBoard.tsx's schedule, not a second one that agrees with it until somebody
+   edits one: the card knocks the table the frame it lands, the banner's own
+   beats take it from there, and a tier that winds up for longer than the flight
+   still gives the card its own small knock on the way in — otherwise the light
+   one would collide with the heavy one and cut it short.
+*/
+let knockTimers = [], flightTimers = [];
+
+function clearTimers() {
+  knockTimers.forEach(clearTimeout); knockTimers = [];
+  flightTimers.forEach(clearTimeout); flightTimers = [];
+}
+
+function scheduleKnock(plan, tier, sp) {
+  const fsp = slowMo ? 4 : 1;
+  const strength = SHAKE_FOR[tier];
+  const land = FLIGHT_IMPACT_MS * fsp;
+  const impactAt = plan.charge * sp;
+  const hitAt = Math.max(land, impactAt);
+  const at = (fn, d) => knockTimers.push(setTimeout(fn, d));
+
+  if (strength > 1 && impactAt > land + 300 * fsp) at(() => kick(1), land);
+  if (plan.beats.length) {
+    for (const b of plan.beats) at(() => kick(b.strength), b.at * sp);
+  } else {
+    at(() => kick(strength), hitAt);
+    // A blast and up rings twice: the hit, then the room settling.
+    if (strength >= 5) at(() => kick(Math.ceil(strength / 2)), hitAt + 950 * sp);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   The round: game_over, the result screen, return_to_lobby
+
+   The shape here is the server's, not a convenience. The winning play resolves
+   the round the moment it lands; the result screen waits for whatever is still
+   narrating it; and the room resets on its own clock twelve seconds later
+   whether anyone is watching or not. See game.service.ts and RoundOverScreen.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** How long game.service.ts holds the room open after game_over. */
+const RETURN_TO_LOBBY_MS = 12000;
+
+const overlay = document.getElementById('overlay');
+const lobbyEl = document.getElementById('lobby');
+const wireEl  = document.getElementById('wire');
+
+let phase = 'table';
+let endGame = false;
+let pendingResult = null, resultUp = false;
+let bannerBusy = false, busyTimer = null, lobbyTimer = null;
+
+const WIRE_T0 = performance.now();
+function wire(dir, text) {
+  const line = document.createElement('div');
+  line.className = dir;
+  line.innerHTML = `<span class="t">${((performance.now() - WIRE_T0) / 1000).toFixed(1)}s</span> ` +
+    (dir === 'out' ? '⇢ ' : '⇠ ') + text;
+  wireEl.appendChild(line);
+  while (wireEl.children.length > 4) wireEl.firstElementChild.remove();
+}
+
+/** Hold the result screen while anything is still narrating the round. */
+function markBusy(ms) {
+  bannerBusy = true;
+  clearTimeout(busyTimer);
+  busyTimer = setTimeout(() => { bannerBusy = false; maybeShowResult(); }, ms);
+}
+
+/**
+ * Let the result screen through now.
+ *
+ * markBusy() covers everything whose length is known in advance. The video
+ * finales are not: 黑棺 releases on the frame its shutter finishes closing, so
+ * the result screen is revealed already settled rather than arriving in front
+ * of the player. The ceiling passed to markBusy is a safety net for a clip that
+ * never reports itself finished.
+ */
+function releaseBusy() {
+  clearTimeout(busyTimer);
+  bannerBusy = false;
+  maybeShowResult();
+}
+
+function maybeShowResult() {
+  if (!pendingResult || resultUp || bannerBusy) return;
+  resultUp = true;
+  showResult(pendingResult);
+}
+
+/**
+ * The play that ended it.
+ *
+ * Fired with the play rather than after the banner: the server has the round
+ * worked out before the first frame is on screen, which is precisely why the
+ * screen it wants to show has to be held back.
+ */
+function gameOver(p, origin, cards) {
+  const winner = origin === 'self' ? 'landlord' : 'farmer';
+  wire('in', `game_over { winner: "${winner}", winReason: "played out", phase: "result" }`);
+  pendingResult = { winner, origin, cards };
+  resultUp = false;
+  seatCount(origin, 0);
+  clearTimeout(lobbyTimer);
+  lobbyTimer = setTimeout(returnToLobby, RETURN_TO_LOBBY_MS);
+  maybeShowResult();
+}
+
+/** The room moving on, with or without the player. */
+function returnToLobby() {
+  clearTimeout(lobbyTimer); lobbyTimer = null;
+  phase = 'lobby';
+  wire('in', 'return_to_lobby { phase: "lobby" }');
+  cancelPreroll();
+  clearTimers();
+  // The room resetting takes the board with it — not a finale still playing over
+  // it. 閻魔刀 runs for 29s and is meant to outlive this; dismissing the result
+  // screen is what stops it.
+  if (!kuroEl && !domainEl && !vergilEl) fx.innerHTML = '';
+  flightEl.innerHTML = '';
+  clearTable();
+  renderHand([]);
+  seatCount('left', 0); seatCount('right', 0);
+  lobbyEl.hidden = false;
+  lobbyNote();
+  readout.innerHTML = '<b>大廳</b> · 房間已重置 · 結算是快照，活過了重置';
+}
+
+/** What the lobby has to say for itself depends on who is still holding what. */
+function lobbyNote() {
+  const p = lobbyEl.querySelector('p');
+  if (!p) return;
+  p.textContent = resultUp
+    ? '房間已重置。上一局的結算畫面是快照，它活過了重置，還在你手上。'
+    : '房間已重置，這一局結束了。準備好就再開一局。';
+}
+
+function enterTable(opts = {}) {
+  phase = 'table';
+  lobbyEl.hidden = true;
+  overlay.innerHTML = '';
+  pendingResult = null; resultUp = false;
+  clearTimeout(lobbyTimer); lobbyTimer = null;
+  clearTable();
+  seatCount('left', 9); seatCount('right', 7);
+  renderHand(FILLER.slice().sort(byRank), { deal: true });
+  if (opts.silent) return;
+  wire('in', 'game_started { phase: "dealing" }');
+  cue(AUDIO.deal);
+}
+
+/** Confetti.tsx's pieces, derived from the index so the layout is stable. */
+function confettiHTML(tone) {
+  const P = tone === 'gold'
+    ? ['#fde047', '#facc15', '#f59e0b', '#fca5a5', '#fb7185', '#fff7cc']
+    : ['#86efac', '#4ade80', '#22d3ee', '#67e8f9', '#a7f3d0', '#ecfeff'];
+  let out = '';
+  for (let i = 0; i < 70; i++) {
+    const r1 = ((i * 9301 + 49297) % 233280) / 233280;
+    const r2 = ((i * 4801 + 9973) % 233280) / 233280;
+    const r3 = ((i * 7717 + 3571) % 233280) / 233280;
+    out += `<i style="left:${(r1 * 100).toFixed(1)}%;width:${(6 + r1 * 7).toFixed(1)}px;` +
+      `height:${(9 + r3 * 9).toFixed(1)}px;background:${P[i % P.length]};` +
+      `border-radius:${i % 5 === 0 ? '99px' : '1px'};--dx:${((r2 - 0.5) * 150).toFixed(0)}px;` +
+      `--spin:${(360 + r3 * 1080).toFixed(0)}deg;--d:${(2.4 + r3 * 2).toFixed(2)}s;` +
+      `--delay:${(r2 * 1.6).toFixed(2)}s"></i>`;
+  }
+  return `<div class="confetti">${out}</div>`;
+}
+
+/** RoundOverScreen, in miniature: the same snapshot, held by the same rules. */
+function showResult(r) {
+  const iWon = r.origin === 'self';
+  const seats = [
+    { name: '你', landlord: true },
+    { name: '阿明', landlord: false },
+    { name: '小華', landlord: false },
+  ];
+  const won = (s) => (r.winner === 'landlord' ? s.landlord : !s.landlord);
+
+  const el = document.createElement('div');
+  el.className = 'overlay';
+  el.innerHTML =
+    (iWon ? confettiHTML(r.winner === 'landlord' ? 'gold' : 'green') : '') +
+    '<div class="panel">' +
+      `<h2><span>${iWon ? '🏆' : '🥀'}</span>${r.winner === 'landlord' ? '地主獲勝！' : '農民獲勝！'}</h2>` +
+      '<div class="who">' + seats.map((s, i) =>
+        `<span class="${won(s) ? 'won p' + i : ''}">${won(s) ? '✓ ' : ''}${s.name}${s.landlord ? ' 👑' : ''}</span>`
+      ).join('') + '</div>' +
+      '<span class="cap">致勝牌</span>' +
+      '<div class="winning">' +
+        r.cards.map((c, i) => cardHTML(c, '', `--dd:${250 + i * 70}ms`)).join('') +
+      '</div>' +
+      '<button type="button" class="home">返回大廳</button>' +
+      '<p class="note" id="resultNote"></p>' +
+    '</div>';
+  overlay.replaceChildren(el);   // one result screen, never a stack of them
+  el.querySelector('.home').addEventListener('click', dismissResult);
+  updateMusicReadout();
+
+  // The win sting waits for the music the way the game's does: a round that
+  // ended on a bomb still has its track running, and that track is the point.
+  if (!musicEl || musicEl.paused || musicEl.ended) cue(iWon ? AUDIO.win : AUDIO.lose);
+}
+
+/**
+ * Dismissal is the player's, not the server's — which is the whole reason the
+ * screen is a snapshot rather than a phase. A round that ended on a 46-second
+ * track can be listened to all the way out.
+ */
+function dismissResult() {
+  stopMusic();
+  // 閻魔刀 outlives its own blocking window — the result screen goes up over
+  // the clip at eleven seconds and the clip keeps playing behind it. Dismissing
+  // is what stops it, in game and here.
+  stopKuro();
+  stopDomain();
+  stopVergil();
+  overlay.innerHTML = '';
+  pendingResult = null; resultUp = false;
+  wire('out', 'dismiss_result → 返回大廳');
+  lobbyNote();
+  if (phase === 'lobby') return;
+  // The room is the server's to reset: dismissing early leaves the finished
+  // table on screen until return_to_lobby actually lands.
+  readout.innerHTML = '<b>結算已關閉</b> · 房間還在 result，等 return_to_lobby';
+}
+
 /* ── Fire ──────────────────────────────────────────────────────────────── */
+/** Which seat plays. 'self' is measured out of the hand; the rest fly from a chair. */
+let seatMode = 'self';
+
 function fire(p) {
   last = p;
+  if (phase === 'lobby') enterTable();
+
   const tier = p.tier;
   const stretch = STRETCH[tier] ?? 1;
   const sp = (slowMo ? 4 : 1) * stretch;
+  const fsp = slowMo ? 4 : 1;
   const ms = (n) => (n * sp) + 'ms';
 
   curSpeed = sp;
   stage.style.setProperty('--speed', sp);
+  stopKuro();
+  stopDomain();
+  stopVergil();
   fx.innerHTML = '';
   cancelPreroll();                     // a newer play supersedes the wind-up
+  clearTimers();
+  // Whatever was still in the air belongs to a play that has been superseded.
+  flightEl.innerHTML = '';
   fx.dataset.tier = tier;
   fx.style.setProperty('--accent', TIERS[tier].color);
   hush();
+
+  const origin = seatMode;
+  const cards = cardsFor(p);
+  const plan = planOf(p);
+  const win = endGame && phase === 'table';
+  const total = Math.round(plan.total * stretch);
 
   const add = (cls, html = '', style = '') => {
     const el = document.createElement('div');
@@ -971,42 +1882,52 @@ function fire(p) {
     return el;
   };
 
-  const slam = withSlam;
-  if (slam) {
-    add('slammer', p.glyph);
-    add('dust', '', `animation-delay:${ms(300)}`);
-    setTimeout(() => kick(1), 300 * sp);
-  }
-  if (tier === 0) {
-    readout.innerHTML = `<b>${p.zh}</b> · no banner · card slam only`;
-    return;
-  }
-
-  const t0 = slam ? 300 : 0;           // banner starts after the card lands
-  const launch = (delay) => {
-    setTimeout(() => { if (fx.isConnected) build(p, tier, sp, ms, add); }, delay * sp);
+  /** The cards leaving the hand, the banner and the shake, all on one clock. */
+  const launch = () => {
+    // Only our own play comes out of the hand on screen; an opponent’s comes
+    // out of a chair, and their cards were never in it.
+    if (origin === 'self') dealForPlay(cards, win);
+    if (flightOn) flyCards(p, origin, cards); else placeCards(p, origin, cards);
+    if (origin !== 'self') seatSub(origin, cards.length);
+    cue(AUDIO.cardplay);
+    scheduleKnock(plan, tier, sp);
+    markBusy(plan.total * sp + 120);
+    if (tier === 0) return;            // under a 2: the table knocks, nothing else
+    build(p, tier, sp, ms, add);
     play(tier);
     // The rocket lands on two channels at once: its track, and the impact,
     // which is much the shorter of the two and is meant to be.
     if (p.type === 'rocket') cue(AUDIO.godhand);
   };
 
-  const total = Math.round((planOf(p).total + t0) * stretch);
   const spec = `tier ${tier} ${TIERS[tier].name} · ${total}ms` +
     ` · shake ${SHAKE_FOR[tier]} ${SHAKE[SHAKE_FOR[tier]].name}` +
+    ` · ${cards.length}張 · flight ${FLIGHT_MS * fsp}ms` +
     (slowMo ? ' <span style="opacity:.6">(×4 slow)</span>' : '');
 
-  // Tier 7 is no longer the rocket alone — a four-group plane and 天堂製造
-  // live there too — and the cold open belongs to the rocket.
-  if (p.type === 'rocket' && godIntro) {
-    // The card has already hit the table by now, so the banner starts the
-    // instant the cue ends rather than waiting out the slam again.
+  wire('out', `play_cards { type: "${p.type}", rank: ${p.rank}, count: ${cards.length} }`);
+
+  /* The hold goes on before game_over is allowed to ask for the result screen.
+     Arming it afterwards means the ask arrives while nothing is holding, and
+     the screen lands on top of the play that earned it — which is the one thing
+     the whole waiting arrangement exists to prevent. launch() re-arms it from
+     the moment the banner actually starts, which is what a cold open needs. */
+  const coldOpen = p.type === 'rocket' && godIntro;
+  markBusy((coldOpen ? GOD_CUE_MS : 0) + plan.total * sp + 120);
+  if (win) gameOver(p, origin, cards);
+
+  // Tier 7 is no longer the rocket alone — a four-group plane and 天堂製造 live
+  // there too — and the cold open belongs to the rocket.
+  if (coldOpen) {
+    // holdTable: the cards must not come flying out from under the dialog, so
+    // the table stays bare until the line is over.
+    clearTable();
     readout.innerHTML = `<b>${p.zh}</b> · <span style="color:#fde047">cold open…</span> · ${spec}`;
-    preroll(() => { launch(0); readout.innerHTML = `<b>${p.zh}</b> · ${spec}`; updateMusicReadout(); });
+    preroll(() => { launch(); readout.innerHTML = `<b>${p.zh}</b> · ${spec}`; updateMusicReadout(); });
     return;
   }
 
-  launch(t0);
+  launch();
   readout.innerHTML = `<b>${p.zh}</b> · ${spec}`;
   updateMusicReadout();
 }
@@ -1091,15 +2012,29 @@ function planOf(p) {
 
   let total = TIERS[tier].dur;
   let detonateAt = null;
+  /* Every jolt the table takes, in the same units as everything else here.
+     The banner draws the beats and the board shakes to them, so both read one
+     object — the alternative is two schedules that agree until someone edits
+     one of them. bannerPlan() in HitBanner.tsx builds the identical list. */
+  const beats = [];
+  const shake = SHAKE_FOR[tier];
   if (seq) {
     detonateAt = charge + (chars.length - 1) * gap + land + gap;
+    // The impact sits one notch under the ladder so the whacks have somewhere
+    // to climb to; the last glyph and the detonation are the only full hits.
+    beats.push({ at: charge, strength: Math.max(1, shake - 1) });
+    chars.forEach((_, i) => beats.push({
+      at: charge + i * gap + land,
+      strength: Math.min(shake, Math.max(3, shake - (chars.length - 1 - i))),
+    }));
+    beats.push({ at: detonateAt, strength: shake });
+    beats.push({ at: detonateAt + 900 / stretch, strength: Math.ceil(shake / 2) });
     // A long word outruns the tier's stock length. Stretch the banner to fit
     // rather than cutting the word off halfway through its own sequence.
     total = Math.max(total, detonateAt + 1500 / stretch);
   }
-  return { n, stretch, charge, chars, seq, serene, gap, glyphIn, land, total, detonateAt };
+  return { n, stretch, charge, chars, seq, serene, gap, glyphIn, land, total, detonateAt, beats };
 }
-
 /**
  * Shrink a word that would run off the stage.
  *
@@ -1255,11 +2190,9 @@ function build(p, tier, sp, ms, add) {
       seq ? `--od:${ms(dur)}` : '');
     fitWord(bannerEl);
 
-    const strength = SHAKE_FOR[tier];
-    kick(seq ? Math.max(1, strength - 1) : strength);
-    // A blast and up rings twice: the hit, then the room settling.
-    if (!seq && strength >= 5) at(() => kick(Math.ceil(strength / 2)), 950);
-
+    // The table's jolts are not scheduled here. scheduleKnock() reads the same
+    // plan this draws from, so the banner and the board can never disagree
+    // about which beat is which — see GameBoard.tsx, which does it that way too.
     if (!seq) return;
 
     /** The second blast, one beat after the last glyph lands. */
@@ -1285,8 +2218,6 @@ function build(p, tier, sp, ms, add) {
             `animation-delay:${ms((i % 8) * 90)}`);
         }
       }
-      kick(strength);
-      at(() => kick(Math.ceil(strength / 2)), 900);
     };
 
     /* Each glyph lands with its own shockwave and sparks, thrown from where
@@ -1300,8 +2231,6 @@ function build(p, tier, sp, ms, add) {
         ? `left:${(((g.left + g.width / 2) - box.left) / box.width * 100).toFixed(2)}%;` +
           `top:${(((g.top + g.height / 2) - box.top) / box.height * 100).toFixed(2)}%;`
         : '';
-      // Ramp to full strength on the last glyph, so four hits read as a climb.
-      kick(Math.min(strength, Math.max(3, strength - (chars.length - 1 - i))));
       add('shock', '', origin + `--d:${ms(gap * 1.7)}`);
       burst(14 + i * 6, 70, false, origin);
     }, i * gap + land));
@@ -1389,10 +2318,42 @@ shakeLock.addEventListener('click', () => {
 const slowBtn = document.getElementById('slow');
 slowBtn.addEventListener('click', () => { slowMo = !slowMo; slowBtn.setAttribute('aria-pressed', String(slowMo)); });
 
-const slamBtn = document.getElementById('withSlam');
-slamBtn.addEventListener('click', () => { withSlam = !withSlam; slamBtn.setAttribute('aria-pressed', String(withSlam)); });
+const flightBtn = document.getElementById('flightBtn');
+flightBtn.addEventListener('click', () => {
+  flightOn = !flightOn;
+  flightBtn.setAttribute('aria-pressed', String(flightOn));
+});
 
-document.getElementById('stopMusic').addEventListener('click', stopMusic);
+/* Which seat plays. An opponent has no hand on screen to be measured out of —
+   their cards are only ever a face-down count — so those plays launch from the
+   chair instead, which is the game's own fallback and the reason a play from
+   the left arrives tilted. */
+const SEAT_CYCLE = [['self', '我（地主）'], ['left', '左家 阿明'], ['right', '右家 小華']];
+const seatBtn = document.getElementById('seatBtn');
+seatBtn.addEventListener('click', () => {
+  const i = SEAT_CYCLE.findIndex(([s]) => s === seatMode);
+  const next = SEAT_CYCLE[(i + 1) % SEAT_CYCLE.length];
+  seatMode = next[0];
+  seatBtn.textContent = `出牌：${next[1]}`;
+});
+
+/* 終局模式. The next play is the winning one: it is the whole hand, game_over
+   rides in with it, and the room resets twelve seconds later. */
+const endgameBtn = document.getElementById('endgameBtn');
+endgameBtn.addEventListener('click', () => {
+  endGame = !endGame;
+  endgameBtn.setAttribute('aria-pressed', String(endGame));
+  readout.innerHTML = endGame
+    ? '<b>終局模式</b> · 下一手就是致勝牌 · 打完會走完整個結束流程'
+    : '<b>終局模式</b> off · 一般出牌';
+});
+
+/* The signal by hand. It arrives on its own twelve seconds after game_over;
+   this is for when you would rather not sit through the wait. */
+document.getElementById('sendLobby').addEventListener('click', returnToLobby);
+document.getElementById('deal').addEventListener('click', () => enterTable());
+
+document.getElementById('stopMusic').addEventListener('click', () => { stopMusic(); stopKuro(); stopDomain(); stopVergil(); });
 
 
 /* ── 天堂製造 ──────────────────────────────────────────────────────────────
@@ -1403,10 +2364,23 @@ document.getElementById('stopMusic').addEventListener('click', stopMusic);
 const HEAVEN_CUE_MS = 2800;          // made_in_heaven.mp3 is 2.4s
 const HEAVEN_BANNER_MS = 3600;       // fade in, hold ~2s, fade out
 
-function heavenBanner() {
+function heavenBanner(cards) {
   fx.innerHTML = '';
   fx.dataset.tier = 'heaven';
   fx.style.setProperty('--accent', '#fde047');
+
+  /* The cards still have to land — a six-turn win is a play like any other,
+     and the finale only takes the moment that follows it. No knock, though:
+     天堂製造 suppresses the banner and the shake both, and the table goes
+     quiet under it. */
+  const heavenPlay = PLAYS.find((x) => x.firstWin);
+  if (cards && heavenPlay) {
+    dealForPlay(cards, true);
+    if (flightOn) flyCards(heavenPlay, 'self', cards);
+    else placeCards(heavenPlay, 'self', cards);
+    cue(AUDIO.cardplay);
+  }
+  markBusy(HEAVEN_BANNER_MS + 80);
 
   const add = (cls, html = '', style = '') => {
     const el = document.createElement('div');
@@ -1446,12 +2420,28 @@ function heavenBanner() {
 
 function fireHeaven() {
   cancelPreroll();
+  clearTimers();
   hush();
   stopMusic();
+  stopKuro();
+  stopDomain();
+  stopVergil();
   fx.innerHTML = '';
+  if (phase === 'lobby') enterTable();
   stage.style.setProperty('--speed', 1);
   curSpeed = 1;
   readout.innerHTML = `<b>天堂製造</b> · <span style="color:#fde047">MADE IN HEAVEN…</span>`;
+
+  /* 天堂製造 is not a tier, it is a way of finishing — it can only happen on a
+     win — so it always ends the round here too. The table is held bare while
+     the line plays, exactly as holdTable does in game, and the result screen
+     queues behind the finale rather than cutting it off. */
+  const heavenPlay = PLAYS.find((x) => x.firstWin);
+  const heavenCards = cardsFor(heavenPlay);
+  clearTable();
+  markBusy(HEAVEN_CUE_MS + HEAVEN_BANNER_MS + 200);
+  wire('out', `play_cards { type: "${heavenPlay.type}", rank: ${heavenPlay.rank}, count: ${heavenCards.length} }`);
+  gameOver(heavenPlay, 'self', heavenCards);
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
@@ -1465,7 +2455,7 @@ function fireHeaven() {
     clearTimeout(timer);
     bubble.classList.add('out');
     setTimeout(() => bubble.remove(), 220);
-    heavenBanner();
+    heavenBanner(heavenCards);
   };
   const wait = a && isFinite(a.duration) && a.duration > 0
     ? Math.max(HEAVEN_CUE_MS, a.duration * 1000 + 300)
@@ -1483,6 +2473,525 @@ function fireHeaven() {
 }
 
 document.getElementById('heaven').addEventListener('click', fireHeaven);
+/* ── 黑棺 ──────────────────────────────────────────────────────────────────
+   A video plate, not a CSS build: the calligraphy is baked into
+   kuro_hitsugi.mp4 and the only thing this page contributes is the blend mode
+   that drops its black field. Filed at the top of the ladder for now — it
+   cancels whatever is running the way the rocket does. Where it actually
+   belongs among the tiers is still open.
+
+   Same two-part shape as 火箭 and 天堂製造: the table holds still while the
+   line is said, and the plate starts on the cue's own 'ended', with a timer
+   behind it as the safety net for a cue that is muted or never loads.
+
+   The clip runs silent — kyoka.mp3 owns the audio, and the video's own track
+   would land on top of the tail of it. Muted is also what guarantees the plate
+   can start at all: a muted video is exempt from autoplay policy. */
+const KURO_SRC = 'video/kuro_hitsugi.mp4';
+const KYOKA_LINE = '一体 いつから鏡花水月を使っていないと錯覚していた';
+const KYOKA_CUE_MS = 4800;         // kyoka.mp3 is 4.4s, plus room to breathe
+
+/* ── The two knobs ────────────────────────────────────────────────────────
+   KURO_TARGET_MS sets how hard the head is compressed: it is what the whole
+   22.1s clip would take if it ran fast the whole way, so the rate is simply
+   duration ÷ target. KURO_UNMUTE_AT_MS is a mark on the CLIP'S OWN timeline —
+   not on the wall clock — and everything from there runs at 1× with sound.
+   The real runtime is therefore mark ÷ rate + (duration − mark), which the
+   readout prints back so both knobs can be dialled by feel. */
+const KURO_TARGET_MS = 2000;       // compression of the head
+const KURO_UNMUTE_AT_MS = 18000;   // ← unmute here, in the clip's own time
+const VOIS_FADE_MS = 5000;         // the bed swells 0 → full across this
+let kuroEl = null;
+
+function stopKuro() {
+  stopShutter();
+  if (!kuroEl) return;
+  // A detached <video> keeps playing, so pause before dropping it.
+  kuroEl.pause();
+  kuroEl.parentElement?.remove();
+  kuroEl = null;
+}
+
+/**
+ * Hand the clip over to real time at the mark.
+ *
+ * Two independent ways of hitting it, because each covers the other's blind
+ * spot. requestVideoFrameCallback reports the mediaTime of every presented
+ * frame, so on a visible tab the switch lands on the first frame at or past
+ * the mark — as exact as the source's frame rate allows. It is also silent on
+ * a tab that is not compositing, which is why a self-correcting timer chain
+ * runs alongside it: each tick converts the remaining SOURCE time into wall
+ * time at the current rate, sleeps just short of it, and closes the last
+ * stretch in ~0ms hops. Recomputing from currentTime every tick is what keeps
+ * a slow decode from accumulating drift.
+ */
+function armKuroUnmute(v) {
+  let done = false;
+
+  const flip = () => {
+    if (done || kuroEl !== v) return;
+    done = true;
+    v.playbackRate = 1;
+    if (!soundOn) return;            // the toolbar toggle still wins
+    v.muted = false;
+    // Chrome pauses a video that is unmuted without user activation. The click
+    // that fired this counts as activation, so this is a belt-and-braces
+    // resume — and if the audio really is refused, carry on silent rather than
+    // freeze on the mark.
+    if (v.paused) v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+  };
+
+  if ('requestVideoFrameCallback' in v) {
+    const onFrame = (now, meta) => {
+      if (done || kuroEl !== v) return;
+      if (meta.mediaTime * 1000 >= KURO_UNMUTE_AT_MS) return flip();
+      v.requestVideoFrameCallback(onFrame);
+    };
+    v.requestVideoFrameCallback(onFrame);
+  }
+
+  const tick = () => {
+    if (done || kuroEl !== v) return;
+    // Chrome pauses muted video-only playback on a backgrounded tab, and the
+    // closing hops below are ~0ms apart. Idle instead of spinning through a
+    // stall — currentTime is not moving, so there is nothing to converge on.
+    if (v.paused) { setTimeout(tick, 100); return; }
+    const leftMs = KURO_UNMUTE_AT_MS - v.currentTime * 1000;
+    if (leftMs <= 0) return flip();
+    const wall = leftMs / (v.playbackRate || 1);
+    setTimeout(tick, wall > 30 ? wall - 20 : 0);
+  };
+  tick();
+}
+
+/* ── The shutter at the end ────────────────────────────────────────────────
+   The blackout is over the picture only: the bed plays straight through it,
+   so the leaves close on a piece that is still running rather than on
+   silence. */
+const SHUTTER = { close: 500, hold: 1000, open: 500 };
+let shutterEl = null, shutterTimer = 0, shutterClosedTimer = 0;
+
+function stopShutter() {
+  clearTimeout(shutterTimer);
+  clearTimeout(shutterClosedTimer);
+  shutterTimer = shutterClosedTimer = 0;
+  shutterEl?.remove();
+  shutterEl = null;
+}
+
+/**
+ * Close, hold, open — then hand back, if anything is waiting on it.
+ *
+ * `atClosed` fires the instant the leaves meet, which is not the same moment
+ * as `then`: the result screen is meant to arrive BEHIND the black and be
+ * revealed by the opening, so it is given the first mark and not the last.
+ */
+function runShutter(then, atClosed) {
+  stopShutter();
+  const el = document.createElement('div');
+  el.className = 'shutter';
+  el.style.setProperty('--close', SHUTTER.close + 'ms');
+  el.style.setProperty('--hold', SHUTTER.hold + 'ms');
+  el.style.setProperty('--open', SHUTTER.open + 'ms');
+  el.innerHTML = '<div class="leaf l"></div><div class="leaf r"></div>';
+  stage.appendChild(el);
+  shutterEl = el;
+
+  if (atClosed) shutterClosedTimer = setTimeout(atClosed, SHUTTER.close);
+
+  shutterTimer = setTimeout(() => {
+    if (shutterEl !== el) return;      // superseded by a newer play
+    stopShutter();
+    then?.();
+  }, SHUTTER.close + SHUTTER.hold + SHUTTER.open);
+}
+
+/** The plate itself, once the line has been said. */
+function kuroPlate(p, cards) {
+  fx.innerHTML = '';
+  fx.dataset.tier = 'kuro';
+
+  /* The line is over, so the winning cards may land — the same release the
+     game calls settledAt. They land under the plate, which comes up over them
+     a frame later; there is no knock, because 黑棺 takes the whole moment and
+     the table goes quiet for it. */
+  if (cards) {
+    dealForPlay(cards, true);
+    if (flightOn) flyCards(p, 'self', cards); else placeCards(p, 'self', cards);
+    cue(AUDIO.cardplay);
+  }
+
+  const layer = document.createElement('div');
+  layer.className = 'kuro';
+  const v = document.createElement('video');
+  v.src = KURO_SRC;
+  v.autoplay = true;
+  v.playsInline = true;            // iOS would otherwise yank it fullscreen
+  v.muted = true;
+  layer.appendChild(v);
+  fx.appendChild(layer);
+  kuroEl = v;
+
+  v.addEventListener('loadedmetadata', () => {
+    if (kuroEl !== v || !isFinite(v.duration) || v.duration <= 0) return;
+    // Time-stretched rather than cut, so the whole piece still reads.
+    const rate = (v.duration * 1000) / KURO_TARGET_MS;
+    v.playbackRate = rate;
+    armKuroUnmute(v);
+
+    const durMs = v.duration * 1000;
+    const mark = Math.min(KURO_UNMUTE_AT_MS, durMs);
+    const total = mark / rate + (durMs - mark);
+    readout.innerHTML = `<b>黑棺</b> · video plate · ${(total / 1000).toFixed(2)}s` +
+      ` <span style="opacity:.6">(${rate.toFixed(2)}× silent, then 1× with sound` +
+      ` from ${(mark / 1000).toFixed(3)}s)</span> · screen blend · no shake`;
+  }, { once: true });
+
+  v.addEventListener('ended', () => {
+    if (kuroEl !== v) return;
+    stopKuro();
+    if (fx.dataset.tier === 'kuro') fx.innerHTML = '';
+    // The result screen mounts as the leaves meet and is revealed by them
+    // opening — the one finale that hands the round on rather than merely
+    // getting out of its way.
+    runShutter(undefined, releaseBusy);
+  }, { once: true });
+
+  v.play().catch(() => {});
+  updateMusicReadout();
+}
+
+function fireKuro() {
+  cancelPreroll();
+  clearTimers();
+  hush();
+  stopMusic();
+  stopKuro();
+  stopDomain();
+  stopVergil();
+  fx.innerHTML = '';
+  flightEl.innerHTML = '';
+  if (phase === 'lobby') enterTable();
+  stage.style.setProperty('--speed', 1);
+  curSpeed = 1;
+  readout.innerHTML = `<b>黑棺</b> · <span style="color:#a78bfa">鏡花水月…</span>`;
+
+  /* 黑棺 is a way of ending, not a tier: emptying your hand on a play taken off
+     the OTHER side. So it ends the round here too, on whichever play was fired
+     last — any of them will do, since what qualifies it is whose play it beat.
+     The table is held bare while the line is said, exactly as holdTable does in
+     game, and the winning cards fly when it finishes. */
+  const kuroPlay = last ?? PLAYS.find((x) => x.type === 'bomb');
+  const kuroCards = cardsFor(kuroPlay);
+  clearTable();
+  wire('out', `play_cards { type: "${kuroPlay.type}", rank: ${kuroPlay.rank}, count: ${kuroCards.length} }`);
+  // A ceiling, not the schedule: the shutter is what actually releases it. On
+  // before game_over, so the ask arrives to a screen that is already held.
+  markBusy(45000);
+  gameOver(kuroPlay, 'self', kuroCards);
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble long';
+  bubble.textContent = KYOKA_LINE;
+  stage.appendChild(bubble);
+
+  // The bed comes up with the line and keeps running underneath, so kyoka, the
+  // silent head and the clip's own audio at the mark all land on top of one
+  // piece rather than three separate cues. It goes on the music channel, which
+  // is what makes ■ Stop music reach it and what puts its remaining time in the
+  // readout; the weight is above every tier, since nothing outranks 黑棺 yet.
+  if (soundOn) {
+    musicEl = new Audio(AUDIO.voissur);
+    musicWeight = 400;
+    musicEl.addEventListener('ended', () => { musicEl = null; musicWeight = -1; }, { once: true });
+    fadeInMusic(musicEl, VOIS_FADE_MS);   // armed before play(), so it starts silent
+    musicEl.play().catch(() => {});
+  }
+
+  const a = cue(AUDIO.kyoka);
+  const go = () => {
+    prerollPending = null;
+    a?.removeEventListener('ended', go);
+    clearTimeout(timer);
+    bubble.classList.add('out');
+    setTimeout(() => bubble.remove(), 220);
+    kuroPlate(kuroPlay, kuroCards);
+  };
+  const wait = a && isFinite(a.duration) && a.duration > 0
+    ? Math.max(KYOKA_CUE_MS, a.duration * 1000 + 300)
+    : KYOKA_CUE_MS;
+  const timer = setTimeout(go, wait);
+  a?.addEventListener('ended', go, { once: true });
+  prerollPending = {
+    cancel: () => {
+      a?.removeEventListener('ended', go);
+      a?.pause();
+      clearTimeout(timer);
+      bubble.remove();
+      stopMusic();
+    },
+  };
+}
+
+document.getElementById('kuro').addEventListener('click', fireKuro);
+
+/* ── 無量空処 ──────────────────────────────────────────────────────────────
+   The third of the video finales, and the plainest of the three: no banner, no
+   shake, no bed running underneath. Two beats and nothing else.
+
+     1. the seat says 大丈夫、僕最強だから over saikyo.mp3, table held still
+     2. saikyo ends → the domain opens, and the clip's own audio carries it
+
+   The join is the cue's own 'ended' with a timer behind it, the same shape 火箭
+   and 黑棺 use: an <audio> that was refused, muted or never loaded still has to
+   hand the round on. And unlike 黑棺 the clip is NOT silenced — its track is
+   the piece, so it plays out loud and the finale is over when it stops. */
+const DOMAIN_SRC = 'video/domain_gojo.mp4';
+const SAIKYO_LINE = '大丈夫、僕最強だから';
+const SAIKYO_CUE_MS = 3900;        // saikyo.mp3 is 3.6s, plus room to breathe
+const DOMAIN_FADE_MS = 700;        // the way back to the table
+
+/* How long the WHITE half of the key is worn, on the CLIP'S OWN timeline. The
+   flash holds flat to 1.3s and has broken up by 1.9s, where the frame measures
+   99.6% fully opaque through the key — so 2.0s clears it with margin. The black
+   half is not on a clock; it runs to the end. */
+const DOMAIN_KEY_MS = 2000;
+let domainEl = null;
+
+function stopDomain() {
+  if (!domainEl) return;
+  // A detached <video> keeps playing, so pause before dropping it.
+  domainEl.pause();
+  domainEl.parentElement?.remove();
+  domainEl = null;
+}
+
+/**
+ * Take a plate's `keyed` class off at a mark on the CLIP'S OWN timeline.
+ *
+ * Shared by the two plates that only wear a key for part of their run: 無量空処
+ * drops the white half of its key at 2.0s, 閻魔刀 drops the green screen at
+ * 3.15s. `isLive` is how each one says whether the video handed in is still the
+ * one on screen, since a newer play must not be able to strip a later plate.
+ *
+ * Same two-track shape as 黑棺's unmute, and for the same reason: the frame
+ * callback lands the switch on the first frame at or past the mark while the
+ * tab is compositing, and is silent when it is not — so a self-correcting
+ * timer runs alongside it, converting the source time still to go into wall
+ * time on every tick rather than counting down from one reading.
+ */
+function armKeyOff(v, layer, atMs, isLive) {
+  let done = false;
+
+  const off = () => {
+    if (done || !isLive()) return;
+    done = true;
+    layer.classList.remove('keyed');
+  };
+
+  if ('requestVideoFrameCallback' in v) {
+    const onFrame = (now, meta) => {
+      if (done || !isLive()) return;
+      if (meta.mediaTime * 1000 >= atMs) return off();
+      v.requestVideoFrameCallback(onFrame);
+    };
+    v.requestVideoFrameCallback(onFrame);
+  }
+
+  const tick = () => {
+    if (done || !isLive()) return;
+    if (v.paused) { setTimeout(tick, 100); return; }   // stalled; nothing to converge on
+    const leftMs = atMs - v.currentTime * 1000;
+    if (leftMs <= 0) return off();
+    setTimeout(tick, leftMs > 30 ? leftMs - 20 : 0);
+  };
+  tick();
+}
+
+/** The plate itself, once the line has been said. */
+function domainPlate() {
+  fx.innerHTML = '';
+  fx.dataset.tier = 'domain';
+
+  const layer = document.createElement('div');
+  layer.className = 'domain keyed';
+  const v = document.createElement('video');
+  v.src = DOMAIN_SRC;
+  v.playsInline = true;            // iOS would otherwise yank it fullscreen
+  // Loud by default: this clip's audio is the finale's second half, which is
+  // the one difference from 黑棺, where the video runs silent under kyoka.
+  v.muted = !soundOn;
+  layer.appendChild(v);
+  fx.appendChild(layer);
+  domainEl = v;
+
+  v.addEventListener('loadedmetadata', () => {
+    if (domainEl !== v || !isFinite(v.duration) || v.duration <= 0) return;
+    readout.innerHTML = `<b>無量空処</b> · video plate · ${v.duration.toFixed(2)}s` +
+      ` <span style="opacity:.6">(black keyed out throughout, white to` +
+      ` ${(DOMAIN_KEY_MS / 1000).toFixed(1)}s, clip audio 1×)</span> · no shake`;
+  }, { once: true });
+  // The white half comes off at the mark; the black half runs to the end.
+  armKeyOff(v, layer, DOMAIN_KEY_MS, () => domainEl === v);
+
+  // Ends when the clip ends — which is when its audio ends. One fade back
+  // rather than the shutter 黑棺 closes on: there is nothing still running
+  // underneath for leaves to close over.
+  v.addEventListener('ended', () => {
+    if (domainEl !== v) return;
+    layer.style.setProperty('--od', DOMAIN_FADE_MS + 'ms');
+    layer.classList.add('out');
+    setTimeout(() => {
+      if (domainEl !== v) return;    // superseded by a newer play
+      stopDomain();
+      if (fx.dataset.tier === 'domain') fx.innerHTML = '';
+      readout.innerHTML = '<b>無量空処</b> · done';
+    }, DOMAIN_FADE_MS);
+  }, { once: true });
+
+  // Sound without a gesture is refused on some browsers even after a click;
+  // carry on silent rather than freeze on a black plate.
+  v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+}
+
+function fireDomain() {
+  cancelPreroll();
+  hush();
+  stopMusic();
+  stopKuro();
+  stopDomain();
+  stopVergil();
+  fx.innerHTML = '';
+  stage.style.setProperty('--speed', 1);
+  curSpeed = 1;
+  readout.innerHTML = `<b>無量空処</b> · <span style="color:#a5b4fc">僕最強だから…</span>`;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = SAIKYO_LINE;
+  stage.appendChild(bubble);
+
+  const a = cue(AUDIO.saikyo);
+  const go = () => {
+    prerollPending = null;
+    a?.removeEventListener('ended', go);
+    clearTimeout(timer);
+    bubble.classList.add('out');
+    setTimeout(() => bubble.remove(), 220);
+    domainPlate();
+  };
+  const wait = a && isFinite(a.duration) && a.duration > 0
+    ? Math.max(SAIKYO_CUE_MS, a.duration * 1000 + 300)
+    : SAIKYO_CUE_MS;
+  const timer = setTimeout(go, wait);
+  a?.addEventListener('ended', go, { once: true });
+  prerollPending = {
+    cancel: () => {
+      a?.removeEventListener('ended', go);
+      a?.pause();
+      clearTimeout(timer);
+      bubble.remove();
+    },
+  };
+}
+
+document.getElementById('domain').addEventListener('click', fireDomain);
+
+/* ── 閻魔刀 ──────────────────────────────────────────────────────────────────
+   The bluntest of the video finales: no line, no cue, no bed — the clip is the
+   whole piece. It carries its own audio and its own two halves, and the only
+   thing this page decides is when to stop keying.
+
+   vergil.bury.mp4 is two cuts joined by scripts in public/video: 3.15s of green
+   screen, then 2.97s of footage. Keyed, the first half is Vergil standing on
+   the table; unkeyed, the second takes the stage whole. Re-cutting either half
+   means re-running make-clips.mjs and moving the mark below to match. */
+const VERGIL_SRC = 'video/vergil.bury.mp4';
+const VERGIL_KEY_MS = 3150;        // end of the green-screen half, in clip time
+/** When the result screen is allowed through, measured from the first frame. */
+const VERGIL_BANNER_AT_MS = 11000;
+const VERGIL_FADE_MS = 700;        // the way back to the table
+let vergilEl = null;
+
+function stopVergil() {
+  if (!vergilEl) return;
+  // A detached <video> keeps playing, so pause before dropping it.
+  vergilEl.pause();
+  vergilEl.parentElement?.remove();
+  vergilEl = null;
+}
+
+function fireVergil() {
+  cancelPreroll();
+  clearTimers();
+  hush();
+  stopMusic();
+  stopKuro();
+  stopDomain();
+  stopVergil();
+  fx.innerHTML = '';
+  flightEl.innerHTML = '';
+  if (phase === 'lobby') enterTable();
+  stage.style.setProperty('--speed', 1);
+  curSpeed = 1;
+
+  /* The other way a round is taken outright: you led, everyone passed, you led
+     again and were out. There is no line to wait through, so the cards go down
+     with the first frame of the clip. */
+  const vergilPlay = last ?? PLAYS.find((x) => x.type === 'sequence');
+  const vergilCards = cardsFor(vergilPlay);
+  wire('out', `play_cards { type: "${vergilPlay.type}", rank: ${vergilPlay.rank}, count: ${vergilCards.length} }`);
+  dealForPlay(vergilCards, true);
+  if (flightOn) flyCards(vergilPlay, 'self', vergilCards);
+  else placeCards(vergilPlay, 'self', vergilCards);
+  cue(AUDIO.cardplay);
+  /* The result screen goes up over the clip at eleven seconds — one second
+     before the server resets the room — and the clip plays straight through
+     both. A fixed mark rather than anything the video reports: a clip that is
+     blocked or missing fires no events, and the screen cannot wait on one. */
+  markBusy(VERGIL_BANNER_AT_MS);
+  gameOver(vergilPlay, 'self', vergilCards);
+
+  const layer = document.createElement('div');
+  layer.className = 'vergil keyed';
+  const v = document.createElement('video');
+  v.src = VERGIL_SRC;
+  v.playsInline = true;            // iOS would otherwise yank it fullscreen
+  v.muted = !soundOn;              // the clip's own track is the piece
+  layer.appendChild(v);
+  fx.dataset.tier = 'vergil';
+  fx.appendChild(layer);
+  vergilEl = v;
+
+  v.addEventListener('loadedmetadata', () => {
+    if (vergilEl !== v || !isFinite(v.duration) || v.duration <= 0) return;
+    readout.innerHTML = `<b>閻魔刀</b> · video plate · ${v.duration.toFixed(2)}s` +
+      ` <span style="opacity:.6">(green keyed to ${(VERGIL_KEY_MS / 1000).toFixed(2)}s,` +
+      ` clip audio 1×)</span> · no shake`;
+  }, { once: true });
+  armKeyOff(v, layer, VERGIL_KEY_MS, () => vergilEl === v);
+
+  v.addEventListener('ended', () => {
+    if (vergilEl !== v) return;
+    layer.style.setProperty('--od', VERGIL_FADE_MS + 'ms');
+    layer.classList.add('out');
+    setTimeout(() => {
+      if (vergilEl !== v) return;    // superseded by a newer play
+      stopVergil();
+      if (fx.dataset.tier === 'vergil') fx.innerHTML = '';
+      readout.innerHTML = '<b>閻魔刀</b> · done';
+    }, VERGIL_FADE_MS);
+  }, { once: true });
+
+  // Sound without a gesture is refused on some browsers even after a click;
+  // carry on silent rather than freeze on the first frame.
+  v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+  readout.innerHTML = `<b>閻魔刀</b> · <span style="color:#93c5fd">…</span>`;
+}
+
+document.getElementById('vergil').addEventListener('click', fireVergil);
+
+
 
 const godBtn = document.getElementById('godIntro');
 godBtn.addEventListener('click', () => {
@@ -1508,10 +3017,22 @@ function updateMusicReadout() {
   musicNote.innerHTML = left > 0
     ? `<span style="color:#22d3ee">♪ music ${left}s left</span>`
     : '';
+  // The result screen says the same thing in the player's language: "stay and
+  // listen" is an invisible affordance unless the screen admits there is
+  // something left to listen to.
+  const note = document.getElementById('resultNote');
+  if (note) {
+    note.textContent = left > 0
+      ? `♪ 音樂播放中 · 還有 ${left} 秒，聽完再走也可以`
+      : '慢慢看，準備好再回大廳';
+  }
 }
 setInterval(updateMusicReadout, 500);
 
-// Open on the ceiling. Audio stays silent until the first interaction — that's
-// the browser's autoplay policy, not a bug.
-setTimeout(() => fire(PLAYS.find(p => p.type === 'rocket')), 600);
+// Open on a dealt hand and nothing else. Nothing fires until it is asked to:
+// the ceiling used to play itself on load, which meant every reload cost four
+// seconds of 火箭 before the page could be used. ↻ Replay last still starts
+// there, so it is one keypress away.
+enterTable({ silent: true });
+wire('in', 'room_joined { code: "4F2A", phase: "gameplay" }');
 </script>

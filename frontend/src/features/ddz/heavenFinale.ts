@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { sfx } from '@/features/ddz/sfx';
-import { LEVEL_LABEL, playSeq } from '@/features/ddz/hitTier';
+import { LEVEL_LABEL, heavenWin, playSeq, type HeavenWin } from '@/features/ddz/hitTier';
 import { kuroWin } from '@/features/ddz/kuroFinale';
 import { vergilWin } from '@/features/ddz/vergilFinale';
 import { bannerPlan } from '@/features/ddz/components/effects/HitBanner';
@@ -17,10 +17,10 @@ import type { GameState, HistoryEntry } from '@/features/ddz/types';
  * result screen waits for it.
  */
 
-export { playSeq };
-
-/** How few plays it takes. The winning play is one of them. */
-export const HEAVEN_TURNS = 6;
+// heavenWin sits in hitTier so 閻魔刀 can stand down for it without a cycle. It
+// still belongs to this finale, so this is still where the rest of the app takes
+// it from.
+export { playSeq, heavenWin, HEAVEN_TURNS, type HeavenWin } from '@/features/ddz/hitTier';
 
 export const HEAVEN_LINE = 'MADE IN HEAVEN';
 const HEAVEN_CUE = '/sounds/made_in_heaven.mp3';
@@ -39,33 +39,6 @@ const HEAVEN_WEIGHT = 400;
 const HEAVEN_CUE_MS = 2800;
 /** The banner: fade in together, hold ~2s, fade out. Matches hb-serene. */
 export const HEAVEN_BANNER_MS = 3600;
-
-export interface HeavenWin {
-  /** Seat index of whoever emptied their hand. */
-  playerIndex: number;
-  /** How many plays it took them. */
-  plays: number;
-}
-
-/**
- * Did the newest entry end the game inside HEAVEN_TURNS plays by its player?
- *
- * Passes do not count against the player: a pass makes no progress, so it is
- * not one of the six. A surrender is not a play at all and carries no cards,
- * so it never qualifies.
- *
- * Card counts and history arrive in the same GAME_STATE action, so the zero
- * here belongs to the play being examined rather than to a later snapshot.
- */
-export function heavenWin(history: HistoryEntry[], cardCounts: number[]): HeavenWin | null {
-  const latest = history[history.length - 1];
-  if (!latest?.play?.cards?.length) return null;
-  if (cardCounts[latest.playerIndex] !== 0) return null;   // not the winning play
-  const plays = history.filter(
-    (h) => h.playerIndex === latest.playerIndex && h.play?.cards?.length,
-  ).length;
-  return plays <= HEAVEN_TURNS ? { playerIndex: latest.playerIndex, plays } : null;
-}
 
 /**
  * Does the newest play open cold — does the table wait before its cards land?
@@ -86,17 +59,20 @@ export function coldOpenFor(
   // 黑棺 first: it replaces both of the others when it answers, so asking in
   // any other order would hold the table for a cold open that never comes.
   if (kuroWin(upto, cardCounts, landlordIndex)) return 'kuro';
-  // 閻魔刀 replaces the two below on the same terms — but it is not a cold open
-  // and must answer null, not 'kuro'. It has no line to wait through: the clip
-  // starts on the winning play and covers the table a frame later. Answering
-  // anything else here would hold the winning cards for a cue that never comes,
-  // and the rocket check below would claim a winning 火箭 that has already
-  // stood down. See vergilFinale.ts.
-  if (vergilWin(upto, cardCounts)) return null;
-  if ((history[i].play.type as string) === 'rocket') return 'rocket';
   // heavenWin reads the newest entry, so ask it about the history as it stood
-  // when that play landed.
-  return heavenWin(upto, cardCounts) ? 'heaven' : null;
+  // when that play landed. Settled here rather than at the bottom because 閻魔刀
+  // below has to know the answer: 天堂製造 outranks it and takes the win.
+  const heaven = heavenWin(upto, cardCounts);
+  // 閻魔刀, where 天堂製造 left it the win. It replaces what is below it on the
+  // same terms as 黑棺 — but it is not a cold open and must answer null, not
+  // 'kuro'. It has no line to wait through: the clip starts on the winning play
+  // and covers the table a frame later. Answering anything else would hold the
+  // winning cards for a cue that never comes. It is also asked before the
+  // rocket, which would otherwise claim a winning 火箭 that has already stood
+  // down. See vergilFinale.ts.
+  if (!heaven && vergilWin(upto, cardCounts)) return null;
+  if ((history[i].play.type as string) === 'rocket') return 'rocket';
+  return heaven ? 'heaven' : null;
 }
 
 /** What the finale is showing right now. */
@@ -152,9 +128,9 @@ export function useHeavenFinale(gameState: GameState): HeavenState {
     // 黑棺 outranks this and replaces it outright — a win taken off an enemy
     // is not also a 天堂製造, however few turns it took.
     if (kuroWin(history, counts, gameState.landlordIndex)) return;
-    // Nor is an unanswerable win a 天堂製造, however few turns it took.
-    if (vergilWin(history, counts)) return;
-
+    // 閻魔刀 is the one below, not above: a six-turn win is a 天堂製造 whether or
+    // not the table was ever given a chance to answer it, and the clip stands
+    // down instead. See vergilFinale.ts.
     const win = heavenWin(history, counts);
     if (!win) return;
 

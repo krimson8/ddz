@@ -106,6 +106,42 @@ export function playSeq(history: HistoryEntry[]): number {
   return history.filter((h) => h.play?.cards?.length).length;
 }
 
+/** How few plays a 天堂製造 takes. The winning play is one of them. */
+export const HEAVEN_TURNS = 6;
+
+export interface HeavenWin {
+  /** Seat index of whoever emptied their hand. */
+  playerIndex: number;
+  /** How many plays it took them. */
+  plays: number;
+}
+
+/**
+ * Did the newest entry end the game inside HEAVEN_TURNS plays by its player?
+ *
+ * Passes do not count against the player: a pass makes no progress, so it is
+ * not one of the six. A surrender is not a play at all and carries no cards,
+ * so it never qualifies.
+ *
+ * Card counts and history arrive in the same GAME_STATE action, so the zero
+ * here belongs to the play being examined rather than to a later snapshot.
+ *
+ * Down here rather than with the finale it drives, for the same reason playSeq
+ * is: 閻魔刀 stands down for 天堂製造 and so has to ask this, while 天堂製造's
+ * own module asks 閻魔刀 a question back on behalf of coldOpenFor. A pure
+ * predicate in the layer underneath is what keeps that from being a cycle.
+ * heavenFinale.ts re-exports it, so nothing else had to move.
+ */
+export function heavenWin(history: HistoryEntry[], cardCounts: number[]): HeavenWin | null {
+  const latest = history[history.length - 1];
+  if (!latest?.play?.cards?.length) return null;
+  if (cardCounts[latest.playerIndex] !== 0) return null;   // not the winning play
+  const plays = history.filter(
+    (h) => h.playerIndex === latest.playerIndex && h.play?.cards?.length,
+  ).length;
+  return plays <= HEAVEN_TURNS ? { playerIndex: latest.playerIndex, plays } : null;
+}
+
 /**
  * The play the newest entry is beating, or null if it is a fresh lead.
  *

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { sfx } from '@/features/ddz/sfx';
+import { heavenWin } from '@/features/ddz/hitTier';
 
 import type { GameState, HistoryEntry } from '@/features/ddz/types';
 
@@ -9,16 +10,21 @@ import type { GameState, HistoryEntry } from '@/features/ddz/types';
  * 閻魔刀 — the finish nobody was allowed to answer.
  *
  * The other bookend to 黑棺. That one is the round taken off an enemy's play;
- * this is the round taken while the table could only watch — you led, everyone
- * passed, you led again and were out. A → 2 → K, and no one ever got a turn
- * that mattered.
+ * this is the round taken while the table could only watch — you led, both of
+ * them passed, and it happened again, and again, the last of it your hand
+ * emptied. A → 2 → K, and no one ever got a turn that mattered.
+ *
+ * 天堂製造 is the one thing that outranks it. A six-turn win is a 天堂製造 even
+ * when nobody was given the chance to answer it, so where both would fire the
+ * clip stands down — the only ranking this finale is on the losing end of.
  *
  * The two are mutually exclusive by construction rather than by ranking, which
  * is why they can share a rank. 黑棺 needs the newest play to have BEATEN an
- * opposing play; this needs the newest play to follow the winner's own last
- * play, which can only happen after both opponents passed — and a play that
- * follows two passes leads a fresh trick and has beaten nobody. Neither can
- * answer where the other does, so no order between them ever has to be picked.
+ * opposing play; this needs it to follow the winner's own last play, which can
+ * only happen after both opponents passed — and a play that follows two passes
+ * leads a fresh trick and has beaten nobody. Neither can answer where the other
+ * does, so no order between them ever has to be picked. VERGIL_RUN narrows this
+ * side further; it cannot make the two overlap.
  *
  * Every number here is the one the lab settled on — frontend/public/fx-lab.html.
  */
@@ -35,10 +41,24 @@ export const VERGIL_VIDEO = '/video/vergil.bury.mp4';
 export const VERGIL_KEY_MS = 3150;
 
 /**
- * Level with 黑棺 (500). Nothing else in the game outranks either, and the two
- * never contend for the channel — see the note above.
+ * Level with 黑棺 (500). A music-channel weight, not the ranking: 天堂製造 (400)
+ * outranks this finale but never plays alongside it, because whichever of them
+ * takes the win stands the other down. Nothing that does share the channel — a
+ * tier track, a turn alert — sits above either of these.
  */
 export const VERGIL_WEIGHT = 500;
+
+/**
+ * How long the unanswered run has to be, the winning play included.
+ *
+ * A → 2 → K: three leads by one player with nothing but passes between them.
+ *
+ * Two is not this. Win a trick, lead your last cards — that is the ordinary way
+ * a round ends, close to half of all wins, and asking only for that put the
+ * clip in front of most of them. The run is what the moment is named for, so
+ * the run is what it asks for.
+ */
+export const VERGIL_RUN = 3;
 
 /**
  * When the result screen is allowed through, measured from the first frame.
@@ -69,13 +89,21 @@ export interface VergilWin {
 }
 
 /**
- * Did the newest entry win the round on the winner's own second lead?
+ * Did the newest entry end a run of VERGIL_RUN leads nobody answered?
  *
- * Two conditions about the newest entry: it has to be the winning play — cards
- * on the table, that player's count at zero — and the play before it has to be
- * the same player's. Passes are stepped over, so "the play before it" means the
- * previous entry that actually put cards down; if that one is theirs too, then
- * nobody else played in between, because everyone else could only have passed.
+ * It has to be the winning play — cards on the table, that player's count at
+ * zero — and the VERGIL_RUN-1 plays before it have to be that player's as well.
+ *
+ * Consecutive plays by one player already mean the other two passed: a pass is
+ * never written to the history at all, the server recording only plays and
+ * surrenders (handlePass, game.service.ts), so anyone who took a turn in
+ * between and did something with it would be sitting in one of these entries.
+ * The card-less skip is for the surrender entries, which carry no play.
+ *
+ * A run that reaches the start of the history without filling is not this
+ * either — the round was simply too short to have held one. The round's opening
+ * play does count toward a run that does fill: both opponents passed on it, or
+ * the same player would not have been the one to lead next.
  *
  * Party never comes into it. Being unanswerable is the whole event, and it
  * reads the same whoever was sitting where.
@@ -91,14 +119,14 @@ export function vergilWin(
   if (!latest?.play?.cards?.length) return null;
   if (cardCounts[latest.playerIndex] !== 0) return null;   // not the winning play
 
-  for (let i = history.length - 2; i >= 0; i--) {
+  let run = 1;                                             // the winning play itself
+  for (let i = history.length - 2; i >= 0 && run < VERGIL_RUN; i--) {
     const entry = history[i];
-    if (!entry.play?.cards?.length) continue;              // a pass, or a surrender
-    return entry.playerIndex === latest.playerIndex
-      ? { playerIndex: latest.playerIndex }
-      : null;                                              // somebody else got in
+    if (!entry.play?.cards?.length) continue;              // a surrender, not a play
+    if (entry.playerIndex !== latest.playerIndex) return null;  // somebody got in
+    run += 1;
   }
-  return null;                                             // nothing before it
+  return run >= VERGIL_RUN ? { playerIndex: latest.playerIndex } : null;
 }
 
 /** What the finale is showing right now. */
@@ -140,6 +168,10 @@ export function useVergilFinale(gameState: GameState) {
     // Shrank (new round) or jumped (a reconnect replaying the whole history) —
     // neither is a live play.
     if (history.length <= prev || history.length - prev > 1) return;
+
+    // 天堂製造 is the one finale above this: it takes a six-turn win outright,
+    // however little the table got to say about it. See heavenFinale.ts.
+    if (heavenWin(history, counts)) return;
 
     const win = vergilWin(history, counts);
     if (!win) return;
